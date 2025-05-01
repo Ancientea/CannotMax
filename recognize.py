@@ -5,10 +5,10 @@ import pytesseract
 from PIL import ImageGrab
 
 # 配置Tesseract路径
-pytesseract.pytesseract.tesseract_cmd = r'Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r"Tesseract-OCR\tesseract.exe"
 
 # 定义全局变量
-MONSTER_COUNT = 51  # 设置怪物数量
+MONSTER_COUNT = 56  # 设置怪物数量
 
 # 鼠标交互全局变量
 drawing = False
@@ -21,7 +21,7 @@ relative_regions_nums = [
     (0.2900, 0.7, 0.4000, 1),
     (0.6100, 0.7, 0.7200, 1),
     (0.7300, 0.7, 0.8400, 1),
-    (0.8600, 0.7, 0.9700, 1)
+    (0.8600, 0.7, 0.9700, 1),
 ]
 relative_regions = [
     (0.0000, 0.1, 0.1200, 0.77),
@@ -29,7 +29,7 @@ relative_regions = [
     (0.2400, 0.1, 0.3600, 0.77),
     (0.6400, 0.1, 0.7600, 0.77),
     (0.7600, 0.1, 0.8800, 0.77),
-    (0.8800, 0.1, 1.0000, 0.77)
+    (0.8800, 0.1, 1.0000, 0.77),
 ]
 
 
@@ -47,7 +47,7 @@ def save_number_image(number, processed, mon_id):
             os.makedirs(num_folder)
 
         # 获取文件夹中已有的图片数量
-        existing_files = [f for f in os.listdir(num_folder) if f.endswith('.png')]
+        existing_files = [f for f in os.listdir(num_folder) if f.endswith(".png")]
         next_index = len(existing_files) + 1
 
         # 保存图片，命名为 id_序号.png
@@ -113,7 +113,7 @@ def add_black_border(img, border_size=3):
         left=border_size,
         right=border_size,
         borderType=cv2.BORDER_CONSTANT,
-        value=[0, 0, 0]  # BGR格式的黑色
+        value=[0, 0, 0],  # BGR格式的黑色
     )
 
 
@@ -133,7 +133,7 @@ def crop_to_min_bounding_rect(image):
     all_contours = np.vstack(contours)
     x, y, w, h = cv2.boundingRect(all_contours)
     # 裁剪图片并返回
-    return image[y:y + h, x:x + w]
+    return image[y : y + h, x : x + w]
 
 
 def preprocess(img):
@@ -181,7 +181,7 @@ def find_best_match(target, ref_images: dict):
     :param ref_images: 参考图像字典 {id: image}
     :return: (最佳匹配的id, 最小差异值)
     """
-    confidence = float('-inf')
+    confidence = float("-inf")
     best_id = -1
 
     # 确保目标图像是RGB格式
@@ -266,32 +266,31 @@ def process_regions(main_roi, screenshot=None):
             cv2.imwrite(f"images/tmp/number_{idx}.png", processed)
 
             # OCR识别（保留优化后的处理逻辑）
-            custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789x×X'
+            custom_config = r"--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789x×X"
             number = pytesseract.image_to_string(processed, config=custom_config).strip()
-            number = number.replace('×', 'x').lower()  # 统一符号
+            number = number.replace("×", "x").lower()  # 统一符号
 
             # 提取有效数字部分
-            x_pos = number.find('x')
+            x_pos = number.find("x")
             if x_pos != -1:
-                number = number[x_pos + 1:]  # 截取x之后的字符串
-            number = ''.join(filter(str.isdigit, number))
+                number = number[x_pos + 1 :]  # 截取x之后的字符串
+            number = "".join(filter(str.isdigit, number))
 
             # 保存有数字的图片到images/nums中的对应文件夹
             # if number:
             #     save_number_image(number, processed, matched_id)
 
-            results.append({
-                "region_id": idx,
-                "matched_id": matched_id,
-                "number": number if number else "N/A",
-                "confidence": round(confidence, 2)
-            })
+            results.append(
+                {
+                    "region_id": idx,
+                    "matched_id": matched_id,
+                    "number": number if number else "N/A",
+                    "confidence": round(confidence, 2),
+                }
+            )
         except Exception as e:
             print(f"区域{idx}处理失败: {str(e)}")
-            results.append({
-                "region_id": idx,
-                "error": str(e)
-            })
+            results.append({"region_id": idx, "error": str(e)})
 
     return results
 
@@ -307,8 +306,10 @@ def load_ref_images(ref_dir="images"):
             if len(img.shape) == 2:
                 img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
             # 裁切模板匹配图像比例
-            img = img[int(img.shape[0]*0.16) : int(img.shape[0]*0.8),   # 高度取靠上部分
-                      int(img.shape[1]*0.18) : int(img.shape[1]*0.82)]  # 宽度与高度一致
+            img = img[
+                int(img.shape[0] * 0.16) : int(img.shape[0] * 0.80),  # 高度取靠上部分
+                int(img.shape[1] * 0.18) : int(img.shape[1] * 0.82), # 宽度与高度一致
+            ]
             # 调整参考图像大小以匹配目标图像
             ref_resized = cv2.resize(img, (80, 80))
             ref_resized = ref_resized[0:70, :]
@@ -320,6 +321,7 @@ def load_ref_images(ref_dir="images"):
                 ref_images[i] = ref_resized
     return ref_images
 
+
 if __name__ == "__main__":
     print("请用鼠标拖拽选择主区域...")
     main_roi = select_roi()
@@ -328,9 +330,10 @@ if __name__ == "__main__":
     # 输出结果
     print("\n识别结果：")
     for res in results:
-        if 'error' in res:
+        if "error" in res:
             print(f"区域{res['region_id']}: 错误 - {res['error']}")
         else:
-            if res['matched_id'] != 0:
+            if res["matched_id"] != 0:
                 print(
-                    f"区域{res['region_id']} => 匹配ID:{res['matched_id']} 数字:{res['number']} 置信度:{res['confidence']}")
+                    f"区域{res['region_id']} => 匹配ID:{res['matched_id']} 数字:{res['number']} 置信度:{res['confidence']}"
+                )

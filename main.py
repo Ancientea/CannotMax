@@ -12,9 +12,7 @@ import loadData
 import recognize
 import train
 from train import UnitAwareTransformer
-
-# 定义全局变量
-MONSTER_COUNT = 51  # 设置怪物数量为 51
+from recognize import MONSTER_COUNT
 
 
 class ArknightsApp:
