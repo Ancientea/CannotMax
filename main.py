@@ -1,4 +1,5 @@
 import csv
+import json
 import os
 import subprocess
 import threading
@@ -13,6 +14,9 @@ import torch
 import loadData
 import recognize
 import math
+from simulator.battle_field import Battlefield
+from simulator.simulate import MONSTER_MAPPING
+from simulator.utils import Faction
 import train
 from train import UnitAwareTransformer
 from recognize import MONSTER_COUNT,intelligent_workers_debug
@@ -47,6 +51,10 @@ class ArknightsApp:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = None  # 模型实例
         self.load_model()  # 初始化时加载模型
+
+        # 加载怪物数据
+        with open("monsters.json", encoding='utf-8') as f:
+            self.monster_data = json.load(f)["monsters"]
 
     def load_images(self):
         for i in range(1, MONSTER_COUNT + 1):
@@ -215,6 +223,36 @@ class ArknightsApp:
             writer.writerow(data_row)
         # messagebox.showinfo("Info", "Data filled successfully")
 
+    def process_battle_data(self, left_counts, right_counts):
+        """
+        处理战斗数据CSV文件
+        :param csv_path: 输入CSV文件路径
+        """
+        # 构建阵营字典（ID从1开始）
+        left_army = {MONSTER_MAPPING[i]: int(count) for i, count in enumerate(left_counts) if count > 0}
+        right_army = {MONSTER_MAPPING[i]: int(count) for i, count in enumerate(right_counts) if count > 0}
+        
+        # 构建记录格式
+        battle_record = {
+            "left": left_army,
+            "right": right_army
+        }
+        
+        return battle_record
+    
+    def predict_with_simulator(self, battle_record):
+        # 用户配置
+        left_army = battle_record["left"]
+        right_army = battle_record["right"]
+    
+        # 初始化战场
+        battlefield = Battlefield(self.monster_data)
+        if not battlefield.setup_battle(left_army, right_army, self.monster_data):
+            return None
+        
+        # 开始战斗
+        return battlefield.run_battle(visualize=False)
+
     def get_prediction(self):
         try:
             if self.model is None:
@@ -232,6 +270,8 @@ class ArknightsApp:
             for name, entry in self.right_monsters.items():
                 value = entry.get()
                 right_counts[int(name) - 1] = int(value) if value.isdigit() else 0
+
+            sim_prediction = self.predict_with_simulator(self.process_battle_data(left_counts, right_counts))
 
             # 转换为张量并处理符号和绝对值
             left_signs = torch.sign(torch.tensor(left_counts, dtype=torch.int16)).unsqueeze(0).to(self.device)
@@ -253,24 +293,24 @@ class ArknightsApp:
                 if prediction < 0 or prediction > 1:
                     prediction = max(0, min(1, prediction))
 
-            return prediction
+            return prediction, sim_prediction
         except FileNotFoundError:
             messagebox.showerror("错误", "未找到模型文件，请先点击「训练」按钮")
-            return 0.5
+            return 0.5, None
         except RuntimeError as e:
             if "size mismatch" in str(e):
                 messagebox.showerror("错误", "模型结构不匹配！请删除旧模型并重新训练")
             else:
                 messagebox.showerror("错误", f"模型加载失败: {str(e)}")
-            return 0.5
+            return 0.5, None
         except ValueError:
             messagebox.showerror("错误", "请输入有效的数字（0或正整数）")
-            return 0.5
+            return 0.5, None
         except Exception as e:
             messagebox.showerror("错误", f"预测时发生错误: {str(e)}")
-            return 0.5
+            return 0.5, None
 
-    def predictText(self, prediction):
+    def predictText(self, prediction, sim_prediction):
         # 结果解释（注意：prediction直接对应标签'R'的概率）
         right_win_prob = prediction  # 模型输出的是右方胜率
         left_win_prob = 1 - right_win_prob
@@ -278,7 +318,8 @@ class ArknightsApp:
         # 格式化输出
         result_text = (f"预测结果:\n"
                        f"左方胜率: {left_win_prob:.2%}\n"
-                       f"右方胜率: {right_win_prob:.2%}")
+                       f"右方胜率: {right_win_prob:.2%}\n"
+                       f"模拟胜者: {"左" if sim_prediction == Faction.LEFT else "右"}")
 
         # 根据胜率设置颜色（保持与之前一致）
         self.result_label.config(text=result_text)
@@ -294,8 +335,8 @@ class ArknightsApp:
             self.result_label.config(fg="black", font=("Helvetica", 12, "bold"))
 
     def predict(self):
-        prediction = self.get_prediction()
-        self.predictText(prediction)
+        prediction, sim_prediction = self.get_prediction()
+        self.predictText(prediction, sim_prediction)
         # 保存当前预测结果用于后续数据收集
         self.current_prediction = prediction
 
