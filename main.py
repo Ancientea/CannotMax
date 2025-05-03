@@ -466,7 +466,8 @@ class ArknightsApp:
             results = sorted(results, key=lambda x: x[1], reverse=True)
             #print("匹配结果：", results[0])
             for idx, score in results:
-                if score > 0.5:
+                if score > 0.8:
+                    print(f'idx: {idx}')
                     if idx == 0:
                         loadData.click(relative_points[0])
                         print("加入赛事")

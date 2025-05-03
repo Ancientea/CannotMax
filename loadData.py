@@ -5,7 +5,8 @@ import numpy as np
 
 adb_path = r".\platform-tools\adb.exe"
 # 默认设备序列号，可以在main.py中修改
-manual_serial = '127.0.0.1:5555'
+# manual_serial = '127.0.0.1:5555'
+manual_serial = '127.0.0.1:16384'
 
 def set_device_serial(serial):
     global manual_serial
