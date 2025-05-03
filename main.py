@@ -30,6 +30,7 @@ class ArknightsApp:
         self.no_region = True
         self.first_recognize = True
         self.is_invest = tk.BooleanVar(value=False)  # 添加投资状态变量
+        self.allow_simulation_predict = tk.BooleanVar(value=False)  # 添加是否允许模拟预测变量
         self.game_mode = tk.StringVar(value="单人")  # 添加游戏模式变量，默认单人模式
         self.device_serial = tk.StringVar(value=loadData.manual_serial)  # 添加设备序列号变量
 
@@ -151,6 +152,10 @@ class ArknightsApp:
         self.predict_button = tk.Button(self.button_frame, text="{----预测----}", command=self.predict)
         self.predict_button.pack(side=tk.LEFT, padx=5)
 
+        # 添加允许模拟预测复选框
+        self.allow_simulation_checkbox = tk.Checkbutton(self.button_frame, text="模拟预测", variable=self.allow_simulation_predict)
+        self.allow_simulation_checkbox.pack(side=tk.LEFT, padx=5)
+
         self.recognize_button = tk.Button(self.button_frame, text="识别", command=self.recognize)
         self.recognize_button.pack(side=tk.LEFT, padx=5)
 
@@ -271,7 +276,9 @@ class ArknightsApp:
                 value = entry.get()
                 right_counts[int(name) - 1] = int(value) if value.isdigit() else 0
 
-            sim_prediction = self.predict_with_simulator(self.process_battle_data(left_counts, right_counts))
+            sim_prediction = None
+            if self.allow_simulation_predict.get():
+                sim_prediction = self.predict_with_simulator(self.process_battle_data(left_counts, right_counts))
 
             # 转换为张量并处理符号和绝对值
             left_signs = torch.sign(torch.tensor(left_counts, dtype=torch.int16)).unsqueeze(0).to(self.device)
@@ -315,11 +322,15 @@ class ArknightsApp:
         right_win_prob = prediction  # 模型输出的是右方胜率
         left_win_prob = 1 - right_win_prob
 
+        sim_prediction_result = "暂无"
+        if sim_prediction:
+            sim_prediction_result = "左" if sim_prediction == Faction.LEFT else "右"
+
         # 格式化输出
         result_text = (f"预测结果:\n"
                        f"左方胜率: {left_win_prob:.2%}\n"
                        f"右方胜率: {right_win_prob:.2%}\n"
-                       f"模拟胜者: {"左" if sim_prediction == Faction.LEFT else "右"}")
+                       f"模拟胜者: {sim_prediction_result}")
 
         # 根据胜率设置颜色（保持与之前一致）
         self.result_label.config(text=result_text)
