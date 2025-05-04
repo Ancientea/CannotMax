@@ -466,8 +466,9 @@ class ArknightsApp:
             results = sorted(results, key=lambda x: x[1], reverse=True)
             #print("匹配结果：", results[0])
             for idx, score in results:
+                # print(f'idx: {idx}, score: {score}')
                 if score > 0.8:
-                    print(f'idx: {idx}')
+                    # print(f'idx: {idx}')
                     if idx == 0:
                         loadData.click(relative_points[0])
                         print("加入赛事")
@@ -533,7 +534,7 @@ class ArknightsApp:
                         print("下一轮")
                         # 为填写数据操作设置冷却期
                         time.sleep(10)
-                    elif idx in [6, 7, 14]:
+                    elif idx in [6, 7, 14, 16]:
                         print("等待战斗结束")
                     elif idx in [12, 13]:  #返回主页
                         loadData.click(relative_points[0])

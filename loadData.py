@@ -57,7 +57,7 @@ except RuntimeError as e:
     print(f"错误: {str(e)}")
     exit(1)
 
-process_images = [cv2.imread(f'images/process/{i}.png') for i in range(16)]#16个模板
+process_images = [cv2.imread(f'images/process/{i}.png') for i in range(17)]#16个模板
 
 # 屏幕分辨率
 screen_width = 1920
