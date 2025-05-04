@@ -1,14 +1,14 @@
 import os
 import cv2
 import numpy as np
-import pytesseract
 from PIL import ImageGrab
+from rapidocr import RapidOCR
+
+
+rapidocr_eng = RapidOCR()
 
 # 是否启用debug模式
 intelligent_workers_debug = True
-
-# 配置Tesseract路径
-pytesseract.pytesseract.tesseract_cmd = r"Tesseract-OCR\tesseract.exe"
 
 # 定义全局变量
 MONSTER_COUNT = 56  # 设置怪物数量
@@ -34,6 +34,18 @@ relative_regions = [
     (0.7600, 0.1, 0.8800, 0.77),
     (0.8800, 0.1, 1.0000, 0.77),
 ]
+
+
+def do_ocr(img, use_det=False, use_cls=False, use_rec=True):
+    result = rapidocr_eng(img, use_det=use_det, use_cls=use_cls, use_rec=use_rec)
+    if result.txts:
+        return result.txts[0]
+    return ''
+
+
+def do_num_ocr(img):
+    s = do_ocr(img)
+    return ''.join([c for c in s if c.isdigit()])
 
 
 def save_number_image(number, processed, mon_id):
@@ -266,9 +278,7 @@ def process_regions(main_roi, screenshot=None):
             processed = add_black_border(processed, border_size=3)  # 加黑框
 
             # OCR识别（保留优化后的处理逻辑）
-            custom_config = r"--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789x×X"
-            number = pytesseract.image_to_string(processed, config=custom_config).strip()
-            number = number.replace("×", "x").lower()  # 统一符号
+            number = do_num_ocr(processed)
 
             # 提取有效数字部分
             x_pos = number.find("x")
@@ -282,6 +292,7 @@ def process_regions(main_roi, screenshot=None):
 
                 # 存储OCR图像用于debug
                 cv2.imwrite(f"images/tmp/number_{idx}.png", processed)
+                # cv2.imwrite(f"images/tmp/number_roi_{idx}_{number}.png", sub_roi_num)
 
                 # 保存有数字的图片到images/nums中的对应文件夹
                 if number:
