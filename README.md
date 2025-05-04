@@ -35,15 +35,8 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-4. 安装Tesseract OCR：
-- 下载并安装 [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki)
-- 将Tesseract安装目录添加到系统环境变量PATH中
-
-5. 修改你的设备序列号:
-- 在`loadData.py`中找到以下代码：
-```python
-   device_serial = '127.0.0.1:5555'  # 指定设备序列号
-```
+4. 修改你的设备序列号:
+- 详情参考使用方法部分，例如雷电模拟器默认设备序列号'127.0.0.1:5555'
 - 若你使用MUMU或雷电模拟器，你可以从以下网址得知如何找到设备序列号
 - 雷电 https://help.ldmnq.com/docs/LD9adbserver
 - MUMU https://mumu.163.com/help/20230214/35047_1073151.html

@@ -5,7 +5,6 @@ import threading
 import time
 import tkinter as tk
 from tkinter import messagebox
-
 import cv2
 import keyboard
 import numpy as np
@@ -51,12 +50,12 @@ class ArknightsApp:
     def load_images(self):
         for i in range(1, MONSTER_COUNT + 1):
             original_image = tk.PhotoImage(file=f"images/{i}.png")
-            # 计算合适的缩放比例使图片显示为60*60像素
+            # 计算合适的缩放比例使图片显示为80*80像素
             width = original_image.width()
             height = original_image.height()
-            width_ratio = width / 60
-            height_ratio = height / 60
-            # 使用较大的比例确保图片不超过60*60
+            width_ratio = width / 80
+            height_ratio = height / 80
+            # 使用较大的比例确保图片不超过80*80
             ratio = max(width_ratio, height_ratio)
             if ratio > 0:
                 self.images[str(i)] = original_image.subsample(int(ratio), int(ratio))
@@ -69,9 +68,6 @@ class ArknightsApp:
             if not os.path.exists('models/best_model_full.pth'):
                 raise FileNotFoundError("未找到训练好的模型文件 'models/best_model_full.pth'，请先训练模型")
 
-            # 初始化模型结构
-            #model = torch.load('models/best_model_full.pth', map_location=self.device,weights_only=False)
-            #model = torch.load('models/best_model_full.pth', map_location=self.device) if __
             try:
                 model = torch.load('models/best_model_full.pth', map_location=self.device, weights_only=False)
             except TypeError:  # 如果旧版本 PyTorch 不认识 weights_only
@@ -87,83 +83,152 @@ class ArknightsApp:
             self.root.destroy()  # 无法继续运行，退出程序
 
     def create_widgets(self):
-        # Create frames
-        self.top_frame = tk.Frame(self.root)
-        self.bottom_frame = tk.Frame(self.root)
-        self.button_frame = tk.Frame(self.root)
-        self.result_frame = tk.Frame(self.root)
+        # 创建顶层容器
+        self.top_container = tk.Frame(self.root)
+        self.bottom_container = tk.Frame(self.root)
 
-        self.top_frame.pack(side=tk.TOP, padx=10, pady=10)
-        self.bottom_frame.pack(side=tk.TOP, padx=10, pady=10)
-        self.button_frame.pack(side=tk.BOTTOM, padx=10, pady=10)
-        self.result_frame.pack(side=tk.BOTTOM, padx=10, pady=10)
+        # 顶部容器布局（填充整个水平空间）
+        self.top_container.pack(side=tk.TOP, fill=tk.X, pady=10)
+        self.bottom_container.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=10)
 
-        # 使用嵌套循环创建左侧和右侧怪物输入框
-        for side, frame, monsters in [("left", self.top_frame, self.left_monsters),
-                                      ("right", self.bottom_frame, self.right_monsters)]:
-            monsters_per_row = math.ceil(MONSTER_COUNT / 3)  # 每行怪物数量向上取整
-            for row in range(3):  # 分为3行
+        # 创建居中容器用于放置左右怪物框
+        self.monster_center = tk.Frame(self.top_container)
+        self.monster_center.pack(side=tk.TOP, anchor='center')
+
+        # 创建左右怪物容器（添加边框和背景色）
+        self.left_frame = tk.Frame(self.monster_center,borderwidth=2,relief="groove",padx=5,pady=5)
+        self.right_frame = tk.Frame(self.monster_center,borderwidth=2,relief="groove",padx=5,pady=5)
+
+        # 添加左右标题
+        tk.Label(self.left_frame, text="左侧怪物", font=('Helvetica', 10, 'bold')).grid(row=0, columnspan=10)
+        tk.Label(self.right_frame, text="右侧怪物", font=('Helvetica', 10, 'bold')).grid(row=0, columnspan=10)
+
+        # 左右布局（添加显式间距并居中）
+        self.left_frame.pack(side=tk.LEFT, padx=10, anchor='n', pady=5)
+        self.right_frame.pack(side=tk.RIGHT, padx=10, anchor='n', pady=5)
+
+        # 怪物输入框生成逻辑（增加行间距）
+        for side, frame, monsters in [("left", self.left_frame, self.left_monsters),
+                                      ("right", self.right_frame, self.right_monsters)]:
+            monsters_per_row = math.ceil(MONSTER_COUNT / 8)
+            for row in range(8):
                 start = row * monsters_per_row + 1
-                end = min((row + 1) * monsters_per_row + 1, MONSTER_COUNT + 1)  # 确保不超出总数
+                end = min((row + 1) * monsters_per_row + 1, MONSTER_COUNT + 1)
                 for i in range(start, end):
-                    tk.Label(frame, image=self.images[str(i)]).grid(row=row * 2, column=i - start)
-                    monsters[str(i)] = tk.Entry(frame, width=8)
-                    monsters[str(i)].grid(row=row * 2 + 1, column=i - start)
+                    # 图片标签增加内边距
+                    tk.Label(frame, image=self.images[str(i)], padx=3, pady=3).grid(
+                        row=row * 2 + 1,  # 从第1行开始
+                        column=i - start,
+                        sticky='ew'
+                    )
+                    # 输入框增加内边距
+                    monsters[str(i)] = tk.Entry(frame, width=10)  # 加宽输入框
+                    monsters[str(i)].grid(
+                        row=row * 2 + 2,  # 下移一行
+                        column=i - start,
+                        pady=(0, 5)  # 底部留空
+                    )
 
-        # Create buttons
-        # 添加当次训练时长输入框
-        self.duration_label = tk.Label(self.button_frame, text="当次训练时长(小时):")
-        self.duration_label.pack(side=tk.LEFT, padx=5)
-        self.duration_entry = tk.Entry(self.button_frame, width=4)
-        self.duration_entry.insert(0, "-1")  # 默认值为-1表示无限训练时间
+        # 结果显示区域（增加边框）
+        self.result_frame = tk.Frame(self.bottom_container,relief="ridge",borderwidth=1)
+        self.result_frame.pack(fill=tk.X, pady=5)
+
+        # 使用更醒目的字体
+        self.result_label = tk.Label(self.result_frame,text="Prediction: ",font=("Helvetica", 16, "bold"),fg="blue")
+        self.result_label.pack(pady=3)
+        self.stats_label = tk.Label(self.result_frame,text="",font=("Helvetica", 12),fg="green")
+        self.stats_label.pack(pady=3)
+
+        # 按钮区域容器（增加边框和背景）
+        self.button_frame = tk.Frame(self.bottom_container,relief="groove",borderwidth=2,padx=10,pady=10)
+        self.button_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 按钮布局（分左右两列布局）
+        left_buttons = tk.Frame(self.button_frame)
+        center_buttons = tk.Frame(self.button_frame)  # 新增中间按钮容器
+        right_buttons = tk.Frame(self.button_frame)
+
+        # 使用grid布局实现均匀分布
+        left_buttons.grid(row=0, column=0, sticky='ew')
+        center_buttons.grid(row=0, column=1, sticky='ew')  # 中间列
+        right_buttons.grid(row=0, column=2, sticky='ew')
+        self.button_frame.grid_columnconfigure((0, 1, 2), weight=1)  # 均匀分布三列
+
+        # 左侧按钮列（控制选项）
+        control_col = tk.Frame(left_buttons)
+        control_col.pack(anchor='center', expand=True)
+
+        # 时长输入组
+        duration_frame = tk.Frame(control_col)
+        duration_frame.pack(pady=2)
+        tk.Label(duration_frame, text="训练时长:").pack(side=tk.LEFT)
+        self.duration_entry = tk.Entry(duration_frame, width=6)
+        self.duration_entry.insert(0, "-1")
         self.duration_entry.pack(side=tk.LEFT, padx=5)
 
-        # self.train_button = tk.Button(self.button_frame, text="训练", command=self.train_model)
-        # self.train_button.pack(side=tk.LEFT, padx=5)
-        self.auto_fetch_button = tk.Button(self.button_frame, text="自动获取数据", command=self.toggle_auto_fetch)
-        self.auto_fetch_button.pack(side=tk.LEFT, padx=5)
-
-        # 添加游戏模式下拉菜单
-        self.mode_menu = tk.OptionMenu(self.button_frame, self.game_mode, "单人", "30人")
-        self.mode_menu.pack(side=tk.LEFT, padx=5)
-
-        # 添加投资复选框
-        self.invest_checkbox = tk.Checkbutton(self.button_frame, text="投资", variable=self.is_invest)
+        # 模式选择组
+        mode_frame = tk.Frame(control_col)
+        mode_frame.pack(pady=2)
+        self.mode_menu = tk.OptionMenu(mode_frame, self.game_mode, "单人", "30人")
+        self.mode_menu.pack(side=tk.LEFT)
+        self.invest_checkbox = tk.Checkbutton(mode_frame, text="投资", variable=self.is_invest)
         self.invest_checkbox.pack(side=tk.LEFT, padx=5)
 
-        self.fill_correct_button = tk.Button(self.button_frame, text="填写√", command=self.fill_data_correct)
-        self.fill_correct_button.pack(side=tk.LEFT, padx=5)
+        # 中间按钮列（核心操作）
+        action_col = tk.Frame(center_buttons)
+        action_col.pack(anchor='center', expand=True)
 
-        self.fill_incorrect_button = tk.Button(self.button_frame, text="填写×", command=self.fill_data_incorrect)
-        self.fill_incorrect_button.pack(side=tk.LEFT, padx=5)
+        # 核心操作按钮
+        action_buttons = [
+            ("自动获取数据", self.toggle_auto_fetch)
+        ]
+        # 单独处理自动获取数据按钮
+        for text, cmd in action_buttons:
+            btn = tk.Button(action_col,text=text,command=cmd,width=14)  # 加宽按钮
+            btn.pack(pady=5, ipadx=5)
+            if text == "自动获取数据":
+                self.auto_fetch_button = btn
+            btn.pack(pady=5, ipadx=5)
 
-        self.reset_button = tk.Button(self.button_frame, text="归零", command=self.reset_entries)
-        self.reset_button.pack(side=tk.LEFT, padx=5)
+        # 创建对错按钮容器（水平排列）
+        fill_buttons_frame = tk.Frame(action_col)
+        fill_buttons_frame.pack(pady=2)
 
-        self.predict_button = tk.Button(self.button_frame, text="{----预测----}", command=self.predict)
-        self.predict_button.pack(side=tk.LEFT, padx=5)
+        # 左侧的√按钮
+        tk.Button(fill_buttons_frame,text="填写√",command=self.fill_data_correct,width=8,bg="#C1E1C1").pack(side=tk.LEFT, padx=5)
 
-        self.recognize_button = tk.Button(self.button_frame, text="识别", command=self.recognize)
-        self.recognize_button.pack(side=tk.LEFT, padx=5)
+        # 右侧的×按钮
+        tk.Button(fill_buttons_frame,text="填写×",command=self.fill_data_incorrect,width=8,bg="#FFB3BA").pack(side=tk.RIGHT, padx=5)
 
-        self.reselect_button = tk.Button(self.button_frame, text="选择范围", command=self.reselect_roi)
-        self.reselect_button.pack(side=tk.LEFT, padx=5)
+        # 右侧按钮列（功能按钮）
+        func_col = tk.Frame(right_buttons)
+        func_col.pack(anchor='center', expand=True)
 
-        # 添加设备序列号输入框
-        self.serial_label = tk.Label(self.button_frame, text="模拟器序列号:")
-        self.serial_label.pack(side=tk.LEFT, padx=5)
-        self.serial_entry = tk.Entry(self.button_frame, textvariable=self.device_serial, width=15)
-        self.serial_entry.pack(side=tk.LEFT, padx=5)
-        self.serial_button = tk.Button(self.button_frame, text="更新", command=self.update_device_serial)
-        self.serial_button.pack(side=tk.LEFT, padx=5)
+        # 预测功能组
+        predict_frame = tk.Frame(func_col)
+        predict_frame.pack(pady=2)
+        self.predict_button = tk.Button(predict_frame,text="预测",command=self.predict,width=8,bg="#FFE4B5")
+        self.predict_button.pack(side=tk.LEFT, padx=2)
 
-        # Create result label
-        self.result_label = tk.Label(self.result_frame, text="Prediction: ", font=("Helvetica", 16))
-        self.result_label.pack()
+        self.recognize_button = tk.Button(predict_frame,text="识别并预测",command=self.recognize,width=10,bg="#98FB98")
+        self.recognize_button.pack(side=tk.LEFT, padx=2)
 
-        # Create statistics label
-        self.stats_label = tk.Label(self.result_frame, text="", font=("Helvetica", 12))
-        self.stats_label.pack()
+        self.reset_button = tk.Button(predict_frame,text="归零",command=self.reset_entries,width=6)
+        self.reset_button.pack(side=tk.LEFT, padx=2)
+
+        # 设备序列号组（独立行）
+        serial_frame = tk.Frame(func_col)
+        serial_frame.pack(pady=5)
+
+        self.reselect_button = tk.Button(serial_frame, text="选择范围", command=self.reselect_roi,width=10)
+        self.reselect_button.pack(side=tk.LEFT)
+
+        tk.Label(serial_frame, text="设备号:").pack(side=tk.LEFT)
+        self.serial_entry = tk.Entry(serial_frame,textvariable=self.device_serial,width=15)
+        self.serial_entry.pack(side=tk.LEFT, padx=3)
+
+        self.serial_button = tk.Button(serial_frame,text="更新",command=self.update_device_serial,width=6)
+        self.serial_button.pack(side=tk.LEFT)
 
     def reset_entries(self):
         for entry in self.left_monsters.values():
@@ -294,10 +359,9 @@ class ArknightsApp:
             self.result_label.config(fg="black", font=("Helvetica", 12, "bold"))
 
     def predict(self):
-        prediction = self.get_prediction()
-        self.predictText(prediction)
         # 保存当前预测结果用于后续数据收集
-        self.current_prediction = prediction
+        self.current_prediction = self.get_prediction()
+        self.predictText(self.current_prediction)
 
     def recognize(self):
         # 如果正在进行自动获取数据，从adb加载截图
@@ -339,22 +403,22 @@ class ArknightsApp:
                         entry.config(bg="yellow")
 
         # =====================人工审核保存测试用例截图========================
-        # 获取截图区域
-        x1 = int(0.2479 * loadData.screen_width)
-        y1 = int(0.8444 * loadData.screen_height)
-        x2 = int(0.7526 * loadData.screen_width)
-        y2 = int(0.9491 * loadData.screen_height)
-        # 截取指定区域
-        roi = screenshot[y1:y2, x1:x2]
+        if intelligent_workers_debug & self.auto_fetch_running:  # 如果处于debug模式且处于自动模式
+            # 获取截图区域
+            x1 = int(0.2479 * loadData.screen_width)
+            y1 = int(0.8444 * loadData.screen_height)
+            x2 = int(0.7526 * loadData.screen_width)
+            y2 = int(0.9491 * loadData.screen_height)
+            # 截取指定区域
+            roi = screenshot[y1:y2, x1:x2]
 
-        # 处理结果
-        processed_monster_ids = []  # 用于存储处理的怪物 ID
-        for res in results:
-            if 'error' not in res:
-                matched_id = res['matched_id']
-                if matched_id != 0:
-                    processed_monster_ids.append(matched_id)  # 记录处理的怪物 ID
-        if intelligent_workers_debug: # 如果处于debug模式
+            # 处理结果
+            processed_monster_ids = []  # 用于存储处理的怪物 ID
+            for res in results:
+                if 'error' not in res:
+                    matched_id = res['matched_id']
+                    if matched_id != 0:
+                        processed_monster_ids.append(matched_id)  # 记录处理的怪物 ID
             # 生成唯一的文件名（使用时间戳）
             timestamp = int(time.time())
             if screenshot is not None:
@@ -364,6 +428,7 @@ class ArknightsApp:
             monster_ids_str = "_".join(map(str, processed_monster_ids))
             self.current_image_name = f"{timestamp}_{monster_ids_str}.png"
             self.current_image = cv2.resize(roi, (roi.shape[1] // 2, roi.shape[0] // 2))  # 保存缩放后的图片到内存
+        self.predict()
 
     def reselect_roi(self):
         self.main_roi = recognize.select_roi()
@@ -491,14 +556,10 @@ class ArknightsApp:
                         self.reset_entries()
                         #识别怪物类型数量
                         self.recognize()
-                        #预测
-                        prediction = self.get_prediction()
-                        self.predictText(prediction)
-                        self.current_prediction = prediction
                         #点击下一轮
                         if self.is_invest.get():#投资
                             # 根据预测结果点击投资左/右
-                            if prediction > 0.5:
+                            if self.current_prediction > 0.5:
                                 if idx == 4:
                                     loadData.click(relative_points[0])
                                 else:

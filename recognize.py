@@ -292,7 +292,6 @@ def process_regions(main_roi, screenshot=None):
 
                 # 存储OCR图像用于debug
                 cv2.imwrite(f"images/tmp/number_{idx}.png", processed)
-                # cv2.imwrite(f"images/tmp/number_roi_{idx}_{number}.png", sub_roi_num)
 
                 # 保存有数字的图片到images/nums中的对应文件夹
                 if number:
