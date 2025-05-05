@@ -15,7 +15,17 @@ from recognize import MONSTER_COUNT, intelligent_workers_debug
 
 
 class AutoFetch:
-    def __init__(self, game_mode, is_invest, reset, recognizer, updater, start_callback, stop_callback, training_duration):
+    def __init__(
+        self,
+        game_mode,
+        is_invest,
+        reset,
+        recognizer,
+        updater,
+        start_callback,
+        stop_callback,
+        training_duration,
+    ):
         self.game_mode = game_mode  # 游戏模式（30人或自娱自乐）
         self.is_invest = is_invest  # 是否投资
         self.current_prediction = 0.5  # 当前预测结果，初始值为0.5
@@ -27,21 +37,21 @@ class AutoFetch:
         self.updater = updater  # 更新统计信息的函数
         self.start_callback = start_callback
         self.stop_callback = stop_callback
-        self.image = None     # 当前图片
-        self.image_name = ""    # 当前图片名称
-        self.auto_fetch_running = False # 自动获取数据的状态
+        self.image = None  # 当前图片
+        self.image_name = ""  # 当前图片名称
+        self.auto_fetch_running = False  # 自动获取数据的状态
         self.start_time = time.time()  # 记录开始时间
-        self.training_duration = training_duration  # 训练持续时间
+        self.training_duration = training_duration  # 训练时长
 
     @staticmethod
     def fill_data(battle_result, recoginze_results, image, image_name):
         image_data = np.zeros((1, MONSTER_COUNT * 2))
 
         for res in recoginze_results:
-            region_id = res['region_id']
-            if 'error' not in res:
-                matched_id = res['matched_id']
-                number = res['number']
+            region_id = res["region_id"]
+            if "error" not in res:
+                matched_id = res["matched_id"]
+                number = res["number"]
                 if matched_id != 0:
                     if region_id < 3:  # 左侧怪物
                         image_data[0][matched_id - 1] = number
@@ -119,9 +129,11 @@ class AutoFetch:
         elapsed_time = time.time() - self.start_time if self.start_time else 0
         hours, remainder = divmod(elapsed_time, 3600)
         minutes, _ = divmod(remainder, 60)
-        stats_text = (f"总共填写次数: {self.total_fill_count}\n"
-                      f"填写×次数: {self.incorrect_fill_count}\n"
-                      f"当次运行时长: {int(hours)}小时{int(minutes)}分钟\n")
+        stats_text = (
+            f"总共填写次数: {self.total_fill_count}\n"
+            f"填写×次数: {self.incorrect_fill_count}\n"
+            f"当次运行时长: {int(hours)}小时{int(minutes)}分钟\n"
+        )
         with open("log.txt", "a") as log_file:
             log_file.write(stats_text)
 
@@ -161,7 +173,9 @@ class AutoFetch:
                         # 归零
                         self.reset()
                         # 识别怪物类型数量
-                        self.current_prediction, self.recognize_results, screenshot = self.recognizer()
+                        self.current_prediction, self.recognize_results, screenshot = (
+                            self.recognizer()
+                        )
                         # 人工审核保存测试用截图
                         if intelligent_workers_debug:  # 如果处于debug模式且处于自动模式
                             self.image, self.image_name = self.save_recoginze_image(
@@ -223,13 +237,13 @@ class AutoFetch:
                     break
                 # 检测一次间隔时间——————————————————————————————————
                 time.sleep(0.5)
-                if keyboard.is_pressed('esc'):
+                if keyboard.is_pressed("esc"):
                     break
             except Exception as e:
                 logging.exception(f"自动获取数据出错:\n{e}")
                 break
-            #time.sleep(2)
-            if keyboard.is_pressed('esc'):
+            # time.sleep(2)
+            if keyboard.is_pressed("esc"):
                 break
         else:
             logging.info("自动获取数据已停止")
