@@ -1,6 +1,8 @@
 import csv
+import datetime
 import logging
 import os
+from pathlib import Path
 import threading
 import time
 from tkinter import image_names
@@ -43,8 +45,7 @@ class AutoFetch:
         self.start_time = time.time()  # 记录开始时间
         self.training_duration = training_duration  # 训练时长
 
-    @staticmethod
-    def fill_data(battle_result, recoginze_results, image, image_name):
+    def fill_data(self, battle_result, recoginze_results, image, image_name):
         image_data = np.zeros((1, MONSTER_COUNT * 2))
 
         for res in recoginze_results:
@@ -66,15 +67,29 @@ class AutoFetch:
 
         # 将数据转换为列表，并添加图片名称
         data_row = image_data.tolist()
-        if intelligent_workers_debug:  # 如果处于debug模式
+        # 保存数据
+        start_time = datetime.datetime.fromtimestamp(self.start_time).strftime(
+            r"%Y_%m_%d__%H_%M_%S"
+        )
+        data_folder = Path(f"data/{start_time}")
+        img_folder = Path(f"data/{start_time}/images")
+        if not data_folder.exists():
+            print(f"创建文件夹: {data_folder}")
+            data_folder.mkdir(parents=True, exist_ok=True)  # 创建文件夹
+            img_folder.mkdir(parents=True, exist_ok=True)
+            with open(data_folder / "arknights.csv", "a", newline="") as file:
+                header = [f"{i+1}L" for i in range(MONSTER_COUNT)]
+                header += [f"{i+1}R" for i in range(MONSTER_COUNT)]
+                header += ["Result", "ImgPath"]
+                writer = csv.writer(file)
+                writer.writerow(header)
+        if intelligent_workers_debug:  # 如果处于debug模式，保存人工审核图片到本地
             data_row.append(image_name)
-            # ==================在这里保存人工审核图片到本地==================
             if image is not None:
                 os.makedirs("data/images", exist_ok=True)
-                image_path = os.path.join("data/images", image_name)
+                image_path = img_folder / image_name
                 cv2.imwrite(image_path, image)
-
-        with open("arknights.csv", "a", newline="") as file:
+        with open(data_folder / "arknights.csv", "a", newline="") as file:
             writer = csv.writer(file)
             writer.writerow(data_row)
         print(f"写入csv完成")
