@@ -286,6 +286,41 @@ def find_csv_files(root_dir):
                 csv_files.append(csv_path)
     return csv_files
 
+def find_where_from(easydata,floder_path):
+    "easydata格式：[[[序号,数量][序号,数量][序号,数量]],[[序号,数量][序号,数量][序号,数量]],结果]，没有的序号和数量留-1，序号是真实序号"
+    datalist = [0]*MONSTER_NUM*2
+    from_list = []
+    for i in easydata[0]:
+        if i[0] > 0:
+            datalist[i[0]-1] = i[1]
+    for i in easydata[1]:
+        if i[0] > 0:
+            datalist[i[0]-1+MONSTER_NUM] = i[1]
+    datalist.extend(easydata[2])
+    print(datalist)
+    csvlist = find_csv_files(floder_path)
+    for c in csvlist:
+        print(c)
+    for c in csvlist:
+        print(f'正在检查：{c}…………………………')
+        lines_num = MONSTER_NUM*2
+        datafull = []
+        row_id = 0
+        with open(c, 'r') as file:
+            csv_reader = csv.reader(file)
+            for row in csv_reader:
+                if isfloat(row[0]) and '' not in row[:lines_num] and len(row) > lines_num:
+                    numbers = list(map(int,map(float, row[:lines_num])))  # 转换为整数列表
+                    vals = row[lines_num:]
+                    if datalist == numbers+vals:
+                        from_list.append([c,row_id+1])
+                        print(f'数据来源于：{c}，第{row_id+1}行！')
+                row_id += 1
+    str_from = ''
+    if from_list != []:
+        str_from = "\n".join([i[0] + '第：' + str(i[1]) + '行' for i in from_list])
+    print(f'可能的数据来源：{str_from}')
+
 
 #newdata,deleted,ori_len = read_and_remove_zeros('0502.csv',MONSTER_NUM=56)
 #_,inc = remove_duplicate_subsequences()
@@ -629,6 +664,8 @@ def create_gui():
 if __name__ == "__main__":
     # 请确保以下函数已经正确导入或定义：
     # process_floder, process_file, find_csv_files, savecsv
+    #find_where_from([[[9,2]],[[53,3]],'L'],r'C:\Users\Administrator\Desktop\lll')
+    #find_where_from([[[53,3]],[[9,2]],'R'],r'C:\Users\Administrator\Desktop\lll')
     app = create_gui()
     app.mainloop()
     #process_floder(r'D:\Backup\Downloads\CaM\camdata',r'C:\Users\Administrator\Desktop\Files\dat6.csv',r'C:\Users\Administrator\Desktop\Files\dat7.csv',do_remove_duplicate_subsequences = False,delete_no_time = True)
