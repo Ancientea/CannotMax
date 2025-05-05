@@ -75,6 +75,7 @@ python main.py
 - 自动获取数据功能游戏窗口可在后台运行
 - 按ESC键可以随时停止自动获取数据
 - 模拟器分辨率目前仅适配了1920*1080
+- 如遇到cv2.error:OpenCV……报错字样务必删除opencv-python-headless(与opencv-python冲突)，仅保留opencv-python
 
 ## 文件说明
 
