@@ -228,7 +228,10 @@ def view_monster_counts(listdata):
                     print(f'确认为30人数据，文档加入黑名单。')
         ind += 1
     processed_data = [listdata[j] for j in range(len(listdata)) if j not in wrong_counts]
-    return black_listed,wrong_counts,processed_data
+    mwdata = is_list_true_np(processed_data)
+    processed_data2 = [processed_data[j] for j in range(len(processed_data)) if j not in mwdata]
+    print(f'怪物信息不符合权重分配的数据行：{mwdata}')
+    return black_listed,wrong_counts,mwdata,processed_data2
 
 def del_duplicate_by_time(listdata,delete_no_time = True):
     ind = 0
@@ -286,8 +289,21 @@ def find_csv_files(root_dir):
                 csv_files.append(csv_path)
     return csv_files
 
+def easydata2data(easydata):
+    # 测试用函数
+    # easydata格式：[[[序号,数量][序号,数量][序号,数量]],[[序号,数量][序号,数量][序号,数量]],结果]，没有的序号和数量留-1，序号是真实序号
+    datalist = [0]*MONSTER_NUM*2
+    for i in easydata[0]:
+        if i[0] > 0:
+            datalist[i[0]-1] = i[1]
+    for i in easydata[1]:
+        if i[0] > 0:
+            datalist[i[0]-1+MONSTER_NUM] = i[1]
+    datalist.extend(easydata[2])
+    return datalist
+
 def find_where_from(easydata,floder_path):
-    "easydata格式：[[[序号,数量][序号,数量][序号,数量]],[[序号,数量][序号,数量][序号,数量]],结果]，没有的序号和数量留-1，序号是真实序号"
+    # easydata格式：[[[序号,数量][序号,数量][序号,数量]],[[序号,数量][序号,数量][序号,数量]],结果]，没有的序号和数量留-1，序号是真实序号
     datalist = [0]*MONSTER_NUM*2
     from_list = []
     for i in easydata[0]:
@@ -311,7 +327,7 @@ def find_where_from(easydata,floder_path):
             for row in csv_reader:
                 if isfloat(row[0]) and '' not in row[:lines_num] and len(row) > lines_num:
                     numbers = list(map(int,map(float, row[:lines_num])))  # 转换为整数列表
-                    vals = row[lines_num:]
+                    vals = [row[lines_num]]
                     if datalist == numbers+vals:
                         from_list.append([c,row_id+1])
                         print(f'数据来源于：{c}，第{row_id+1}行！')
@@ -321,6 +337,123 @@ def find_where_from(easydata,floder_path):
         str_from = "\n".join([i[0] + '第：' + str(i[1]) + '行' for i in from_list])
     print(f'可能的数据来源：{str_from}')
 
+def is_distance_not_over_60(a,b,c,d):
+    #a, b = interval1
+    #c, d = interval2
+    # 判断区间是否有交集
+    if max(a, c) <= min(b, d):
+        return True  # 有交集时距离为0，未超过60
+    # 计算不重叠时的间隔
+    if b < c:
+        distance = c - b  # interval1在左，interval2在右
+    else:
+        distance = a - d  # interval2在左，interval1在右
+    return distance <= 60
+
+def is_list_true_np(fulllist):
+    cost_list = [
+        [2,0], [2,0.1], [7,0], [7,0], [3,0.1], [10,0], [25,15], [22,0], [25,100], [7,0],
+        [5,0.2], [7,0], [2,0], [15,2], [13,0], [12,1.5],
+        [6,0.2], [18,3], [15,3], [18,1], [11,0], [10,1], [16,0], [5,0.5], [15,2], [14,0],
+        [30,0], [35,100], [-1,-1], [-1,-1], [-1,-1], [6,0.5], [6,0],
+        [16,0], [15,5], [11,0], [26,0], [15,0], [4,0.1], [10,0], [21,0], [5,0.2],
+        [18,0], [9,1.5], [8,0.5], [16,0], [21,0], [7,0], [36,10], [10,2], [30,15],
+        [25,0], [27,0], [32,6], [25,50], [15,5]
+        ]
+    round_cost_list = [[50,70],[70,90],[90,110],[110,130],[120,160],[140,180],[160,200],[170,230],[190,250],[210,270]]
+    
+    # Convert to numpy arrays
+    cost_arr = np.array(cost_list)
+    round_cost_arr = np.array(round_cost_list)
+    round_low = round_cost_arr[:, 0]
+    round_high = round_cost_arr[:, 1]
+    
+    # Validity mask for cost entries not equal to [-1, -1]
+    valid_mask = np.all(cost_arr != [-1, -1], axis=1)
+    
+    # Split the input into left and right parts
+    fulllist_np = np.array([i[:112] for i in fulllist], dtype=np.float64)
+    N = fulllist_np.shape[0]
+    left_part = fulllist_np[:, :56]
+    right_part = fulllist_np[:, 56:112]
+    
+    # Calculate valid entries (cost not [-1,-1] and count >0)
+    valid_left = valid_mask[np.newaxis, :] & (left_part > 0)
+    valid_right = valid_mask[np.newaxis, :] & (right_part > 0)
+    
+    # Compute mincostL and maxcostL for left
+    left_min_terms = (
+        (left_part - 1) * cost_arr[np.newaxis, :, 0] +
+        ((left_part - 1) * (left_part - 2) * cost_arr[np.newaxis, :, 1]) / 2 +
+        0.01
+    ) * valid_left
+    mincostL = left_min_terms.sum(axis=1)
+    
+    left_max_terms = (
+        (left_part + 1) * cost_arr[np.newaxis, :, 0] +
+        (left_part * (left_part + 1) * cost_arr[np.newaxis, :, 1]) / 2 -
+        0.01
+    ) * valid_left
+    maxcostL = left_max_terms.sum(axis=1)
+    
+    # Compute mincostR and maxcostR for right
+    right_min_terms = (
+        (right_part - 1) * cost_arr[np.newaxis, :, 0] +
+        ((right_part - 1) * (right_part - 2) * cost_arr[np.newaxis, :, 1]) / 2 +
+        0.01
+    ) * valid_right
+    mincostR = right_min_terms.sum(axis=1)
+    
+    right_max_terms = (
+        (right_part + 1) * cost_arr[np.newaxis, :, 0] +
+        (right_part * (right_part + 1) * cost_arr[np.newaxis, :, 1]) / 2 -
+        0.01
+    ) * valid_right
+    maxcostR = right_max_terms.sum(axis=1)
+    
+    # Check overlap with round costs
+    left_low = np.maximum(mincostL[:, np.newaxis], round_low)
+    left_high = np.minimum(maxcostL[:, np.newaxis], round_high)
+    left_cond = left_low <= left_high
+    
+    right_low = np.maximum(mincostR[:, np.newaxis], round_low)
+    right_high = np.minimum(maxcostR[:, np.newaxis], round_high)
+    right_cond = right_low <= right_high
+    
+    both_cond = left_cond & right_cond
+    any_round = np.any(both_cond, axis=1)
+    
+    # Get indices where no round condition is satisfied
+    false_indices = np.where(~any_round)[0].tolist()
+    return false_indices
+
+def is_list_true(onelist):
+    roundlist = []
+    #费用和附加费用，写死在代码里吧，不想读文件了。
+    cost_list = [[2,0],[2,0.1],[7,0],[7,0],[3,0.1],[10,0],[25,15],[22,0],[25,100],[7,0],[5,0.2],[7,0],[2,0],[15,2],[13,0],[12,1.5],
+        [6,0.2],[18,3],[15,3],[18,1],[11,0],[10,1],[16,0],[5,0.5],[15,2],[14,0],[30,0],[35,100],[-1,-1],[-1,-1],[-1,-1],[6,0.5],[6,0],
+        [16,0],[15,5],[11,0],[26,0],[15,0],[4,0.1],[10,0],[21,0],[5,0.2],[18,0],[9,1.5],[8,0.5],[16,0],[21,0],[7,0],[36,10],[10,2],[30,15],
+        [25,0],[27,0],[32,6],[25,50],[15,5]]
+    #
+    round_cost_list = [[50,70],[70,90],[90,110],[110,130],[120,160],[140,180],[160,200],[170,230],[190,250],[210,270]]
+    left = onelist[:MONSTER_NUM]
+    right = onelist[MONSTER_NUM:MONSTER_NUM*2]
+    #result = onelist[MONSTER_NUM*2]
+    #print(left,right,result)
+    mincostL = sum([(left[i]-1)*cost_list[i][0]+(left[i]-1)*(left[i]-2)*cost_list[i][1]/2+0.01 for i in range(len(left)) if (cost_list[i] != [-1,-1]) and (left[i] > 0)])
+    maxcostL = sum([(left[i]+1)*cost_list[i][0]+left[i]*(left[i]+1)*cost_list[i][1]/2-0.01 for i in range(len(left)) if (cost_list[i] != [-1,-1]) and (left[i] > 0)])
+    mincostR = sum([(right[i]-1)*cost_list[i][0]+(right[i]-1)*(right[i]-2)*cost_list[i][1]/2+0.01 for i in range(len(right)) if (cost_list[i] != [-1,-1]) and (right[i] > 0)])
+    maxcostR = sum([(right[i]+1)*cost_list[i][0]+right[i]*(right[i]+1)*cost_list[i][1]/2-0.01 for i in range(len(right)) if (cost_list[i] != [-1,-1]) and (right[i] > 0)])
+    print(mincostL,maxcostL,mincostR,maxcostR)
+    for i in range(len(round_cost_list)):
+        if max(mincostL, round_cost_list[i][0]) <= min(maxcostL, round_cost_list[i][1]) and max(mincostR, round_cost_list[i][0]) <= min(maxcostR, round_cost_list[i][1]):
+            roundlist.append(i)     
+    if roundlist != []:
+        return True
+    else:
+        print(f'{onelist}is not true！！！')
+        return False
+    #return is_distance_not_over_60(mincostL,maxcostL,mincostR,maxcostR)
 
 #newdata,deleted,ori_len = read_and_remove_zeros('0502.csv',MONSTER_NUM=56)
 #_,inc = remove_duplicate_subsequences()
@@ -342,14 +475,14 @@ def process_full(filename,do_remove_duplicate_subsequences = False,delete_no_tim
     newdata, deleted2, deleted3 = del_duplicate_by_time(newdata,delete_no_time)
     if not delete_no_time:
         deleted2 = []
-    black_listed,deleted4,newdata = view_monster_counts(newdata)
-    deleted5 = []
+    black_listed,deleted4,deleted5,newdata = view_monster_counts(newdata)
+    deleted6 = []
     if open_black_list:
-        newdata,deleted5 = process_black_list(newdata)
+        newdata,deleted6 = process_black_list(newdata)
 
     dl = deleted0
     flag = 0
-    for i in [deleted1,deleted2,deleted3,deleted4,deleted5]:
+    for i in [deleted1,deleted2,deleted3,deleted4,deleted5,deleted6]:
         if i != []:
             dl,secori = ori_pos(ori_len,dl,i)
             if flag == 0:
@@ -362,6 +495,8 @@ def process_full(filename,do_remove_duplicate_subsequences = False,delete_no_tim
             elif flag == 3:
                 wrong_type_list.append(['怪物信息错误的数据：',merge([i + 1 for i in secori])])
             elif flag == 4:
+                wrong_type_list.append(['不符合出怪权重规则的数据：',merge([i + 1 for i in secori])])
+            elif flag == 5:
                 wrong_type_list.append(['黑名单内数据：',merge([i + 1 for i in secori])])
         flag += 1
     return black_listed,newdata,dl,wrong_type_list
@@ -542,7 +677,7 @@ def create_gui():
     sys.stdout = RedirectText(output_text, "data_processing.log")
 
     # 处理文件夹的Frame
-    folder_frame = ttk.LabelFrame(root, text="处理文件夹(处理文件夹及其所有子文件夹下的CSV文件)")
+    folder_frame = ttk.LabelFrame(root, text="处理文件夹(处理文件夹及其所有子文件夹下的CSV文件，并合并为一个)")
     folder_frame.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
 
     # 处理文件夹的组件
@@ -664,8 +799,9 @@ def create_gui():
 if __name__ == "__main__":
     # 请确保以下函数已经正确导入或定义：
     # process_floder, process_file, find_csv_files, savecsv
-    #find_where_from([[[9,2]],[[53,3]],'L'],r'C:\Users\Administrator\Desktop\lll')
-    #find_where_from([[[53,3]],[[9,2]],'R'],r'C:\Users\Administrator\Desktop\lll')
+    #find_where_from([[[9,1]],[[53,4]],'L'],r'D:\Backup\Downloads\arcdata')
+    #find_where_from([[[53,4]],[[9,1]],'R'],r'D:\Backup\Downloads\arcdata')
+    #print(is_list_true_np([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 47, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'R']]))
     app = create_gui()
     app.mainloop()
     #process_floder(r'D:\Backup\Downloads\CaM\camdata',r'C:\Users\Administrator\Desktop\Files\dat6.csv',r'C:\Users\Administrator\Desktop\Files\dat7.csv',do_remove_duplicate_subsequences = False,delete_no_time = True)
