@@ -799,10 +799,6 @@ def create_gui():
 if __name__ == "__main__":
     # 请确保以下函数已经正确导入或定义：
     # process_floder, process_file, find_csv_files, savecsv
-    #find_where_from([[[9,1]],[[53,4]],'L'],r'D:\Backup\Downloads\arcdata')
-    #find_where_from([[[53,4]],[[9,1]],'R'],r'D:\Backup\Downloads\arcdata')
-    #print(is_list_true_np([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 47, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'R']]))
+
     app = create_gui()
     app.mainloop()
-    #process_floder(r'D:\Backup\Downloads\CaM\camdata',r'C:\Users\Administrator\Desktop\Files\dat6.csv',r'C:\Users\Administrator\Desktop\Files\dat7.csv',do_remove_duplicate_subsequences = False,delete_no_time = True)
-    #process_file(r'dat4.csv',r'C:\Users\Administrator\Desktop\Files\dat41.csv',do_remove_duplicate_subsequences = False,delete_no_time = False)
