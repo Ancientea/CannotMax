@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 from PIL import ImageGrab
 from rapidocr import RapidOCR
+import find_monster_zone
 
 rapidocr_eng = RapidOCR()
 
@@ -179,7 +180,7 @@ def preprocess(img: cv2.typing.MatLike):
     return closed
 
 
-def find_best_match(target: cv2.typing.MatLike, ref_images: dict):
+def find_best_match(target: cv2.typing.MatLike, ref_images: dict[int, cv2.typing.MatLike]):
     """
     模板匹配找到最佳匹配的参考图像
     :param target: 目标图像
@@ -233,6 +234,20 @@ def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None):
     if screenshot is None:
         screenshot = np.array(ImageGrab.grab(bbox=(x1, y1, x2, y2)))
         screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
+
+        # 手动框选的截图需先识别目标区域
+        cv2.imwrite(f"images/tmp/zone1.png", screenshot)
+        d_avatar, d_nums = find_monster_zone.cutFrame(screenshot)
+        height, width, _ = screenshot.shape
+        divisors = np.array([width, height, width, height])
+        avatar = np.round(d_avatar * divisors).astype("int")
+        x_min, x_max, y_min, y_max = width, 0, height, 0
+        for x1, y1, x2, y2 in avatar:
+            x_min = min(x_min, min(x1, x2))
+            x_max = max(x_max, max(x1, x2))
+            y_min = min(y_min, min(y1, y2))
+            y_max = max(y_max, max(y1, y2))
+        screenshot = screenshot[y_min:y_max, x_min:x_max]
     else:
         # 从当前screenshot中提取主区域
         screenshot = screenshot[y1:y2, x1:x2]
@@ -293,6 +308,11 @@ def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None):
                 # 保存有数字的图片到images/nums中的对应文件夹
                 if number:
                     save_number_image(number, processed, matched_id)
+
+            if number == "" and matched_id != 0:
+                raise ValueError("发现有怪物但无数量异常数据！")
+            if matched_id == 0 and number != "":
+                raise ValueError("发现无怪物但有数量异常数据！")
 
             results.append(
                 {

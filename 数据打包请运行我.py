@@ -1,35 +1,40 @@
-import os
-import shutil
+from pathlib import Path
 import zipfile
+import re
+from datetime import datetime
+
 
 def create_zip_package(output_zip_path):
     # 定义文件和文件夹路径
-    csv_file = "arknights.csv"
-    data_folder = "data"
-    images_folder = os.path.join(data_folder, "images")
+    data_folder = Path("data")
 
-    # 检查文件和文件夹是否存在
-    if not os.path.exists(csv_file):
-        print(f"文件 {csv_file} 不存在！")
-        return
-    if not os.path.exists(images_folder):
-        print(f"文件夹 {images_folder} 不存在！")
+    # 获取所有符合日期格式的目录
+    date_pattern = re.compile(r"^\d{4}_\d{2}_\d{2}__\d{2}_\d{2}_\d{2}$")
+    time_folders = [
+        folder
+        for folder in data_folder.iterdir()
+        if folder.is_dir() and date_pattern.match(folder.name)
+    ]
+    if not time_folders:
+        print("未找到输出目录！")
         return
 
     # 创建压缩包
     with zipfile.ZipFile(output_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        # 添加 arknights.csv
-        zipf.write(csv_file, arcname="arknights.csv")
-
-        # 添加 data/images 文件夹及其内容
-        for root, _, files in os.walk(images_folder):
-            for file in files:
-                file_path = os.path.join(root, file)
-                # 在压缩包中保留 data/images 的目录结构
-                arcname = os.path.relpath(file_path, start=data_folder)
-                zipf.write(file_path, arcname=arcname)
+        # 添加所有符合日期格式的目录及其内容
+        for folder in time_folders:
+            for file_path in folder.rglob("*"):
+                if file_path.is_file():
+                    # 在压缩包中保留相对目录结构
+                    arcname = file_path.relative_to(data_folder)
+                    zipf.write(file_path, arcname=str(arcname))
 
     print(f"压缩包已创建：{output_zip_path}")
 
+
+# 使用当前时间生成输出文件名
+current_time = datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
+output_zip = f"arknights_package_{current_time}.zip"
+
 # 调用函数创建压缩包
-create_zip_package("arknights_package.zip")
+create_zip_package(output_zip)
