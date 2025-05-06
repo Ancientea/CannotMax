@@ -7,6 +7,8 @@ import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
 import time
+# 导入混合精度训练所需的库
+from torch.cuda.amp import GradScaler
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -67,12 +69,13 @@ class ArknightsDataset(Dataset):
             left_counts = np.clip(left_counts, 0, max_value)
             right_counts = np.clip(right_counts, 0, max_value)
 
-        # 转换为 PyTorch 张量，并一次性加载到 GPU
-        self.left_signs = torch.from_numpy(left_signs).to(device)
-        self.right_signs = torch.from_numpy(right_signs).to(device)
-        self.left_counts = torch.from_numpy(left_counts).to(device)
-        self.right_counts = torch.from_numpy(right_counts).to(device)
-        self.labels = torch.from_numpy(labels).float().to(device)
+        # 转换为 PyTorch 张量
+        # 注意：数据将保留在CPU上，在训练循环中移动到GPU，以便与pin_memory配合
+        self.left_signs = torch.from_numpy(left_signs)
+        self.right_signs = torch.from_numpy(right_signs)
+        self.left_counts = torch.from_numpy(left_counts)
+        self.right_counts = torch.from_numpy(right_counts)
+        self.labels = torch.from_numpy(labels).float()
 
     def __len__(self):
         return len(self.labels)
@@ -239,20 +242,21 @@ class UnitAwareTransformer(nn.Module):
         L = self.fc(left_feat).squeeze(-1) * left_mask
         R = self.fc(right_feat).squeeze(-1) * right_mask
 
-        # 计算战斗力差输出概率，'L': 0, 'R': 1，R大于L时输出大于0.5
-        output = torch.sigmoid(R.sum(1) - L.sum(1))
+        # 计算战斗力差输出 logits，'L': 0, 'R': 1，R大于L时输出大于0
+        # 移除 sigmoid，因为 BCEWithLogitsLoss 会处理它
+        output_logits = R.sum(1) - L.sum(1)
 
-        return output
+        return output_logits
 
 
-def train_one_epoch(model, train_loader, criterion, optimizer):
+def train_one_epoch(model, train_loader, criterion, optimizer, scaler=None):  # 添加 scaler 参数
     model.train()
     total_loss = 0
     correct = 0
     total = 0
 
     for ls, lc, rs, rc, labels in train_loader:
-        ls, lc, rs, rc, labels = [x.to(device) for x in (ls, lc, rs, rc, labels)]
+        ls, lc, rs, rc, labels = [x.to(device, non_blocking=True) for x in (ls, lc, rs, rc, labels)]  # 使用 non_blocking=True
 
         optimizer.zero_grad()
 
@@ -281,34 +285,32 @@ def train_one_epoch(model, train_loader, criterion, optimizer):
             labels = torch.clamp(labels, 0, 1)
 
         try:
-            outputs = model(ls, lc, rs, rc).squeeze()
-
-            # 确保输出在合理范围内
-            if torch.isnan(outputs).any() or torch.isinf(outputs).any():
-                print("警告: 模型输出包含NaN或Inf，跳过该批次")
-                continue
-
-            # 确保输出严格在0-1之间，因为BCELoss需要
-            if (outputs < 0).any() or (outputs > 1).any():
-                print("警告: 模型输出不在[0,1]范围内，进行修正")
-                outputs = torch.clamp(outputs, 1e-7, 1 - 1e-7)
-
-            loss = criterion(outputs, labels)
+            # 使用 torch.amp.autocast
+            # enabled 参数控制是否实际启用 autocast
+            # device_type 参数指定目标设备 ('cuda' 或 'cpu')
+            with torch.amp.autocast(device_type=device.type, enabled=(scaler is not None)):
+                outputs = model(ls, lc, rs, rc).squeeze()
+                loss = criterion(outputs, labels)
 
             # 检查loss是否有效
             if torch.isnan(loss) or torch.isinf(loss):
                 print(f"警告: 损失值为 {loss.item()}, 跳过该批次")
                 continue
 
-            loss.backward()
-
-            # 梯度裁剪，避免梯度爆炸
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
-            optimizer.step()
+            if scaler:  # 使用混合精度
+                scaler.scale(loss).backward()
+                # 梯度裁剪，避免梯度爆炸
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                scaler.step(optimizer)
+                scaler.update()
+            else:  # 不使用混合精度
+                loss.backward()
+                # 梯度裁剪，避免梯度爆炸
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
 
             total_loss += loss.item()
-            preds = (outputs > 0.5).float()
+            preds = (torch.sigmoid(outputs) > 0.5).float()
             correct += (preds == labels).sum().item()
             total += labels.size(0)
 
@@ -327,7 +329,7 @@ def evaluate(model, data_loader, criterion):
 
     with torch.no_grad():
         for ls, lc, rs, rc, labels in data_loader:
-            ls, lc, rs, rc, labels = [x.to(device) for x in (ls, lc, rs, rc, labels)]
+            ls, lc, rs, rc, labels = [x.to(device, non_blocking=True) for x in (ls, lc, rs, rc, labels)]  # 使用 non_blocking=True
 
             # 检查输入值范围
             if (
@@ -348,17 +350,14 @@ def evaluate(model, data_loader, criterion):
                 labels = torch.clamp(labels, 0, 1)
 
             try:
-                outputs = model(ls, lc, rs, rc).squeeze()
+                # 使用 torch.amp.autocast
+                # enabled 参数控制是否实际启用 autocast
+                # device_type 参数指定目标设备 ('cuda' 或 'cpu')
+                with torch.amp.autocast(device_type=device.type, enabled=(device.type == "cuda")):
+                    outputs = model(ls, lc, rs, rc).squeeze()
 
-                # 确保输出在合理范围内
-                if torch.isnan(outputs).any() or torch.isinf(outputs).any():
-                    print("警告: 评估时模型输出包含NaN或Inf，跳过该批次")
-                    continue
-
-                # 确保输出严格在0-1之间，因为BCELoss需要
-                if (outputs < 0).any() or (outputs > 1).any():
-                    outputs = torch.clamp(outputs, 1e-7, 1 - 1e-7)
-
+                # 对于 BCEWithLogitsLoss，outputs 是 logits
+                # loss 计算会处理 sigmoid
                 loss = criterion(outputs, labels)
 
                 # 检查loss是否有效
@@ -366,7 +365,8 @@ def evaluate(model, data_loader, criterion):
                     continue
 
                 total_loss += loss.item()
-                preds = (outputs > 0.5).float()
+                # 预测时需要应用 sigmoid
+                preds = (torch.sigmoid(outputs) > 0.5).float()
                 correct += (preds == labels).sum().item()
                 total += labels.size(0)
 
@@ -409,6 +409,7 @@ def main():
         "seed": 1145,  # 好臭的种子（
         "save_dir": "models",  # 存到哪里
         "max_feature_value": 100,  # 限制特征最大值，防止极端值造成不稳定
+        "num_workers": 0 if torch.cuda.is_available() else 0,  # 根据CUDA可用性设置num_workers
     }
 
     # 创建保存目录
@@ -423,6 +424,12 @@ def main():
     # 设置设备
     print(f"使用设备: {device}")
 
+    # 初始化 GradScaler 用于混合精度训练
+    scaler = None
+    if device.type == "cuda":
+        scaler = GradScaler()
+        print("CUDA可用，已启用混合精度训练的GradScaler。")
+
     # 检查CUDA可用性
     if torch.cuda.is_available():
         print(f"CUDA设备数量: {torch.cuda.device_count()}")
@@ -431,7 +438,7 @@ def main():
 
         # 设置确定性计算以增加稳定性
         torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.benchmark = True
     else:
         print("警告: 未检测到GPU，将在CPU上运行训练，这可能会很慢!")
 
@@ -459,12 +466,14 @@ def main():
         train_dataset,
         batch_size=config["batch_size"],
         shuffle=True,
-        num_workers=0,
+        num_workers=config["num_workers"],  # 使用配置中的num_workers
+        pin_memory=True if device.type == "cuda" else False,  # 如果使用GPU，则启用pin_memory
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=config["batch_size"],
-        num_workers=0,
+        num_workers=config["num_workers"],  # 使用配置中的num_workers
+        pin_memory=True if device.type == "cuda" else False,  # 如果使用GPU，则启用pin_memory
     )
 
     # 初始化模型
@@ -480,7 +489,7 @@ def main():
     )
 
     # 损失函数和优化器
-    criterion = nn.BCELoss()
+    criterion = nn.BCEWithLogitsLoss()  # 改为 BCEWithLogitsLoss
     optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs"])
 
@@ -500,7 +509,7 @@ def main():
 
         # 训练
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer
+            model, train_loader, criterion, optimizer, scaler  # 传递 scaler
         )
 
         # 验证
@@ -538,7 +547,7 @@ def main():
         else:
             print(f"最佳损失为: {best_loss}")
 
-        # # 保存最新模型
+        # 保存最新模型
         # torch.save({
         #     'epoch': epoch,
         #     'model_state_dict': model.state_dict(),
