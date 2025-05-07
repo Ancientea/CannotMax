@@ -343,10 +343,7 @@ def load_ref_images(ref_dir="images"):
     for i in range(MONSTER_COUNT + 1):
         path = os.path.join(ref_dir, f"{i}.png")
         if os.path.exists(path):
-            img = cv2.imread(path)
-            # 确保参考图像是RGB格式
-            if len(img.shape) == 2:
-                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            img = cv2.imread(path, cv2.IMREAD_COLOR_BGR)
             # 裁切模板匹配图像比例
             img = img[
                 int(img.shape[0] * 0.16) : int(img.shape[0] * 0.80),  # 高度取靠上部分
