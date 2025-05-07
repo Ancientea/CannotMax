@@ -216,7 +216,7 @@ def find_best_match(target: cv2.typing.MatLike, ref_images: dict[int, cv2.typing
 
 def do_num_ocr(img: cv2.typing.MatLike):
     result = rapidocr_eng(img, use_det=False, use_cls=False, use_rec=True)
-    print(f"OCR: text: '{result.txts[0]}', score: {result.scores[0]}")
+    logger.info(f"OCR: text: '{result.txts[0]}', score: {result.scores[0]}")
     number = "".join([c for c in result.txts[0] if c.isdigit()])
     confidence = result.scores[0]
     return number, confidence
@@ -255,6 +255,9 @@ def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None,match
         # 从当前screenshot中提取主区域
         screenshot = screenshot[y1:y2, x1:x2]
 
+    # 确保图像不为空
+    if screenshot.size == 0:
+        raise ValueError("截图为空，请检查区域选择或截图方法。")
     # 转换到标准1920*1080下目标区域
     screenshot = cv2.resize(screenshot, (969, 119))
     main_height = screenshot.shape[0]
@@ -278,11 +281,11 @@ def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None,match
 
             # 图像匹配
             matched_id, confidence = find_best_match(sub_roi, ref_images)
-            print(f"target: {idx} confidence: {confidence}")
+            logger.info(f"target: {idx} confidence: {confidence}")
             if matched_id != 0 and confidence < matched_threshold:
                 raise ValueError(f"模板匹配置信度过低: {confidence}")
         except Exception as e:
-            print(f"区域 {idx} 匹配失败: {str(e)}")
+            logger.exception(f"区域 {idx} 匹配失败: {str(e)}")
             results.append({"region_id": idx, "error": str(e)})
             return results
 
@@ -330,7 +333,7 @@ def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None,match
                 }
             )
         except Exception as e:
-            print(f"区域 {idx} OCR识别失败: {str(e)}")
+            logger.exception(f"区域 {idx} OCR识别失败: {str(e)}")
             results.append(
                 {"region_id": idx, "matched_id": matched_id, "number": "N/A", "error": str(e)}
             )
