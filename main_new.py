@@ -1,15 +1,8 @@
-import csv
 import logging
-import os
 import subprocess
-import threading
 import time
-import math
-import cv2
-import keyboard
 import numpy as np
-import pandas as pd
-import torch
+import recognize
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QLineEdit, QCheckBox, QComboBox,
                              QGroupBox, QScrollArea, QMessageBox, QGridLayout, QSizePolicy, QGraphicsDropShadowEffect,
@@ -17,10 +10,9 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 from sklearn.metrics.pairwise import cosine_similarity
+import PyQt5.QtCore as QtCore
 
 import loadData
-import recognize
-import train
 import auto_fetch
 import similar_history_match
 from train import UnitAwareTransformer
@@ -40,6 +32,12 @@ logger.setLevel(logging.DEBUG)
 loadData.connect()
 
 class ArknightsApp(QMainWindow):
+    # 添加自定义信号
+    update_button_signal = pyqtSignal(str)  # 用于更新按钮文本
+    update_entries_signal = pyqtSignal()    # 用于重置输入框
+    recognize_result_signal = pyqtSignal(float, list, object)  # 识别结果信号
+    update_statistics_signal = pyqtSignal()  # 用于更新统计信息
+
     def __init__(self):
         super().__init__()
         self.auto_fetch_running = False
@@ -54,16 +52,9 @@ class ArknightsApp(QMainWindow):
         self.images = {}
         self.main_roi = None
 
-        # 统计信息
-        self.total_fill_count = 0
-        self.incorrect_fill_count = 0
-        self.start_time = None
-
         # 模型
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = None
         self.current_prediction = 0.5
-        self.current_image_name = ""
+        self.cannot_model = CannotModel() 
 
         # 添加历史对局相关属性
         self.history_visible = False
@@ -73,9 +64,13 @@ class ArknightsApp(QMainWindow):
 
         # 初始化UI后加载历史数据
         self.history_match = similar_history_match.HistoryMatch()
-        self.load_history_data()
+        self.past_left = self.history_match.past_left
+        self.past_right = self.history_match.past_right
+        self.labels = self.history_match.labels
+        # 组合特征
+        self.feat_past = self.history_match.feat_past
+        self.N_history = self.history_match.N_history
 
-        self.cannot_model = CannotModel() 
         # 初始化特殊怪物语言触发处理程序
         self.special_monster_handler = SpecialMonsterHandler()
 
@@ -329,15 +324,8 @@ class ArknightsApp(QMainWindow):
         self.recognize_button = QPushButton("识别")
         self.recognize_button.clicked.connect(self.recognize)
 
-        self.fill_correct_button = QPushButton("填写√")
-        self.fill_correct_button.clicked.connect(self.fill_data_correct)
-
-        self.fill_incorrect_button = QPushButton("填写×")
-        self.fill_incorrect_button.clicked.connect(self.fill_data_incorrect)
 
         row2_layout.addWidget(self.recognize_button)
-        row2_layout.addWidget(self.fill_correct_button)
-        row2_layout.addWidget(self.fill_incorrect_button)
 
         # 第三行按钮
         row3 = QWidget()
@@ -407,6 +395,12 @@ class ArknightsApp(QMainWindow):
         # 连接信号
         self.mode_menu.currentTextChanged.connect(self.update_game_mode)
         self.invest_checkbox.stateChanged.connect(self.update_invest_status)
+
+        # 连接AutoFetch信号到槽
+        self.update_button_signal.connect(self.auto_fetch_button.setText)
+        self.update_entries_signal.connect(self.reset_entries)
+        self.update_statistics_signal.connect(self.update_statistics)
+
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -591,19 +585,6 @@ class ArknightsApp(QMainWindow):
         self.result_label.setStyleSheet("color: black;")
         self.update_input_display()
 
-    def fill_data_correct(self):
-        result = 'R' if self.current_prediction > 0.5 else 'L'
-        self.fill_data(result)
-        self.total_fill_count += 1
-        self.update_statistics()
-
-    def fill_data_incorrect(self):
-        result = 'L' if self.current_prediction > 0.5 else 'R'
-        self.fill_data(result)
-        self.total_fill_count += 1
-        self.incorrect_fill_count += 1
-        self.update_statistics()
-
     def get_prediction(self):
         try:
             left_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
@@ -733,15 +714,7 @@ class ArknightsApp(QMainWindow):
         self.update_input_display()
         if self.history_visible and self.history_data_loaded:
             self.render_similar_matches()
-
-    def load_history_data(self):
-        """加载历史对局数据"""
-        self.past_left = self.history_match.past_left
-        self.past_right = self.history_match.past_right
-        self.labels = self.history_match.labels
-        # 组合特征
-        self.feat_past = self.history_match.feat_past
-        self.N_history = self.history_match.N_history
+        return self.current_prediction, results, screenshot
 
     def toggle_history_panel(self):
         """切换历史对局面板的显示"""
@@ -1011,98 +984,28 @@ class ArknightsApp(QMainWindow):
         self.main_roi = recognize.select_roi()
         self.no_region = False
 
-    # def calculate_average_yellow(self, image):
-    #     if image is None:
-    #         print("图像加载失败")
-    #         return None
-    #     height, width, _ = image.shape
-    #     point_color = image[0, 0]
-    #     blue, green, red = point_color
-    #     is_yellow = (red > 150 and green > 150 and blue < 100)
-    #     return is_yellow
-
-    # def save_statistics_to_log(self):
-    #     elapsed_time = time.time() - self.start_time if self.start_time else 0
-    #     hours, remainder = divmod(elapsed_time, 3600)
-    #     minutes, _ = divmod(remainder, 60)
-    #     stats_text = (f"总共填写次数: {self.total_fill_count}\n"
-    #                   f"填写×次数: {self.incorrect_fill_count}\n"
-    #                   f"当次运行时长: {int(hours)}小时{int(minutes)}分钟\n")
-    #     with open("log.txt", "a") as log_file:
-    #         log_file.write(stats_text)
-
     def toggle_auto_fetch(self):
-        if not self.auto_fetch_running:
+        if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
             self.auto_fetch = auto_fetch.AutoFetch(
                 self.game_mode,
                 self.is_invest,
-                reset=self.reset_entries,
-                recognizer=self.recognize,
-                updater=self.update_statistics,
+                reset=self.reset_entries_callback,
+                recognizer=self.recognize_callback,
+                updater=self.update_statistics_callback,
                 start_callback=self.start_callback,
                 stop_callback=self.stop_callback,
                 training_duration=float(self.duration_entry.text()) * 3600,  # 获取训练时长
             )
             self.auto_fetch.start_auto_fetch()
-            return
-            self.auto_fetch_running = True
-            self.auto_fetch_button.setText("停止自动获取")
-            self.start_time = time.time()
-            self.total_fill_count = 0
-            self.incorrect_fill_count = 0
-            self.update_statistics()
-            self.training_duration = float(self.duration_entry.text()) * 3600
-            self.timer.start(500)  # 每500ms检查一次
         else:
             self.auto_fetch.stop_auto_fetch()
-            return
-            self.auto_fetch_running = False
-            self.auto_fetch_button.setText("自动获取数据")
-            self.update_statistics()
-            self.save_statistics_to_log()
-            self.timer.stop()
-
-    # def auto_fetch_update(self):
-    #     if not hasattr(self, 'auto_fetch') or not self.auto_fetch.auto_fetch_running:
-    #         self.timer.stop()
-    #         return
-
-    #     try:
-    #         # 使用AutoFetch类的auto_fetch_data方法
-    #         self.auto_fetch.auto_fetch_data()
-            
-    #         # 更新统计信息
-    #         self.update_statistics()
-
-    #         # 检查训练时长是否结束
-    #         elapsed_time = time.time() - self.auto_fetch.start_time
-    #         if self.auto_fetch.training_duration != -1 and elapsed_time >= self.auto_fetch.training_duration:
-    #             self.auto_fetch.stop_auto_fetch()
-    #             self.auto_fetch_button.setText("自动获取数据")
-    #             self.save_statistics_to_log()
-    #             self.timer.stop()
-
-    #         # ESC键停止自动获取
-    #         if keyboard.is_pressed('esc'):
-    #             self.auto_fetch.stop_auto_fetch()
-    #             self.auto_fetch_button.setText("自动获取数据")
-    #             self.save_statistics_to_log()
-    #             self.timer.stop()
-
-    #     except Exception as e:
-    #         print(f"自动获取数据出错: {str(e)}")
-    #         if hasattr(self, 'auto_fetch'):
-    #             self.auto_fetch.stop_auto_fetch()
-    #         self.auto_fetch_button.setText("自动获取数据")
-    #         self.save_statistics_to_log()
-    #         self.timer.stop()
 
     def update_statistics(self):
-        elapsed_time = time.time() - self.start_time if self.start_time else 0
+        elapsed_time = time.time() - self.auto_fetch.start_time if self.auto_fetch.start_time else 0
         hours, remainder = divmod(elapsed_time, 3600)
         minutes, _ = divmod(remainder, 60)
-        stats_text = (f"总共填写次数: {self.total_fill_count},    "
-                      f"填写×次数: {self.incorrect_fill_count},    "
+        stats_text = (f"总共填写次数: {self.auto_fetch.total_fill_count},    "
+                      f"填写×次数: {self.auto_fetch.incorrect_fill_count},    "
                       f"当次运行时长: {int(hours)}小时{int(minutes)}分钟")
         self.stats_label.setText(stats_text)
 
@@ -1114,10 +1017,45 @@ class ArknightsApp(QMainWindow):
         QMessageBox.information(self, "提示", f"已更新模拟器序列号为: {new_serial}")
 
     def start_callback(self):
-        self.auto_fetch_button.setText("停止自动获取数据")
+        self.update_button_signal.emit("停止自动获取数据")
 
     def stop_callback(self):
-        self.auto_fetch_button.setText("自动获取数据")
+        self.update_button_signal.emit("自动获取数据")
+
+    def reset_entries_callback(self):
+        self.update_entries_signal.emit()
+        
+    def recognize_callback(self):
+        # self.recognize_signal.emit()
+        """在工作线程中触发识别"""
+        # 使用 QMetaObject.invokeMethod 在主线程中调用 do_recognize
+        future = []
+        def handle_result(prediction, results, screenshot):
+            future.append((prediction, results, screenshot))
+            loop.quit()  # 退出事件循环
+        # 创建事件循环
+        loop = QtCore.QEventLoop()
+        # 临时连接信号到处理函数
+        self.recognize_result_signal.connect(handle_result)
+        # 在主线程中调用 do_recognize
+        QtCore.QMetaObject.invokeMethod(self, 'do_recognize', Qt.BlockingQueuedConnection)
+        # 等待结果
+        loop.exec_()
+        # 断开信号连接
+        self.recognize_result_signal.disconnect(handle_result)
+        # 返回结果
+        if not future:
+            raise RuntimeError("识别结果未返回")
+        return future[0]
+
+    @QtCore.pyqtSlot()
+    def do_recognize(self):
+        """在主线程中执行识别操作"""
+        prediction, results, screenshot = self.recognize()
+        self.recognize_result_signal.emit(prediction, results, screenshot)
+        
+    def update_statistics_callback(self):
+        self.update_statistics_signal.emit()
 
     def update_game_mode(self, mode):
         self.game_mode = mode
