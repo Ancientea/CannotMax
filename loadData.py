@@ -69,6 +69,7 @@ def connect_to_emulator():
 
 
 def connect():
+    global device_serial
     # 初始化设备序列号
     try:
         device_serial = get_device_serial()

@@ -238,19 +238,23 @@ def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None,match
         screenshot = np.array(ImageGrab.grab(bbox=(x1, y1, x2, y2)))
         screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
 
-        # 手动框选的截图需先识别目标区域
-        cv2.imwrite(f"images/tmp/zone1.png", screenshot)
-        d_avatar, d_nums = find_monster_zone.cutFrame(screenshot)
-        height, width, _ = screenshot.shape
-        divisors = np.array([width, height, width, height])
-        avatar = np.round(d_avatar * divisors).astype("int")
-        x_min, x_max, y_min, y_max = width, 0, height, 0
-        for x1, y1, x2, y2 in avatar:
-            x_min = min(x_min, min(x1, x2))
-            x_max = max(x_max, max(x1, x2))
-            y_min = min(y_min, min(y1, y2))
-            y_max = max(y_max, max(y1, y2))
-        screenshot = screenshot[y_min:y_max, x_min:x_max]
+        try:
+            # 手动框选的截图需先识别目标区域
+            cv2.imwrite(f"images/tmp/zone1.png", screenshot)
+            d_avatar, d_nums = find_monster_zone.cutFrame(screenshot)
+            height, width, _ = screenshot.shape
+            divisors = np.array([width, height, width, height])
+            avatar = np.round(d_avatar * divisors).astype("int")
+            x_min, x_max, y_min, y_max = width, 0, height, 0
+            for x1, y1, x2, y2 in avatar:
+                x_min = min(x_min, min(x1, x2))
+                x_max = max(x_max, max(x1, x2))
+                y_min = min(y_min, min(y1, y2))
+                y_max = max(y_max, max(y1, y2))
+            screenshot = screenshot[y_min:y_max, x_min:x_max]
+        except Exception as e:
+            # 如果区域识别失败，则使用手动框选的区域
+            logger.exception("区域识别失败，使用完整区域:", e)
     else:
         # 从当前screenshot中提取主区域
         screenshot = screenshot[y1:y2, x1:x2]
