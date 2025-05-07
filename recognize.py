@@ -222,7 +222,7 @@ def do_num_ocr(img: cv2.typing.MatLike):
     return number, confidence
 
 
-def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None):
+def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None,matched_threshold = 0.5,ocr_threshold = 0.95):
     """处理主区域中的所有区域（优化特征匹配）
     Args:
         main_roi: 主要感兴趣区域的坐标
@@ -279,7 +279,7 @@ def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None):
             # 图像匹配
             matched_id, confidence = find_best_match(sub_roi, ref_images)
             print(f"target: {idx} confidence: {confidence}")
-            if matched_id != 0 and confidence < 0.5:
+            if matched_id != 0 and confidence < matched_threshold:
                 raise ValueError(f"模板匹配置信度过低: {confidence}")
         except Exception as e:
             print(f"区域 {idx} 匹配失败: {str(e)}")
@@ -302,7 +302,7 @@ def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None):
 
             # OCR识别（保留优化后的处理逻辑）
             number, ocr_confidence = do_num_ocr(processed)
-            if number != "" and ocr_confidence < 0.95:
+            if number != "" and ocr_confidence < ocr_threshold:
                 raise ValueError(f"OCR置信度过低: {ocr_confidence}")
 
             if intelligent_workers_debug:  # 如果处于debug模式
