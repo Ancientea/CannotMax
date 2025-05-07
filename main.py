@@ -15,13 +15,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 from similar_history_match import HistoryMatch
 from auto_fetch import AutoFetch
 
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger("PIL").setLevel(logging.INFO)
 stream_handler = logging.StreamHandler()
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s",)
 stream_handler.setFormatter(formatter)
 logging.getLogger().addHandler(stream_handler)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 loadData.connect()
 

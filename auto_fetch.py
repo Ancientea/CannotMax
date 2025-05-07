@@ -15,7 +15,7 @@ import loadData
 from recognize import MONSTER_COUNT, intelligent_workers_debug
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 class AutoFetch:
     def __init__(
@@ -47,7 +47,7 @@ class AutoFetch:
         self.training_duration = training_duration  # 训练时长
         self.data_folder = Path(f"data")# 数据文件夹路径
 
-    def fill_data(self, battle_result, recoginze_results, image, image_name):
+    def fill_data(self, battle_result, recoginze_results, image, image_name, result_image):
         image_data = np.zeros((1, MONSTER_COUNT * 2))
 
         for res in recoginze_results:
@@ -77,7 +77,18 @@ class AutoFetch:
             data_row.append(image_name)
             if image is not None:
                 image_path = self.data_folder / "images" / image_name
-                cv2.imwrite(image_path, image)
+                cv2.imwrite(image_path, image, [cv2.IMWRITE_JPEG_QUALITY, 50])
+
+            # 新增保存结果图片逻辑
+            if self.image_name:
+                result_image_name = self.image_name.replace(".jpg", "_result.jpg")
+                # 缩放到128像素高度
+                (h, w) = result_image.shape[:2]
+                new_height = 128
+                resized_image = cv2.resize(result_image, (int(w * (new_height/h)), new_height))
+                image_path = self.data_folder / "images" / result_image_name
+                cv2.imwrite(str(image_path), resized_image, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                logger.info(f"保存结果图片到 {image_path}")
         with open(self.data_folder / "arknights.csv", "a", newline="") as file:
             writer = csv.writer(file)
             writer.writerow(data_row)
@@ -120,7 +131,7 @@ class AutoFetch:
         timestamp = int(time.time())
         # 将处理的怪物 ID 拼接到文件名中
         monster_ids_str = "_".join(map(str, processed_monster_ids))
-        current_image_name = f"{timestamp}_{monster_ids_str}.png"
+        current_image_name = f"{timestamp}_{monster_ids_str}.jpg"
         current_image = cv2.resize(
             roi, (roi.shape[1] // 2, roi.shape[0] // 2)
         )  # 保存缩放后的图片到内存
@@ -146,87 +157,94 @@ class AutoFetch:
             (0.1640, 0.8833),  # 左礼物
             (0.4979, 0.6324),  # 本轮观望
         ]
+        timea = time.time()
         screenshot = loadData.capture_screenshot()
-        if screenshot is not None:
-            results = loadData.match_images(screenshot, loadData.process_images)
-            results = sorted(results, key=lambda x: x[1], reverse=True)
-            # logger.info("匹配结果：", results[0])
-            for idx, score in results:
-                if score > 0.5:
-                    if idx == 0:
-                        loadData.click(relative_points[0])
-                        logger.info("加入赛事")
-                    elif idx == 1:
-                        if self.game_mode == "30人":
-                            loadData.click(relative_points[1])
-                            logger.info("竞猜对决30人")
-                            time.sleep(2)
-                            loadData.click(relative_points[0])
-                            logger.info("开始游戏")
-                        else:
-                            loadData.click(relative_points[2])
-                            logger.info("自娱自乐")
-                    elif idx == 2:
+        if screenshot is None:
+            logger.error("截图失败，无法继续操作")
+            return
+        results = loadData.match_images(screenshot, loadData.process_images)
+        results = sorted(results, key=lambda x: x[1], reverse=True)
+        logger.debug(f"处理图片总用时：{time.time()-timea:.3f}s")
+        # logger.info("匹配结果：", results[0])
+        for idx, score in results:
+            if score > 0.5:
+                if idx == 0:
+                    loadData.click(relative_points[0])
+                    logger.info("加入赛事")
+                elif idx == 1:
+                    if self.game_mode == "30人":
+                        loadData.click(relative_points[1])
+                        logger.info("竞猜对决30人")
+                        time.sleep(2)
                         loadData.click(relative_points[0])
                         logger.info("开始游戏")
-                    elif idx in [3, 4, 5, 15]:
-                        time.sleep(1)
-                        # 归零
-                        self.reset()
-                        # 识别怪物类型数量
-                        self.current_prediction, self.recognize_results, screenshot = (
-                            self.recognizer()
+                    else:
+                        loadData.click(relative_points[2])
+                        logger.info("自娱自乐")
+                elif idx == 2:
+                    loadData.click(relative_points[0])
+                    logger.info("开始游戏")
+                elif idx in [3, 4, 5, 15]:
+                    time.sleep(1)
+                    # 归零
+                    self.reset()
+                    # 识别怪物类型数量
+                    self.current_prediction, self.recognize_results, screenshot = (
+                        self.recognizer()
+                    )
+                    # 人工审核保存测试用截图
+                    if intelligent_workers_debug:  # 如果处于debug模式且处于自动模式
+                        self.image, self.image_name = self.save_recoginze_image(
+                            self.recognize_results, screenshot
                         )
-                        # 人工审核保存测试用截图
-                        if intelligent_workers_debug:  # 如果处于debug模式且处于自动模式
-                            self.image, self.image_name = self.save_recoginze_image(
-                                self.recognize_results, screenshot
-                            )
-                        # 点击下一轮
-                        if self.is_invest:  # 投资
-                            # 根据预测结果点击投资左/右
-                            if self.current_prediction > 0.5:
-                                if idx == 4:
-                                    loadData.click(relative_points[0])
-                                else:
-                                    loadData.click(relative_points[2])
-                                logger.info("投资右")
+                    # 点击下一轮
+                    if self.is_invest:  # 投资
+                        # 根据预测结果点击投资左/右
+                        if self.current_prediction > 0.5:
+                            if idx == 4:
+                                loadData.click(relative_points[0])
                             else:
-                                if idx == 4:
-                                    loadData.click(relative_points[1])
-                                else:
-                                    loadData.click(relative_points[3])
-                                logger.info("投资左")
-                            if self.game_mode == "30人":
-                                time.sleep(20)  # 30人模式下，投资后需要等待20秒
-                        else:  # 不投资
-                            loadData.click(relative_points[4])
-                            logger.info("本轮观望")
-                            time.sleep(5)
-
-                    elif idx in [8, 9, 10, 11]:
-                        # 判断本次是否填写错误
-                        if self.calculate_average_yellow(screenshot):
-                            self.fill_data("L", self.recognize_results, self.image, self.image_name)
-                            if self.current_prediction > 0.5:
-                                self.incorrect_fill_count += 1  # 更新填写×次数
-                            logger.info("填写数据左赢")
+                                loadData.click(relative_points[2])
+                            logger.info("投资右")
+                            time.sleep(3)
                         else:
-                            self.fill_data("R", self.recognize_results, self.image, self.image_name)
-                            if self.current_prediction < 0.5:
-                                self.incorrect_fill_count += 1  # 更新填写×次数
-                            logger.info("填写数据右赢")
-                        self.total_fill_count += 1  # 更新总填写次数
-                        self.updater()  # 更新统计信息
-                        logger.info("下一轮")
-                        # 为填写数据操作设置冷却期
-                        time.sleep(10)
-                    elif idx in [6, 7, 14]:
-                        logger.info("等待战斗结束")
-                    elif idx in [12, 13]:  # 返回主页
-                        loadData.click(relative_points[0])
-                        logger.info("返回主页")
-                    break  # 匹配到第一个结果后退出
+                            if idx == 4:
+                                loadData.click(relative_points[1])
+                            else:
+                                loadData.click(relative_points[3])
+                            logger.info("投资左")
+                            time.sleep(3)
+                        if self.game_mode == "30人":
+                            time.sleep(20)  # 30人模式下，投资后需要等待20秒
+                    else:  # 不投资
+                        loadData.click(relative_points[4])
+                        logger.info("本轮观望")
+                        time.sleep(3)
+
+                elif idx in [8, 9, 10, 11]:
+                    # 判断本次是否填写错误
+                    if self.calculate_average_yellow(screenshot):
+                        self.fill_data("L", self.recognize_results, self.image, self.image_name, screenshot)
+                        if self.current_prediction > 0.5:
+                            self.incorrect_fill_count += 1  # 更新填写×次数
+                        logger.info("填写数据左赢")
+                    else:
+                        self.fill_data("R", self.recognize_results, self.image, self.image_name, screenshot)
+                        if self.current_prediction < 0.5:
+                            self.incorrect_fill_count += 1  # 更新填写×次数
+                        logger.info("填写数据右赢")
+                    self.total_fill_count += 1  # 更新总填写次数
+                    self.updater()  # 更新统计信息
+                    logger.info("下一轮")
+                    # 为填写数据操作设置冷却期
+                    # 为什么这么长？
+                    time.sleep(5)
+                elif idx in [6, 7, 14]:
+                    logger.info("等待战斗结束")
+                elif idx in [12, 13]:  # 返回主页
+                    loadData.click(relative_points[0])
+                    logger.info("返回主页")
+                break  # 匹配到第一个结果后退出
 
     def auto_fetch_loop(self):
         while self.auto_fetch_running:
@@ -237,7 +255,7 @@ class AutoFetch:
                 if self.training_duration != -1 and elapsed_time >= self.training_duration:
                     break
                 # 检测一次间隔时间——————————————————————————————————
-                time.sleep(0.5)
+                time.sleep(0.1)
                 if keyboard.is_pressed("esc"):
                     break
             except Exception as e:
@@ -272,8 +290,8 @@ class AutoFetch:
             self.log_file_handler = logging.FileHandler(self.data_folder / f"AutoFetch_{start_time}.log", "a", "utf-8")
             file_formatter = logging.Formatter("%(asctime)s - %(filename)s - %(levelname)s - %(message)s")
             self.log_file_handler.setFormatter(file_formatter)
+            self.log_file_handler.setLevel(logging.INFO)
             logging.getLogger().addHandler(self.log_file_handler)
-            logging.getLogger().setLevel(logging.INFO)
             threading.Thread(target=self.auto_fetch_loop).start()
             logger.info("自动获取数据已启动")
             self.start_callback()
