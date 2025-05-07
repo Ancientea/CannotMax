@@ -241,13 +241,13 @@ class AutoFetch:
                 if keyboard.is_pressed("esc"):
                     break
             except Exception as e:
-                logging.exception(f"自动获取数据出错:\n{e}")
+                logger.exception(f"自动获取数据出错:\n{e}")
                 break
             # time.sleep(2)
             if keyboard.is_pressed("esc"):
                 break
         else:
-            logging.info("自动获取数据已停止")
+            logger.info("自动获取数据已停止")
             return
         # 不通过按钮结束自动获取
         self.stop_auto_fetch()
@@ -284,6 +284,6 @@ class AutoFetch:
         self.auto_fetch_running = False
         self.stop_callback()
         self.save_statistics_to_log()
-        logging.info("自动获取数据已停止")
+        logger.info("自动获取数据已停止")
         logging.getLogger().removeHandler(self.log_file_handler)
         # 结束自动获取数据的线程

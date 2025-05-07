@@ -2,10 +2,18 @@ import subprocess
 import time
 import cv2
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 adb_path = r".\platform-tools\adb.exe"
 # 默认设备序列号，可以在main.py中修改
 manual_serial = '127.0.0.1:5555'
+
+screen_width = 0
+screen_height = 0
+process_images = []
 
 def set_device_serial(serial):
     global manual_serial
@@ -38,72 +46,75 @@ def get_device_serial():
         # 自动选择第一个可用设备
         if devices:
             device_serial = devices[0]
-            print(f"自动选择设备: {device_serial}")
+            logger.info(f"自动选择设备: {device_serial}")
             return device_serial
 
-        print("未找到连接的Android设备")
+        logger.warning("未找到连接的Android设备")
         return None
 
     except Exception as e:
-        print(f"设备检测失败: {str(e)}")
+        logger.exception(f"设备检测失败", e)
         return None
 
-# 初始化设备序列号
-try:
-    device_serial = get_device_serial()
-    print(f"最终使用设备: {device_serial}")
-except RuntimeError as e:
-    print(f"错误: {str(e)}")
-    exit(1)
 
 def connect_to_emulator():
     try:
         # 使用绝对路径连接到雷电模拟器
         subprocess.run(f'{adb_path} connect {device_serial}', shell=True, check=True)
     except subprocess.CalledProcessError as e:
-        print(f"ADB connect command failed: {e}")
+        logger.exception(f"ADB connect command failed: {e}")
     except FileNotFoundError as e:
-        print(f"Error: {e}. Please ensure adb is installed and added to the system PATH.")
+        logger.exception(f"Error: {e}. Please ensure adb is installed and added to the system PATH.")
 
 
-connect_to_emulator()
+def connect():
+    # 初始化设备序列号
+    try:
+        device_serial = get_device_serial()
+        logger.info(f"最终使用设备: {device_serial}")
+    except RuntimeError as e:
+        logger.exception(f"初始化设备序列号错误: ", e)
+        exit(1)
 
-# 获取屏幕分辨率
-try:
-    # 执行ADB命令获取分辨率
-    result = subprocess.run(
-        f'{adb_path} -s {device_serial} shell wm size',
-        shell=True,
-        capture_output=True,
-        text=True,
-        check=True
-    )
-    output = result.stdout.strip()
+    connect_to_emulator()
 
-    # 解析分辨率输出
-    if 'Physical size:' in output:
-        res_str = output.split('Physical size: ')[1]
-    elif 'Override size:' in output:
-        res_str = output.split('Override size: ')[1]
-    else:
-        raise ValueError("无法解析分辨率输出格式")
+    # 获取屏幕分辨率
+    try:
+        # 执行ADB命令获取分辨率
+        result = subprocess.run(
+            f'{adb_path} -s {device_serial} shell wm size',
+            shell=True,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        output = result.stdout.strip()
 
-    # 分割分辨率并转换为整数
-    width, height = map(int, res_str.split('x'))
-    if width > height:
-        screen_width = width
-        screen_height = height
-    else:
-        screen_width = height
-        screen_height = width
-    print(f"成功获取模拟器分辨率: {screen_width}x{screen_height}")
-except Exception as e: # 否则使用默认分辨率
-    print(f"获取分辨率失败，使用默认分辨率1920x1080。错误: {e}")
-    screen_width = 1920
-    screen_height = 1080
+        # 解析分辨率输出
+        if 'Physical size:' in output:
+            res_str = output.split('Physical size: ')[1]
+        elif 'Override size:' in output:
+            res_str = output.split('Override size: ')[1]
+        else:
+            raise ValueError("无法解析分辨率输出格式")
 
-process_images = [cv2.imread(f'images/process/{i}.png') for i in range(16)]#16个模板
-process_images = [cv2.resize(img, (screen_width, screen_height)) for img in process_images]
+        # 分割分辨率并转换为整数
+        width, height = map(int, res_str.split('x'))
+        if width > height:
+            global screen_width, screen_height
+            screen_width = width
+            screen_height = height
+        else:
+            screen_width = height
+            screen_height = width
+        logger.info(f"成功获取模拟器分辨率: {screen_width}x{screen_height}")
+    except Exception as e: # 否则使用默认分辨率
+        logger.exception(f"获取分辨率失败，使用默认分辨率1920x1080。错误: {e}")
+        screen_width = 1920
+        screen_height = 1080
+    global process_images
+    process_images = [cv2.imread(f'images/process/{i}.png') for i in range(16)]#16个模板
+    process_images = [cv2.resize(img, (screen_width, screen_height)) for img in process_images]
 
 relative_points = [
     (0.9297, 0.8833),  # 右ALL、返回主页、加入赛事、开始游戏
@@ -126,13 +137,14 @@ def capture_screenshot():
 
         # 使用OpenCV解码图像
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
+        if img is None:
+            raise ValueError("无法解码图像数据")
         return img
     except subprocess.CalledProcessError as e:
-        print(f"Screenshot capture failed: {e}")
+        logger.exception(f"Screenshot capture failed: {e}")
         return None
     except Exception as e:
-        print(f"Image processing error: {e}")
+        logger.exception(f"Image processing error: {e}")
         return None
 
 
@@ -151,7 +163,7 @@ def click(point):
     x, y = point
     x_coord = int(x * screen_width)
     y_coord = int(y * screen_height)
-    print(f"点击坐标: ({x_coord}, {y_coord})")
+    logger.info(f"点击坐标: ({x_coord}, {y_coord})")
     subprocess.run(f'{adb_path} -s {device_serial} shell input tap {x_coord} {y_coord}', shell=True)
 
 
@@ -160,23 +172,23 @@ def operation_simple(results):
         if score > 0.6:  # 假设匹配阈值为 0.8
             if idx == 0:  # 加入赛事
                 click(relative_points[0])
-                print("加入赛事")
+                logger.info("加入赛事")
             elif idx == 1:  # 自娱自乐
                 click(relative_points[2])
-                print("自娱自乐")
+                logger.info("自娱自乐")
             elif idx == 2:  # 开始游戏
                 click(relative_points[0])
-                print("开始游戏")
+                logger.info("开始游戏")
             elif idx in [3, 4, 5]:  # 本轮观望
                 click(relative_points[4])
-                print("本轮观望")
+                logger.info("本轮观望")
             elif idx in [10, 11]:
-                print("下一轮")
+                logger.info("下一轮")
             elif idx in [6, 7]:
-                print("等待战斗结束")
+                logger.info("等待战斗结束")
             elif idx == 12:  # 返回主页
                 click(relative_points[0])
-                print("返回主页")
+                logger.info("返回主页")
             break  # 匹配到第一个结果后退出
 
 def operation(results):
@@ -188,22 +200,22 @@ def operation(results):
                 # 根据预测结果点击投资左/右
                 if prediction > 0.5:
                     click(relative_points[1])  # 投资右
-                    print("投资右")
+                    logger.info("投资右")
                 else:
                     click(relative_points[0])  # 投资左
-                    print("投资左")
+                    logger.info("投资左")
             elif idx in [1, 5]:
                 click(relative_points[2])  # 点击省点饭钱
-                print("点击省点饭钱")
+                logger.info("点击省点饭钱")
             elif idx == 2:
                 click(relative_points[3])  # 点击敬请见证
-                print("点击敬请见证")
+                logger.info("点击敬请见证")
             elif idx in [3, 4]:
                 # 保存数据
                 click(relative_points[4])  # 点击下一轮
-                print("点击下一轮")
+                logger.info("点击下一轮")
             elif idx == 6:
-                print("等待战斗结束")
+                logger.info("等待战斗结束")
             break  # 匹配到第一个结果后退出
 
 def main():
@@ -212,7 +224,7 @@ def main():
         if screenshot is not None:
             results = match_images(screenshot, process_images)
             results = sorted(results, key=lambda x: x[1], reverse=True)
-            print("匹配结果：", results[0])
+            logger.info("匹配结果：", results[0])
             operation(results)
         time.sleep(2)
 
