@@ -460,7 +460,7 @@ def is_list_true(onelist):
         return False
     #return is_distance_not_over_60(mincostL,maxcostL,mincostR,maxcostR)
 
-def recognize_review(data):
+def recognize_review(data,img_floder,matched_threshold = 0.1,ocr_threshold = 0.5):
     print("正在进行识别数据检查")
     print("data行数：",len(data))
     ref_row = [0] * (recognize.MONSTER_COUNT * 2)
@@ -469,17 +469,17 @@ def recognize_review(data):
         ref_row = [0] * (recognize.MONSTER_COUNT * 2)
         try:
             img_name = row[recognize.MONSTER_COUNT * 2 + 1]
-            img_path = "wash/images" / Path(img_name)
+            img_path = img_floder / Path(img_name)
             if not img_path.exists():
-                print(f"Image {img_name} not found.")
+                print(f"未找到对应的图像： {img_name} ")
                 continue
             img = cv2.imread(img_path)
             main_roi = ((0, 0), (img.shape[1], img.shape[0]))
-            results = recognize.process_regions(main_roi, img)
+            results = recognize.process_regions(main_roi, img,matched_threshold,ocr_threshold)
             # 处理结果
             for res in results:
                 if "error" in res:
-                    print(f"识别失败 idx: {idx}, img: {img_name}, error: {res['error']}", file=sys.stderr)
+                    print(f"识别失败 行号: {idx}, 图片: {img_name}, 错误类型: {res['error']}", file=sys.stderr)
                     break
                 if res["matched_id"]:
                     if res["region_id"] < 3:
@@ -490,14 +490,15 @@ def recognize_review(data):
                 # 检查数据行是否与参考行匹配
                 data_row = row[0 : recognize.MONSTER_COUNT * 2]
                 if data_row != ref_row:
-                    print(f"Data line {idx} don't match, img: {img_name}", file=sys.stderr)
-                    print(f"ref_row : {ref_row}", file=sys.stderr)
-                    print(f"data_row: {data_row}", file=sys.stderr)
+                    print(f"找到不匹配的数据行： {idx} 行，对应图片文件: {img_name}", file=sys.stderr)
+                    print(f"识别结果 : {ref_row}", file=sys.stderr)
+                    print(f"文件数据 : {data_row}", file=sys.stderr)
                     need_delete[idx] = True
                 else:
                     need_delete[idx] = False
         except Exception as e:
             logging.exception(f"Error processing line {idx}", e)
+            need_delete[idx] = True
     newdata = [row for idx, row in enumerate(data) if not need_delete[idx]]
     deleted = [idx for idx, del_flag in enumerate(need_delete) if del_flag]
     return newdata, deleted
@@ -513,13 +514,9 @@ def recognize_review(data):
 #view_monster_counts(newdata)
 #del_duplicate_by_time(newdata)
 
-def process_full(filename,do_remove_duplicate_subsequences = False,delete_no_time = True,open_black_list = True):
+def process_full(filename,do_remove_duplicate_subsequences = False,delete_no_time = True,open_black_list = True,re_recognize_imgs = False,img_floder = '',matched_threshold=0.1, ocr_threshold=0.5):
     wrong_type_list = []
     newdata,deleted0,ori_len = read_and_remove_zeros(filename,MONSTER_NUM=56)
-
-    deleted7 = []
-    newdata, deleted7 = recognize_review(newdata)
-
     deleted1 = []
     if do_remove_duplicate_subsequences:
         newdata,deleted1 = do_duplicate(newdata)
@@ -528,8 +525,11 @@ def process_full(filename,do_remove_duplicate_subsequences = False,delete_no_tim
         deleted2 = []
     black_listed,deleted4,deleted5,newdata = view_monster_counts(newdata)
     deleted6 = []
+    if re_recognize_imgs:
+        newdata, deleted6 = recognize_review(newdata,img_floder,matched_threshold, ocr_threshold)
+    deleted7 = []
     if open_black_list:
-        newdata,deleted6 = process_black_list(newdata)
+        newdata,deleted7 = process_black_list(newdata)
 
     dl = deleted0
     flag = 0
@@ -548,6 +548,8 @@ def process_full(filename,do_remove_duplicate_subsequences = False,delete_no_tim
             elif flag == 4:
                 wrong_type_list.append(['不符合出怪权重规则的数据：',merge([i + 1 for i in secori])])
             elif flag == 5:
+                wrong_type_list.append(['经图片识别错误的数据*：',merge([i + 1 for i in secori])])
+            elif flag == 6:
                 wrong_type_list.append(['黑名单内数据：',merge([i + 1 for i in secori])])
         flag += 1
     return black_listed,newdata,dl,wrong_type_list
@@ -561,7 +563,7 @@ def test1():
         print(i)
     savecsv(newdata,'0502processed2.csv')
 
-def process_floder(flodername,savefilename,lastsavefilename,do_remove_duplicate_subsequences = True,delete_no_time = True,open_black_list = True):
+def process_floder(flodername,savefilename,lastsavefilename,do_remove_duplicate_subsequences = True,delete_no_time = True,open_black_list = True,re_recognize_imgs = False,img_floder = '',matched_threshold=0.1, ocr_threshold=0.5):
     '''
     输入：
     flodername：需要处理的文件夹名
@@ -577,7 +579,7 @@ def process_floder(flodername,savefilename,lastsavefilename,do_remove_duplicate_
         print(csv)
     for csv in csvlist:
         print(f'正在处理：{csv}…………………………')
-        black_listed,newdata,dl,wrong_type_list = process_full(csv,do_remove_duplicate_subsequences,delete_no_time,open_black_list)
+        black_listed,newdata,dl,wrong_type_list = process_full(csv,do_remove_duplicate_subsequences,delete_no_time,open_black_list,re_recognize_imgs,img_floder,matched_threshold, ocr_threshold)
         dllist = [i + 1 for i in dl]
         print(f'删除了{merge(dllist)}行的数据')
         for i in wrong_type_list:
@@ -590,7 +592,7 @@ def process_floder(flodername,savefilename,lastsavefilename,do_remove_duplicate_
             if len(newdata) < 5000:#不是整合数据
                 black_list_rows += newdata
     savecsv(full_data_list,savefilename)
-    black_listed,newdata,dl,wrong_type_list = process_full(savefilename,do_remove_duplicate_subsequences,delete_no_time,open_black_list)
+    black_listed,newdata,dl,wrong_type_list = process_full(savefilename,do_remove_duplicate_subsequences,delete_no_time,open_black_list,re_recognize_imgs,img_floder,matched_threshold, ocr_threshold)
     #保存后再总处理去重
     dllist = [i + 1 for i in dl]
     print(f'删除了{merge(dllist)}行的数据')
@@ -614,7 +616,7 @@ def process_black_list(full_data):
     return ok_data,delete_rows
             
     
-def process_file(filename,savefilename,do_remove_duplicate_subsequences = True,delete_no_time = True,open_black_list = True):
+def process_file(filename,savefilename,do_remove_duplicate_subsequences = True,delete_no_time = True,open_black_list = True,re_recognize_imgs = False,img_floder = '',matched_threshold=0.1, ocr_threshold=0.5):
     '''
     输入：
     filename：需要处理的文件名
@@ -622,7 +624,7 @@ def process_file(filename,savefilename,do_remove_duplicate_subsequences = True,d
     do_remove_duplicate_subsequences：是否清理连续3个以上重复元素的重复序列
     delete_no_time：是否删除没有时间戳的数据行
     '''
-    black_listed,newdata,dl,wrong_type_list = process_full(filename,do_remove_duplicate_subsequences,delete_no_time,open_black_list)
+    black_listed,newdata,dl,wrong_type_list = process_full(filename,do_remove_duplicate_subsequences,delete_no_time,open_black_list,re_recognize_imgs,img_floder,matched_threshold, ocr_threshold)
     #保存后再总处理去重
     dllist = [i + 1 for i in dl]
     print(f'删除了{merge(dllist)}行的数据')
@@ -757,10 +759,33 @@ def create_gui():
 
     open_black = tk.BooleanVar(value=True)
     ttk.Checkbutton(folder_frame, text="将黑名单文件内的所有数据行同时加入黑名单", variable=open_black).grid(row=5, column=0, columnspan=3, sticky="w")
+    
+    # 修改后的图片识别行（将复选框和阈值输入放在同一行）
+    re_recognize_var = tk.BooleanVar(value=False)
+    ttk.Checkbutton(folder_frame, text="启用图片二次识别（必须指定图片路径）", variable=re_recognize_var).grid(row=6, column=0, padx=5, sticky="w")
+
+    # 添加匹配阈值设置
+    ttk.Label(folder_frame, text="匹配阈值:").grid(row=6, column=1, padx=(20,5), sticky="e")
+    matched_threshold_var = tk.DoubleVar(value=0.1)
+    ttk.Entry(folder_frame, textvariable=matched_threshold_var, width=6).grid(row=6, column=2, sticky="w")
+
+    # 添加OCR阈值设置
+    ttk.Label(folder_frame, text="OCR阈值:").grid(row=6, column=3, padx=(20,5), sticky="e")
+    ocr_threshold_var = tk.DoubleVar(value=0.5)
+    ttk.Entry(folder_frame, textvariable=ocr_threshold_var, width=6).grid(row=6, column=4, sticky="w")
+
+    # 调整后续行号（原row=6改为row=7开始）
+    ttk.Label(folder_frame, text="图片文件夹路径:").grid(row=7, column=0, padx=5, sticky="w")
+    img_folder_path = tk.StringVar()
+    ttk.Entry(folder_frame, textvariable=img_folder_path, width=40).grid(row=7, column=1, padx=5)
+    ttk.Button(folder_frame, text="浏览", command=lambda: img_folder_path.set(filedialog.askdirectory())).grid(row=7, column=2, padx=5)
+
+    # 调整处理文件夹按钮的行号
+    
 
     # 处理文件夹按钮
     folder_button = ttk.Button(folder_frame, text="执行处理")
-    folder_button.grid(row=6, column=0, columnspan=3, pady=5)
+    folder_button.grid(row=8, column=0, columnspan=5, pady=5)
 
     # 处理文件的Frame
     file_frame = ttk.LabelFrame(root, text="处理单个文件")
@@ -786,10 +811,34 @@ def create_gui():
     
     open_black_file = tk.BooleanVar(value=True)
     ttk.Checkbutton(file_frame, text="将黑名单文件内的所有数据行同时加入黑名单", variable=open_black_file).grid(row=4, column=0, columnspan=3, sticky="w")
+    
+    # 修改后的图片识别行
+    re_recognize_file_var = tk.BooleanVar(value=False)
+    ttk.Checkbutton(file_frame, text="启用图片二次识别（必须指定图片路径）", variable=re_recognize_file_var).grid(row=5, column=0, padx=5, sticky="w")
+
+    # 匹配阈值
+    ttk.Label(file_frame, text="匹配阈值:").grid(row=5, column=1, padx=(20,5), sticky="e")
+    matched_threshold_file_var = tk.DoubleVar(value=0.1)
+    ttk.Entry(file_frame, textvariable=matched_threshold_file_var, width=6).grid(row=5, column=2, sticky="w")
+
+    # OCR阈值
+    ttk.Label(file_frame, text="OCR阈值:").grid(row=5, column=3, padx=(20,5), sticky="e")
+    ocr_threshold_file_var = tk.DoubleVar(value=0.5)
+    ttk.Entry(file_frame, textvariable=ocr_threshold_file_var, width=6).grid(row=5, column=4, sticky="w")
+
+    # 调整后续行号
+    ttk.Label(file_frame, text="图片文件夹路径:").grid(row=6, column=0, padx=5, sticky="w")
+    img_folder_file_path = tk.StringVar()
+    ttk.Entry(file_frame, textvariable=img_folder_file_path, width=40).grid(row=6, column=1, padx=5)
+    ttk.Button(file_frame, text="浏览", command=lambda: img_folder_file_path.set(filedialog.askdirectory())).grid(row=6, column=2, padx=5)
+
+    # 调整处理文件按钮的行号
+    
+
 
     # 处理文件按钮
     file_button = ttk.Button(file_frame, text="执行处理")
-    file_button.grid(row=5, column=0, columnspan=3, pady=5)
+    file_button.grid(row=7, column=0, columnspan=5, pady=5)
 
     # 配置网格权重
     root.grid_rowconfigure(3, weight=1)
@@ -814,7 +863,7 @@ def create_gui():
 
         thread = ProcessingThread(
             func=process_floder,
-            args=(folder, interim, final, remove_dup.get(), del_time.get(), open_black.get()),
+            args=(folder, interim, final, remove_dup.get(), del_time.get(), open_black.get(),re_recognize_var.get(), Path(img_folder_path.get()),matched_threshold_var.get(), ocr_threshold_var.get()),
             callback=callback
         )
         thread.start()
@@ -836,7 +885,7 @@ def create_gui():
 
         thread = ProcessingThread(
             func=process_file,
-            args=(input_file, output_file, remove_dup_file.get(), del_time_file.get(), open_black_file.get()),
+            args=(input_file, output_file, remove_dup_file.get(), del_time_file.get(), open_black_file.get(),re_recognize_file_var.get(), Path(img_folder_file_path.get()),matched_threshold_file_var.get(), ocr_threshold_file_var.get()),
             callback=callback
         )
         thread.start()
