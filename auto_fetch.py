@@ -77,17 +77,17 @@ class AutoFetch:
             data_row.append(image_name)
             if image is not None:
                 image_path = self.data_folder / "images" / image_name
-                cv2.imwrite(image_path, image, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                cv2.imwrite(image_path, image)
 
             # 新增保存结果图片逻辑
             if self.image_name:
-                result_image_name = self.image_name.replace(".jpg", "_result.jpg")
+                result_image_name = self.image_name.replace(".png", "_result.png")
                 # 缩放到128像素高度
                 (h, w) = result_image.shape[:2]
                 new_height = 128
                 resized_image = cv2.resize(result_image, (int(w * (new_height/h)), new_height))
                 image_path = self.data_folder / "images" / result_image_name
-                cv2.imwrite(str(image_path), resized_image, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                cv2.imwrite(str(image_path), resized_image)
                 logger.info(f"保存结果图片到 {image_path}")
         with open(self.data_folder / "arknights.csv", "a", newline="") as file:
             writer = csv.writer(file)
@@ -131,7 +131,7 @@ class AutoFetch:
         timestamp = int(time.time())
         # 将处理的怪物 ID 拼接到文件名中
         monster_ids_str = "_".join(map(str, processed_monster_ids))
-        current_image_name = f"{timestamp}_{monster_ids_str}.jpg"
+        current_image_name = f"{timestamp}_{monster_ids_str}.png"
         current_image = cv2.resize(
             roi, (roi.shape[1] // 2, roi.shape[0] // 2)
         )  # 保存缩放后的图片到内存
