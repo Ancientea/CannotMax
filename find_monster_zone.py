@@ -339,9 +339,7 @@ def filter(results_big, results_small, height):
         high_tol = 1
 
     if small_key == 4:
-        user_input = input("捕捉效果差, 输入n或N启用备用参数, 输入其他内容（如回车）则程序继续执行")
-        if user_input.lower() == "n":
-            raise IndexError("将启用备用参数进行捕捉")
+        raise RuntimeError("捕捉效果差, 将启用备用参数进行捕捉")
     return filtered_big, filtered_small, high_tol
 
 
