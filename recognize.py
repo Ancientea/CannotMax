@@ -296,8 +296,8 @@ def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None,match
                 raise ValueError(f"模板匹配置信度过低: {confidence}")
         except Exception as e:
             logger.exception(f"区域 {idx} 匹配失败: {str(e)}")
-            results.append({"region_id": idx, "error": str(e)})
-            return results
+            results.append({"region_id": idx, "matched_id": matched_id, "number": "N/A", "error": str(e)})
+            return results, roi_found
 
         try:
             # ================== OCR数字识别部分 ==================
