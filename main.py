@@ -110,11 +110,13 @@ class ArknightsApp(QMainWindow):
         self.left_monsters = {}
         self.right_monsters = {}
         self.images = {}
-        self.main_roi = None
 
         # 模型
         self.current_prediction = 0.5
         self.cannot_model = CannotModel()
+
+        # 怪物识别模块
+        self.recognizer = recognize.RecognizeMonster()
 
         # 添加历史对局相关属性
         self.history_visible = False
@@ -774,7 +776,7 @@ class ArknightsApp(QMainWindow):
 
         if self.no_region:
             if self.first_recognize:
-                self.main_roi = [
+                self.recognizer.main_roi = [
                     (int(0.2479 * loadData.screen_width),
                      int(0.8410 * loadData.screen_height)),
                     (int(0.7526 * loadData.screen_width),
@@ -787,8 +789,7 @@ class ArknightsApp(QMainWindow):
                 self.first_recognize = False
             screenshot = loadData.capture_screenshot()
 
-        results, self.main_roi = recognize.process_regions(
-            self.main_roi, screenshot=screenshot)
+        results = self.recognizer.process_regions(screenshot=screenshot)
         self.reset_entries()
 
         for res in results:
@@ -1083,7 +1084,7 @@ class ArknightsApp(QMainWindow):
         return team_widget
 
     def reselect_roi(self):
-        self.main_roi = recognize.select_roi()
+        self.recognizer.main_roi = self.recognizer.select_roi()
         self.no_region = False
 
     def toggle_auto_fetch(self):

@@ -52,10 +52,12 @@ class ArknightsApp:
         self.right_monsters = {}
         self.images = {}
         self.progress_var = tk.StringVar()
-        self.main_roi = None
 
         self.load_images()
         self.create_widgets()
+
+        # 怪物识别模块
+        self.recognizer = recognize.RecognizeMonster()
 
         # 历史对局面板
         self.history_visible = False
@@ -528,7 +530,7 @@ class ArknightsApp:
 
         if self.no_region:  # 如果尚未选择区域，从adb获取截图
             if self.first_recognize:  # 首次识别时，尝试连接adb
-                self.main_roi = [
+                self.recognizer.main_roi = [
                     (int(0.2479 * loadData.screen_width), int(0.8410 * loadData.screen_height)),
                     (int(0.7526 * loadData.screen_width), int(0.9510 * loadData.screen_height)),
                 ]
@@ -538,7 +540,7 @@ class ArknightsApp:
                 self.first_recognize = False
             screenshot = loadData.capture_screenshot()
 
-        results, self.main_roi = recognize.process_regions(self.main_roi, screenshot=screenshot)
+        results = self.recognizer.process_regions(screenshot=screenshot)
         self.reset_entries()
 
         # 处理结果
@@ -572,7 +574,7 @@ class ArknightsApp:
         return self.current_prediction, results, screenshot
 
     def reselect_roi(self):
-        self.main_roi = recognize.select_roi()
+        self.recognizer.main_roi = self.recognizer.select_roi()
         self.no_region = False
 
     def start_training(self):

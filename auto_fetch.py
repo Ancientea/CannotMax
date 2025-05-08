@@ -13,6 +13,7 @@ import numpy as np
 from sympy import N
 import loadData
 from recognize import MONSTER_COUNT, intelligent_workers_debug
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -22,11 +23,11 @@ class AutoFetch:
         self,
         game_mode,
         is_invest,
-        reset,
-        recognizer,
-        updater,
-        start_callback,
-        stop_callback,
+        reset: Callable[[], None],
+        recognizer: Callable[[], tuple[float, list, cv2.typing.MatLike]],
+        updater: Callable[[], None],
+        start_callback: Callable[[], None],
+        stop_callback: Callable[[], None],
         training_duration,
     ):
         self.game_mode = game_mode  # 游戏模式（30人或自娱自乐）
@@ -286,9 +287,10 @@ class AutoFetch:
             if keyboard.is_pressed("esc"):
                 break
         else:
-            logger.info("自动获取数据已停止")
+            logger.info("auto_fetch_running is False, exiting loop")
             return
         # 不通过按钮结束自动获取
+        logger.info("break auto_fetch_loop")
         self.stop_auto_fetch()
 
     def start_auto_fetch(self):
@@ -323,6 +325,6 @@ class AutoFetch:
         self.auto_fetch_running = False
         self.stop_callback()
         self.save_statistics_to_log()
-        logger.info("自动获取数据已停止")
+        logger.info("停止自动获取")
         logging.getLogger().removeHandler(self.log_file_handler)
         # 结束自动获取数据的线程

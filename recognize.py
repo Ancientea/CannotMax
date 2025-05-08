@@ -1,7 +1,5 @@
 import logging
 import os
-import subprocess
-import sys
 import cv2
 import numpy as np
 from PIL import ImageGrab
@@ -13,21 +11,13 @@ import find_monster_zone
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-rapidocr_eng = RapidOCR()
-
 # 是否启用debug模式
 intelligent_workers_debug = True
 
 # 定义全局变量
 MONSTER_COUNT = 56  # 设置怪物数量
-find_zone = False # 是否已经找到了区域
-zone = None
 
-# 鼠标交互全局变量
-drawing = False
-roi_box = []
-
-# 预定义相对坐标
+# 数字区域相对坐标
 relative_regions_nums = [
     (0.0300, 0.7, 0.1400, 1),
     (0.1600, 0.7, 0.2700, 1),
@@ -36,6 +26,7 @@ relative_regions_nums = [
     (0.7300, 0.7, 0.8400, 1),
     (0.8600, 0.7, 0.9700, 1),
 ]
+# 怪物头像相对坐标
 relative_regions = [
     (0.0000, 0.1, 0.1200, 0.77),
     (0.1200, 0.1, 0.2400, 0.77),
@@ -45,77 +36,243 @@ relative_regions = [
     (0.8800, 0.1, 1.0000, 0.77),
 ]
 
-
-def save_number_image(number, processed, mon_id):
-    """保存数字图片到对应文件夹
-    Args:
-        number: 识别出的数字
-        processed: 处理后的图片
-        mon_id: 怪物ID
+def get_rapidocr_engine(prefer_gpu=True):
     """
-    if number and mon_id != 0:
-        # 创建数字对应的文件夹
-        num_folder = os.path.join("images", "nums", str(number))
-        if not os.path.exists(num_folder):
-            os.makedirs(num_folder)
+    prefer_gpu (bool): 是否优先尝试使用GPU
+    """
+    try:
+        if prefer_gpu:
+            import torch
+            if torch.cuda.is_available():
+                return RapidOCR(
+                    params={
+                        "Global.with_torch": True,
+                        "EngineConfig.torch.use_cuda": True,  # 使用torch GPU版推理
+                        "EngineConfig.torch.gpu_id": 0,  # 指定GPU id
+                    }
+                )
+    except ImportError:
+        logger.warning("torch库未安装，使用onnxruntime")
+    # 如果没有GPU可用，使用CPU onnxruntime
+    return RapidOCR()
 
-        # 获取文件夹中已有的图片数量
-        existing_files = [f for f in os.listdir(num_folder) if f.endswith(".png")]
-        next_index = len(existing_files) + 1
+class RecognizeMonster:
+    def __init__(self):
+        self.roi_relative = [(0.2479, 0.8410), (0.7526, 0.9510)] # 16:9下怪物区域相对坐标
+        self.main_roi = [(0, 0), (0, 0)] # 主区域坐标
+        # 鼠标交互全局变量
+        self.roi_box = []
+        self.drawing = False
+        self.rapidocr_eng = get_rapidocr_engine()
+        self.ref_images = load_ref_images()
 
-        # 保存图片，命名为 id_序号.png
-        save_path = os.path.join(num_folder, f"{mon_id}_{next_index}.png")
-        cv2.imwrite(save_path, processed)
+    def mouse_callback(self, event, x:int, y:int, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.roi_box = [(x, y)]
+            self.drawing = True
+        elif event == cv2.EVENT_MOUSEMOVE and self.drawing:
+            img_copy = param.copy()
+            cv2.rectangle(img_copy, self.roi_box[0], (x, y), (0, 255, 0), 2)
+            cv2.imshow("Select ROI", img_copy)
+        elif event == cv2.EVENT_LBUTTONUP:
+            self.roi_box.append((x, y))
+            self.drawing = False
 
+    def select_roi(self):
+        """改进的交互式区域选择"""
+        while True:
+            # 获取初始截图
+            screenshot = np.array(ImageGrab.grab())
+            img = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
 
-def mouse_callback(event, x, y, flags, param):
-    global roi_box, drawing
-    if event == cv2.EVENT_LBUTTONDOWN:
-        roi_box = [(x, y)]
-        drawing = True
-    elif event == cv2.EVENT_MOUSEMOVE and drawing:
-        img_copy = param.copy()
-        cv2.rectangle(img_copy, roi_box[0], (x, y), (0, 255, 0), 2)
-        cv2.imshow("Select ROI", img_copy)
-    elif event == cv2.EVENT_LBUTTONUP:
-        roi_box.append((x, y))
-        drawing = False
+            # 添加操作提示
+            cv2.putText(img, "Drag to select area | ENTER:confirm | ESC:retry",
+                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
+            # 显示窗口
+            cv2.namedWindow("Select ROI", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow("Select ROI", 1280, 720)
+            cv2.setMouseCallback("Select ROI", self.mouse_callback, img)
+            cv2.imshow("Select ROI", img)
 
-def select_roi():
-    """改进的交互式区域选择"""
-    global roi_box  # 声明为全局变量
-    while True:
-        # 获取初始截图
-        screenshot = np.array(ImageGrab.grab())
-        img = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
+            # 添加示例图片(要后弹出才看得见)
+            example_img = cv2.imread("images/eg.png")
+            # 显示示例图片在单独的窗口中
+            cv2.imshow("example", example_img)
 
-        # 添加操作提示
-        cv2.putText(img, "Drag to select area | ENTER:confirm | ESC:retry",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            key = cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
-        # 显示窗口
-        cv2.namedWindow("Select ROI", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("Select ROI", 1280, 720)
-        cv2.setMouseCallback("Select ROI", mouse_callback, img)
-        cv2.imshow("Select ROI", img)
+            if key == 13 and len(self.roi_box) == 2:  # Enter确认
+                # 标准化坐标 (x1,y1)为左上角，(x2,y2)为右下角
+                x1 = min(self.roi_box[0][0], self.roi_box[1][0])
+                y1 = min(self.roi_box[0][1], self.roi_box[1][1])
+                x2 = max(self.roi_box[0][0], self.roi_box[1][0])
+                y2 = max(self.roi_box[0][1], self.roi_box[1][1])
+                return [(x1, y1), (x2, y2)]
+            elif key == 27:  # ESC重试
+                self.roi_box = []
+                continue
 
-        # 添加示例图片(要后弹出才看得见)
-        example_img = cv2.imread("images/eg.png")
-        # 显示示例图片在单独的窗口中
-        cv2.imshow("example", example_img)
+    def find_best_match(target: cv2.typing.MatLike, ref_images: dict[int, cv2.typing.MatLike]):
+        """
+        模板匹配找到最佳匹配的参考图像
+        :param target: 目标图像
+        :param ref_images: 参考图像字典 {id: image}
+        :return: (最佳匹配的id, 最小差异值)
+        """
+        confidence = float("-inf")
+        best_id = -1
+        # 确保目标图像是RGB格式
+        if len(target.shape) == 2:
+            target = cv2.cvtColor(target, cv2.COLOR_GRAY2BGR)
+        for img_id, ref_img in ref_images.items():
+            try:
+                # 模板匹配
+                match_algorithm = cv2.TM_CCOEFF_NORMED
+                res = cv2.matchTemplate(target, ref_img, match_algorithm)
+                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                if max_val > confidence:
+                    confidence = max_val
+                    best_id = img_id
+            except Exception as e:
+                logger.exception(f"处理参考图像 {img_id} 时出错:", e)
+                continue
+        return best_id, confidence
+    
+    def get_manual_screenshot(self):
+        (x1, y1), (x2, y2) = self.main_roi
+        screenshot = np.array(ImageGrab.grab(bbox=(x1, y1, x2, y2)))
+        screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
+        try:
+            # 手动框选的截图需先识别目标区域
+            cv2.imwrite(f"images/tmp/zone1.png", screenshot)
+            d_avatar, d_nums = find_monster_zone.cutFrame(screenshot)
+            height, width, _ = screenshot.shape
+            divisors = np.array([width, height, width, height])
+            avatar = np.round(d_avatar * divisors).astype("int")
+            x_min, x_max, y_min, y_max = width, 0, height, 0
+            for x1, y1, x2, y2 in avatar:
+                x_min = min(x_min, min(x1, x2))
+                x_max = max(x1, x2)
+                y_min = min(y_min, min(y1, y2))
+                y_max = max(y1, y2)
+            # 假如找到过能用main_roi的就存起来
+            self.main_roi = [(x1 + x_min, y1 + y_min), (x1 + x_max, y1 + y_max)]
+            screenshot = screenshot[y_min:y_max, x_min:x_max]
+        except Exception as e:
+            logger.exception("区域识别失败，使用完整区域:", e)
+        return screenshot
 
-        key = cv2.waitKey(0)
-        cv2.destroyAllWindows()
+    def process_regions(
+        self,
+        screenshot: cv2.typing.MatLike | None = None,
+        matched_threshold=0.5,
+        ocr_threshold=0.95,
+    ):
+        """处理主区域中的所有区域（优化特征匹配）
+        Args:
+            main_roi: 主要感兴趣区域的坐标
+            screenshot: 可选的预先捕获的截图
+        Returns:
+            区域处理结果的列表
+        """
+        results = []
+        (x1, y1), (x2, y2) = self.main_roi
+        # 如果没有提供screenshot，则获取最新截图（仅截取主区域）
+        if screenshot is None:
+            screenshot = self.get_manual_screenshot()
+        else:
+            # ADB捕获的截图，从当前screenshot中提取主区域
+            screenshot = screenshot[y1:y2, x1:x2]
 
-        if key == 13 and len(roi_box) == 2:  # Enter确认
-            # 标准化坐标 (x1,y1)为左上角，(x2,y2)为右下角
-            x1, y1 = min(roi_box[0][0], roi_box[1][0]), min(roi_box[0][1], roi_box[1][1])
-            x2, y2 = max(roi_box[0][0], roi_box[1][0]), max(roi_box[0][1], roi_box[1][1])
-            return [(x1, y1), (x2, y2)]
-        elif key == 27:  # ESC重试
-            roi_box = []
-            continue
+        # 确保图像不为空
+        if screenshot.size == 0:
+            raise ValueError("截图为空，请检查区域选择或截图方法。")
+        # 转换到标准1920*1080下目标区域
+        screenshot = cv2.resize(screenshot, (969, 119))
+        main_height = screenshot.shape[0]
+        main_width = screenshot.shape[1]
+
+        if intelligent_workers_debug:  # 如果处于debug模式
+            # 存储模板图像用于debug
+            cv2.imwrite(f"images/tmp/zone.png", screenshot)
+
+        # 遍历所有区域
+        for idx, rel in enumerate(relative_regions):
+            try:
+                # ================== 模板匹配部分 ==================
+                # 计算模板匹配的子区域坐标
+                rx1 = int(rel[0] * main_width)
+                ry1 = int(rel[1] * main_height)
+                rx2 = int(rel[2] * main_width)
+                ry2 = int(rel[3] * main_height)
+                # 提取模板匹配用的子区域
+                sub_roi = screenshot[ry1:ry2, rx1:rx2]
+
+                # 图像匹配
+                matched_id, confidence = find_best_match(sub_roi, self.ref_images)
+                logger.info(f"target: {idx} confidence: {confidence:.4f}")
+                if matched_id != 0 and confidence < matched_threshold:
+                    raise ValueError(f"模板匹配置信度过低: {confidence}")
+            except Exception as e:
+                logger.exception(f"区域 {idx} 匹配失败: {str(e)}")
+                results.append(
+                    {"region_id": idx, "matched_id": matched_id, "number": "N/A", "error": str(e)}
+                )
+                return results
+            try:
+                # ================== OCR数字识别部分 ==================
+                rel_num = relative_regions_nums[idx]
+                rx1_num = int(rel_num[0] * main_width)
+                ry1_num = int(rel_num[1] * main_height)
+                rx2_num = int(rel_num[2] * main_width)
+                ry2_num = int(rel_num[3] * main_height)
+
+                # 提取OCR识别用的子区域
+                sub_roi_num = screenshot[ry1_num:ry2_num, rx1_num:rx2_num]
+                processed = preprocess(sub_roi_num)  # 二值化预处理
+                processed = crop_to_min_bounding_rect(processed)  # 去除多余黑框
+                processed = add_black_border(processed, border_size=3)  # 加上3像素黑框
+
+                # OCR识别（保留优化后的处理逻辑）
+                number, ocr_confidence = self.do_num_ocr(processed)
+                if number != "" and ocr_confidence < ocr_threshold:
+                    raise ValueError(f"OCR置信度过低: {ocr_confidence}")
+
+                if intelligent_workers_debug:  # 如果处于debug模式
+                    # 存储模板图像用于debug
+                    cv2.imwrite(f"images/tmp/target_{idx}.png", sub_roi)
+
+                    # 存储OCR图像用于debug
+                    cv2.imwrite(f"images/tmp/number_{idx}.png", processed)
+
+                if number == "" and matched_id != 0:
+                    raise ValueError("发现有怪物但无数量异常数据！")
+                if matched_id == 0 and number != "":
+                    raise ValueError("发现无怪物但有数量异常数据！")
+
+                results.append(
+                    {
+                        "region_id": idx,
+                        "matched_id": matched_id,
+                        "number": number if number else "N/A",
+                        "confidence": round(confidence, 2),
+                    }
+                )
+            except Exception as e:
+                logger.exception(f"区域 {idx} OCR识别失败: {str(e)}")
+                results.append(
+                    {"region_id": idx, "matched_id": matched_id, "number": "N/A", "error": str(e)}
+                )
+        return results
+    
+    def do_num_ocr(self, img: cv2.typing.MatLike):
+        result = self.rapidocr_eng(img, use_det=False, use_cls=False, use_rec=True)
+        logger.info(f"OCR: text: '{result.txts[0]}', score: {result.scores[0]}")
+        if result.txts[0] != "" and not result.txts[0].isdigit():
+            raise ValueError(f"OCR识别结果不是数字: '{result.txts[0]}'")
+        return result.txts[0], result.scores[0]
 
 
 def add_black_border(img: cv2.typing.MatLike, border_size=3):
@@ -218,138 +375,6 @@ def find_best_match(target: cv2.typing.MatLike, ref_images: dict[int, cv2.typing
     return best_id, confidence
 
 
-def do_num_ocr(img: cv2.typing.MatLike):
-    result = rapidocr_eng(img, use_det=False, use_cls=False, use_rec=True)
-    logger.info(f"OCR: text: '{result.txts[0]}', score: {result.scores[0]}")
-    number = "".join([c for c in result.txts[0] if c.isdigit()])
-    confidence = result.scores[0]
-    return number, confidence
-
-
-def process_regions(main_roi, screenshot: cv2.typing.MatLike | None = None,matched_threshold = 0.5,ocr_threshold = 0.95):
-    """处理主区域中的所有区域（优化特征匹配）
-    Args:
-        main_roi: 主要感兴趣区域的坐标
-        screenshot: 可选的预先捕获的截图
-    Returns:
-        区域处理结果的列表
-    """
-    results = []
-    (x1, y1), (x2, y2) = main_roi
-    (x11,y11),_ = main_roi
-    roi_found = main_roi
-    # 如果没有提供screenshot，则获取最新截图（仅截取主区域）
-    if screenshot is None:
-        screenshot = np.array(ImageGrab.grab(bbox=(x1, y1, x2, y2)))
-        screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
-        try:
-            # 手动框选的截图需先识别目标区域
-            cv2.imwrite(f"images/tmp/zone1.png", screenshot)
-            d_avatar, d_nums = find_monster_zone.cutFrame(screenshot)
-            height, width, _ = screenshot.shape
-            divisors = np.array([width, height, width, height])
-            avatar = np.round(d_avatar * divisors).astype("int")
-            x_min, x_max, y_min, y_max = width, 0, height, 0
-            for x1, y1, x2, y2 in avatar:
-                x_min = min(x_min, min(x1, x2))
-                x_max = max(x1, x2)
-                y_min = min(y_min, min(y1, y2))
-                y_max = max(y1, y2)
-            # 假如找到过能用main_roi的就存起来
-            roi_found = [(x11 + x_min,y11 + y_min),(x11 + x_max,y11 + y_max)]
-            screenshot = screenshot[y_min:y_max, x_min:x_max]
-        except Exception as e:
-            # 如果区域识别失败，则使用手动框选的区域
-            logger.exception("区域识别失败，使用完整区域:", e)
-    else:
-        # 从当前screenshot中提取主区域
-        screenshot = screenshot[y1:y2, x1:x2]
-
-    # 确保图像不为空
-    if screenshot.size == 0:
-        raise ValueError("截图为空，请检查区域选择或截图方法。")
-    # 转换到标准1920*1080下目标区域
-    screenshot = cv2.resize(screenshot, (969, 119))
-    main_height = screenshot.shape[0]
-    main_width = screenshot.shape[1]
-
-    if intelligent_workers_debug:  # 如果处于debug模式
-        # 存储模板图像用于debug
-        cv2.imwrite(f"images/tmp/zone.png", screenshot)
-
-    # 遍历所有区域
-    for idx, rel in enumerate(relative_regions):
-        try:
-            # ================== 模板匹配部分 ==================
-            # 计算模板匹配的子区域坐标
-            rx1 = int(rel[0] * main_width)
-            ry1 = int(rel[1] * main_height)
-            rx2 = int(rel[2] * main_width)
-            ry2 = int(rel[3] * main_height)
-            # 提取模板匹配用的子区域
-            sub_roi = screenshot[ry1:ry2, rx1:rx2]
-
-            # 图像匹配
-            matched_id, confidence = find_best_match(sub_roi, ref_images)
-            logger.info(f"target: {idx} confidence: {confidence}")
-            if matched_id != 0 and confidence < matched_threshold:
-                raise ValueError(f"模板匹配置信度过低: {confidence}")
-        except Exception as e:
-            logger.exception(f"区域 {idx} 匹配失败: {str(e)}")
-            results.append({"region_id": idx, "matched_id": matched_id, "number": "N/A", "error": str(e)})
-            return results, roi_found
-
-        try:
-            # ================== OCR数字识别部分 ==================
-            rel_num = relative_regions_nums[idx]
-            rx1_num = int(rel_num[0] * main_width)
-            ry1_num = int(rel_num[1] * main_height)
-            rx2_num = int(rel_num[2] * main_width)
-            ry2_num = int(rel_num[3] * main_height)
-
-            # 提取OCR识别用的子区域
-            sub_roi_num = screenshot[ry1_num:ry2_num, rx1_num:rx2_num]
-            processed = preprocess(sub_roi_num)  # 二值化预处理
-            processed = crop_to_min_bounding_rect(processed)  # 去除多余黑框
-            processed = add_black_border(processed, border_size=3)  # 加上3像素黑框
-
-            # OCR识别（保留优化后的处理逻辑）
-            number, ocr_confidence = do_num_ocr(processed)
-            if number != "" and ocr_confidence < ocr_threshold:
-                raise ValueError(f"OCR置信度过低: {ocr_confidence}")
-
-            if intelligent_workers_debug:  # 如果处于debug模式
-                # 存储模板图像用于debug
-                cv2.imwrite(f"images/tmp/target_{idx}.png", sub_roi)
-
-                # 存储OCR图像用于debug
-                cv2.imwrite(f"images/tmp/number_{idx}.png", processed)
-
-                # 保存有数字的图片到images/nums中的对应文件夹
-                if number:
-                    save_number_image(number, processed, matched_id)
-
-            if number == "" and matched_id != 0:
-                raise ValueError("发现有怪物但无数量异常数据！")
-            if matched_id == 0 and number != "":
-                raise ValueError("发现无怪物但有数量异常数据！")
-
-            results.append(
-                {
-                    "region_id": idx,
-                    "matched_id": matched_id,
-                    "number": number if number else "N/A",
-                    "confidence": round(confidence, 2),
-                }
-            )
-        except Exception as e:
-            logger.exception(f"区域 {idx} OCR识别失败: {str(e)}")
-            results.append(
-                {"region_id": idx, "matched_id": matched_id, "number": "N/A", "error": str(e)}
-            )
-    return results, roi_found
-
-
 def load_ref_images(ref_dir="images"):
     """加载参考图片库"""
     ref_images = {}
@@ -377,12 +402,11 @@ def load_ref_images(ref_dir="images"):
     return ref_images
 
 
-ref_images = load_ref_images()  # 直接加载图片储存在全局变量，避免反复加载
-
 if __name__ == "__main__":
     print("请用鼠标拖拽选择主区域...")
-    main_roi = select_roi()
-    results,_ = process_regions(main_roi)
+    recognizer = RecognizeMonster()
+    main_roi = recognizer.select_roi()
+    results, _ = recognizer.process_regions(main_roi)
     # 输出结果
     print("\n识别结果：")
     for res in results:
