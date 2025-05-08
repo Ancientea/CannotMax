@@ -45,8 +45,7 @@ class HistoryMatch:
             setR_cur = set(np.where(cur_right > 0)[0])
 
             # 相似度和特征
-            feat_cur = np.hstack(
-                [cur_left + cur_right, np.abs(cur_left - cur_right)])
+            feat_cur = np.hstack([cur_left + cur_right, np.abs(cur_left - cur_right)])
             feat_cur = feat_cur.reshape(1, -1)
             sims = cosine_similarity(feat_cur, self.feat_past)[0]  # shape (N_history,)
 
