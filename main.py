@@ -23,13 +23,15 @@ from predict import CannotModel
 logging.getLogger().setLevel(logging.DEBUG)
 logging.getLogger("PIL").setLevel(logging.INFO)
 stream_handler = logging.StreamHandler()
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s",)
+formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",)
 stream_handler.setFormatter(formatter)
 logging.getLogger().addHandler(stream_handler)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-loadData.connect()
+# loadData.connect()
+
 
 class ArknightsApp(QMainWindow):
     # 添加自定义信号
@@ -40,6 +42,11 @@ class ArknightsApp(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        # 尝试连接模拟器
+        self.adb_connector = loadData.ADBConnector()
+        self.adb_connector.connect_finished.connect(self.on_adb_connected)
+        self.adb_connector.start()
+
         self.auto_fetch_running = False
         self.no_region = True
         self.first_recognize = True
@@ -54,22 +61,17 @@ class ArknightsApp(QMainWindow):
 
         # 模型
         self.current_prediction = 0.5
-        self.cannot_model = CannotModel() 
+        self.cannot_model = CannotModel()
 
         # 添加历史对局相关属性
         self.history_visible = False
-        self.history_data_loaded = True
+        self.history_data_loaded = False
         self.history_widget = None
         self.history_scroll_area = None
 
         # 初始化UI后加载历史数据
-        self.history_match = similar_history_match.HistoryMatch()
-        self.past_left = self.history_match.past_left
-        self.past_right = self.history_match.past_right
-        self.labels = self.history_match.labels
-        # 组合特征
-        self.feat_past = self.history_match.feat_past
-        self.N_history = self.history_match.N_history
+        self.history_match = similar_history_match.AsyncHistoryMatch()
+        self.history_match.history_loaded.connect(self.on_history_loaded)
 
         # 初始化特殊怪物语言触发处理程序
         self.special_monster_handler = SpecialMonsterHandler()
@@ -264,7 +266,8 @@ class ArknightsApp(QMainWindow):
                         background-color: #212121;
                     }
                 """)
-        self.predict_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.predict_button.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.reset_button = QPushButton("重置")
         self.reset_button.clicked.connect(self.reset_entries)
@@ -323,7 +326,22 @@ class ArknightsApp(QMainWindow):
 
         self.recognize_button = QPushButton("识别")
         self.recognize_button.clicked.connect(self.recognize)
-
+        self.recognize_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #313131;
+                        color: #F3F31F;
+                        border-radius: 16px;
+                        padding: 8px;
+                        font-weight: bold;
+                        min-height: 30px;
+                    }
+                    QPushButton:hover {
+                        background-color: #414141;
+                    }
+                    QPushButton:pressed {
+                        background-color: #212121;
+                    }
+                """)
 
         row2_layout.addWidget(self.recognize_button)
 
@@ -401,6 +419,19 @@ class ArknightsApp(QMainWindow):
         self.update_entries_signal.connect(self.reset_entries)
         self.update_statistics_signal.connect(self.update_statistics)
 
+    def on_adb_connected(self):
+        print("模拟器初始化完成")
+
+    def on_history_loaded(self, history_match):
+        print("尝试获取错题本")
+        # Update attributes from loaded HistoryMatch
+        self.past_left = history_match.past_left
+        self.past_right = history_match.past_right
+        self.labels = history_match.labels
+        self.feat_past = history_match.feat_past
+        self.N_history = history_match.N_history
+        self.history_data_loaded = True
+        print("错题本加载成功")
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -431,7 +462,7 @@ class ArknightsApp(QMainWindow):
             monster_container.setFixedHeight(self.ROW_HEIGHT)
             shadow01 = QGraphicsDropShadowEffect()
             shadow01.setBlurRadius(5)  # 模糊半径（控制发光范围）
-            shadow01.setColor(QColor(0, 0, 0,120))  # 发光颜色
+            shadow01.setColor(QColor(0, 0, 0, 120))  # 发光颜色
             shadow01.setOffset(3)  # 偏移量（0表示均匀四周发光）
             monster_container.setGraphicsEffect(shadow01)
 
@@ -452,7 +483,8 @@ class ArknightsApp(QMainWindow):
             try:
                 pixmap = QPixmap(f"images/{i}.png")
                 if not pixmap.isNull():
-                    pixmap = pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    pixmap = pixmap.scaled(
+                        60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                     img_label.setPixmap(pixmap)
             except Exception as e:
                 print(f"加载人物{i}图片错误: {str(e)}")
@@ -477,7 +509,8 @@ class ArknightsApp(QMainWindow):
             container_layout.addWidget(right_entry, 0, Qt.AlignCenter)
 
             # 添加到网格布局
-            self.scroll_grid.addWidget(monster_container, row, col, Qt.AlignCenter)
+            self.scroll_grid.addWidget(
+                monster_container, row, col, Qt.AlignCenter)
 
             # 更新行列位置
             col += 1
@@ -509,13 +542,15 @@ class ArknightsApp(QMainWindow):
             # 左侧人物显示
             if left_value.isdigit() and int(left_value) > 0:
                 left_has_input = True
-                monster_widget = self.create_monster_display_widget(i, left_value)
+                monster_widget = self.create_monster_display_widget(
+                    i, left_value)
                 self.left_input_layout.addWidget(monster_widget)
 
             # 右侧人物显示
             if right_value.isdigit() and int(right_value) > 0:
                 right_has_input = True
-                monster_widget = self.create_monster_display_widget(i, right_value)
+                monster_widget = self.create_monster_display_widget(
+                    i, right_value)
                 self.right_input_layout.addWidget(monster_widget)
 
         # 如果没有输入，显示提示
@@ -553,7 +588,8 @@ class ArknightsApp(QMainWindow):
         try:
             pixmap = QPixmap(f"images/{monster_id}.png")
             if not pixmap.isNull():
-                pixmap = pixmap.scaled(70, 70, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                pixmap = pixmap.scaled(
+                    70, 70, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 img_label.setPixmap(pixmap)
         except:
             pass
@@ -592,13 +628,16 @@ class ArknightsApp(QMainWindow):
 
             for name, entry in self.left_monsters.items():
                 value = entry.text()
-                left_counts[int(name) - 1] = int(value) if value.isdigit() else 0
+                left_counts[int(name) -
+                            1] = int(value) if value.isdigit() else 0
 
             for name, entry in self.right_monsters.items():
                 value = entry.text()
-                right_counts[int(name) - 1] = int(value) if value.isdigit() else 0
+                right_counts[int(name) -
+                             1] = int(value) if value.isdigit() else 0
 
-            prediction = self.cannot_model.get_prediction(left_counts, right_counts)
+            prediction = self.cannot_model.get_prediction(
+                left_counts, right_counts)
             return prediction
         except FileNotFoundError:
             QMessageBox.critical(self, "错误", "未找到模型文件，请先训练")
@@ -636,13 +675,14 @@ class ArknightsApp(QMainWindow):
         # 生成结果文本
         if winner != "难说":
             result_text = (f"预测胜方: {winner}\n"
-                         f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n")
-            
+                           f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n")
+
             # 添加特殊干员提示
-            special_messages = self.special_monster_handler.check_special_monsters(self, winner)
+            special_messages = self.special_monster_handler.check_special_monsters(
+                self, winner)
             if special_messages:
                 result_text += "\n" + special_messages
-            
+
             # 极高概率时的特殊提示
             if left_win_prob > 0.999 or right_win_prob > 0.999:
                 if left_win_prob > 0.999:
@@ -651,12 +691,13 @@ class ArknightsApp(QMainWindow):
                     result_text += "\n      左边赢了我给你们口  ——克头"
         else:
             result_text = (f"这一把{winner}\n"
-                         f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
-                         f"难道说？难道说？难道说？\n")
+                           f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
+                           f"难道说？难道说？难道说？\n")
             self.result_label.setStyleSheet("color: black; font: bold,24px;")
-            
+
             # 添加特殊干员提示
-            special_messages = self.special_monster_handler.check_special_monsters(self, winner)
+            special_messages = self.special_monster_handler.check_special_monsters(
+                self, winner)
             if special_messages:
                 result_text += "\n" + special_messages
 
@@ -681,16 +722,20 @@ class ArknightsApp(QMainWindow):
         if self.no_region:
             if self.first_recognize:
                 self.main_roi = [
-                    (int(0.2479 * loadData.screen_width), int(0.8410 * loadData.screen_height)),
-                    (int(0.7526 * loadData.screen_width), int(0.9510 * loadData.screen_height))
+                    (int(0.2479 * loadData.screen_width),
+                     int(0.8410 * loadData.screen_height)),
+                    (int(0.7526 * loadData.screen_width),
+                     int(0.9510 * loadData.screen_height))
                 ]
                 adb_path = loadData.adb_path
                 device_serial = loadData.device_serial
-                subprocess.run(f'{adb_path} connect {device_serial}', shell=True, check=True)
+                subprocess.run(
+                    f'{adb_path} connect {device_serial}', shell=True, check=True)
                 self.first_recognize = False
             screenshot = loadData.capture_screenshot()
 
-        results,self.main_roi = recognize.process_regions(self.main_roi, screenshot=screenshot)
+        results, self.main_roi = recognize.process_regions(
+            self.main_roi, screenshot=screenshot)
         self.reset_entries()
 
         for res in results:
@@ -863,20 +908,22 @@ class ArknightsApp(QMainWindow):
         cur_right = np.zeros(56, dtype=float)
         for name, entry in self.left_monsters.items():
             v = entry.text()
-            if v.isdigit(): cur_left[int(name)-1] = float(v)
+            if v.isdigit():
+                cur_left[int(name)-1] = float(v)
         for name, entry in self.right_monsters.items():
             v = entry.text()
-            if v.isdigit(): cur_right[int(name)-1] = float(v)
+            if v.isdigit():
+                cur_right[int(name)-1] = float(v)
 
         # 计算当前对局和历史对局的相似度(不镜像和镜像两种情况)
         setL_cur = set(np.where(cur_left > 0)[0])
         setR_cur = set(np.where(cur_right > 0)[0])
         setL_past = set(np.where(left > 0)[0])
         setR_past = set(np.where(right > 0)[0])
-        
+
         # 判断是否需要镜像历史对局
         should_swap = len(setL_cur ^ setR_past) + len(setR_cur ^ setL_past) < \
-                     len(setL_cur ^ setL_past) + len(setR_cur ^ setR_past)
+            len(setL_cur ^ setL_past) + len(setR_cur ^ setR_past)
 
         # 创建对局容器
         match_widget = QWidget()
@@ -947,7 +994,8 @@ class ArknightsApp(QMainWindow):
             if count > 0:
                 # 创建干员显示
                 op_widget = QWidget()
-                op_widget.setStyleSheet("background-color: rgba(0, 0, 0, 0); padding: 0px 0;margin: 0px;")
+                op_widget.setStyleSheet(
+                    "background-color: rgba(0, 0, 0, 0); padding: 0px 0;margin: 0px;")
                 op_layout = QVBoxLayout(op_widget)
                 op_layout.setContentsMargins(0, 0, 0, 0)
                 op_layout.setAlignment(Qt.AlignCenter)
@@ -959,7 +1007,8 @@ class ArknightsApp(QMainWindow):
                 try:
                     pixmap = QPixmap(f"images/{i + 1}.png")
                     if not pixmap.isNull():
-                        pixmap = pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                        pixmap = pixmap.scaled(
+                            60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                         img_label.setPixmap(pixmap)
                 except:
                     pass
@@ -986,6 +1035,7 @@ class ArknightsApp(QMainWindow):
 
     def toggle_auto_fetch(self):
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
+            print("1")
             self.auto_fetch = auto_fetch.AutoFetch(
                 self.game_mode,
                 self.is_invest,
@@ -994,10 +1044,12 @@ class ArknightsApp(QMainWindow):
                 updater=self.update_statistics_callback,
                 start_callback=self.start_callback,
                 stop_callback=self.stop_callback,
-                training_duration=float(self.duration_entry.text()) * 3600,  # 获取训练时长
+                training_duration=float(
+                    self.duration_entry.text()) * 3600,  # 获取训练时长
             )
             self.auto_fetch.start_auto_fetch()
         else:
+            print("2")
             self.auto_fetch.stop_auto_fetch()
 
     def update_statistics(self):
@@ -1024,12 +1076,13 @@ class ArknightsApp(QMainWindow):
 
     def reset_entries_callback(self):
         self.update_entries_signal.emit()
-        
+
     def recognize_callback(self):
         # self.recognize_signal.emit()
         """在工作线程中触发识别"""
         # 使用 QMetaObject.invokeMethod 在主线程中调用 do_recognize
         future = []
+
         def handle_result(prediction, results, screenshot):
             future.append((prediction, results, screenshot))
             loop.quit()  # 退出事件循环
@@ -1038,7 +1091,8 @@ class ArknightsApp(QMainWindow):
         # 临时连接信号到处理函数
         self.recognize_result_signal.connect(handle_result)
         # 在主线程中调用 do_recognize
-        QtCore.QMetaObject.invokeMethod(self, 'do_recognize', Qt.BlockingQueuedConnection)
+        QtCore.QMetaObject.invokeMethod(
+            self, 'do_recognize', Qt.BlockingQueuedConnection)
         # 等待结果
         loop.exec_()
         # 断开信号连接
@@ -1053,7 +1107,7 @@ class ArknightsApp(QMainWindow):
         """在主线程中执行识别操作"""
         prediction, results, screenshot = self.recognize()
         self.recognize_result_signal.emit(prediction, results, screenshot)
-        
+
     def update_statistics_callback(self):
         self.update_statistics_signal.emit()
 

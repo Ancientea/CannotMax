@@ -1,6 +1,52 @@
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
+from PyQt5.QtCore import QThread, pyqtSignal, QObject
+
+
+class HistoryLoader(QThread):
+    """
+    Worker thread to load HistoryMatch without blocking the UI.
+    """
+    history_loaded = pyqtSignal(object)
+
+    def run(self):
+        history_match = HistoryMatch()
+        # Ensure feat_past and N_history are initialized
+        try:
+            history_match.feat_past = np.hstack([history_match.past_left,
+                                                history_match.past_right])
+        except Exception:
+            history_match.feat_past = None
+        history_match.N_history = 0 if history_match.labels is None else len(
+            history_match.labels)
+
+        self.history_loaded.emit(history_match)
+
+
+class AsyncHistoryMatch(QObject):
+    """
+    Proxy wrapper for HistoryMatch loaded asynchronously. All attributes and methods
+    of the real HistoryMatch are available via __getattr__ once loaded.
+    """
+    history_loaded = pyqtSignal(object)
+
+    def __init__(self):
+        super().__init__()
+        self._match = None
+        self._loader = HistoryLoader()
+        self._loader.history_loaded.connect(self._on_loaded)
+        self._loader.start()
+
+    def _on_loaded(self, history_match):
+        self._match = history_match
+        # Emit the signal with the fully prepared object
+        self.history_loaded.emit(history_match)
+
+    def __getattr__(self, name):
+        if self._match is None:
+            raise AttributeError(f"HistoryMatch not loaded yet: '{name}'")
+        return getattr(self._match, name)
 
 
 class HistoryMatch:
@@ -32,7 +78,8 @@ class HistoryMatch:
             self.labels = np.zeros((0,), dtype=float)
         # 组合特征
         self.feat_past = np.hstack(
-            [self.past_left + self.past_right, np.abs(self.past_left - self.past_right)]
+            [self.past_left + self.past_right,
+                np.abs(self.past_left - self.past_right)]
         )
         self.N_history = len(self.past_left)
 
@@ -45,9 +92,11 @@ class HistoryMatch:
             setR_cur = set(np.where(cur_right > 0)[0])
 
             # 相似度和特征
-            feat_cur = np.hstack([cur_left + cur_right, np.abs(cur_left - cur_right)])
+            feat_cur = np.hstack(
+                [cur_left + cur_right, np.abs(cur_left - cur_right)])
             feat_cur = feat_cur.reshape(1, -1)
-            sims = cosine_similarity(feat_cur, self.feat_past)[0]  # shape (N_history,)
+            sims = cosine_similarity(feat_cur, self.feat_past)[
+                0]  # shape (N_history,)
 
             N = self.N_history
             # 数组
@@ -76,12 +125,14 @@ class HistoryMatch:
                 missA = len(setL_cur ^ set(np.where(Lraw > 0)[0])) + len(
                     setR_cur ^ set(np.where(Rraw > 0)[0])
                 )
-                cntA = int(np.abs(Lraw - cur_left).sum() + np.abs(Rraw - cur_right).sum())
+                cntA = int(np.abs(Lraw - cur_left).sum() +
+                           np.abs(Rraw - cur_right).sum())
 
                 missB = len(setL_cur ^ set(np.where(Rraw > 0)[0])) + len(
                     setR_cur ^ set(np.where(Lraw > 0)[0])
                 )
-                cntB = int(np.abs(Rraw - cur_left).sum() + np.abs(Lraw - cur_right).sum())
+                cntB = int(np.abs(Rraw - cur_left).sum() +
+                           np.abs(Lraw - cur_right).sum())
 
                 if (missB, cntB) < (missA, cntA):
                     swap[i] = True
@@ -165,4 +216,3 @@ class HistoryMatch:
             self.top20_idx = top20_idx
         except Exception as e:
             print("[匹配错题本失败]", e)
-
