@@ -32,8 +32,7 @@ class HistoryMatch:
             self.labels = np.zeros((0,), dtype=float)
         # 组合特征
         self.feat_past = np.hstack(
-            [self.past_left + self.past_right,
-                np.abs(self.past_left - self.past_right)]
+            [self.past_left + self.past_right, np.abs(self.past_left - self.past_right)]
         )
         self.N_history = len(self.past_left)
 
@@ -49,8 +48,7 @@ class HistoryMatch:
             feat_cur = np.hstack(
                 [cur_left + cur_right, np.abs(cur_left - cur_right)])
             feat_cur = feat_cur.reshape(1, -1)
-            sims = cosine_similarity(feat_cur, self.feat_past)[
-                0]  # shape (N_history,)
+            sims = cosine_similarity(feat_cur, self.feat_past)[0]  # shape (N_history,)
 
             N = self.N_history
             # 数组
@@ -79,14 +77,12 @@ class HistoryMatch:
                 missA = len(setL_cur ^ set(np.where(Lraw > 0)[0])) + len(
                     setR_cur ^ set(np.where(Rraw > 0)[0])
                 )
-                cntA = int(np.abs(Lraw - cur_left).sum() +
-                           np.abs(Rraw - cur_right).sum())
+                cntA = int(np.abs(Lraw - cur_left).sum() + np.abs(Rraw - cur_right).sum())
 
                 missB = len(setL_cur ^ set(np.where(Rraw > 0)[0])) + len(
                     setR_cur ^ set(np.where(Lraw > 0)[0])
                 )
-                cntB = int(np.abs(Rraw - cur_left).sum() +
-                           np.abs(Lraw - cur_right).sum())
+                cntB = int(np.abs(Rraw - cur_left).sum() + np.abs(Lraw - cur_right).sum())
 
                 if (missB, cntB) < (missA, cntA):
                     swap[i] = True
@@ -170,3 +166,4 @@ class HistoryMatch:
             self.top20_idx = top20_idx
         except Exception as e:
             print("[匹配错题本失败]", e)
+ 
