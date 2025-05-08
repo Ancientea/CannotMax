@@ -25,7 +25,6 @@ logging.getLogger().addHandler(stream_handler)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-loadData.connect()
 
 class ArknightsApp:
     def __init__(self, root):
@@ -97,6 +96,10 @@ class ArknightsApp:
 
         # 模型相关属性
         self.cannot_model = CannotModel()
+
+        # 尝试连接模拟器
+        self.adb_connector = loadData.AdbConnector()
+        self.adb_connector.connect()
 
     def _on_mousewheel(self, event):
         """滑动鼠标滚轮 → 垂直滚动错题本面板"""
@@ -524,21 +527,21 @@ class ArknightsApp:
     def recognize(self):
         # 如果正在进行自动获取数据，从adb加载截图
         if hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running:
-            screenshot = loadData.capture_screenshot()
+            screenshot = self.adb_connector.capture_screenshot()
         else:
             screenshot = None
 
         if self.no_region:  # 如果尚未选择区域，从adb获取截图
             if self.first_recognize:  # 首次识别时，尝试连接adb
+                self.adb_connector.connect()
                 self.recognizer.main_roi = [
-                    (int(0.2479 * loadData.screen_width), int(0.8410 * loadData.screen_height)),
-                    (int(0.7526 * loadData.screen_width), int(0.9510 * loadData.screen_height)),
+                    (int(0.2479 * self.adb_connector.screen_width),
+                     int(0.8410 * self.adb_connector.screen_height)),
+                    (int(0.7526 * self.adb_connector.screen_width),
+                     int(0.9510 * self.adb_connector.screen_height)),
                 ]
-                adb_path = loadData.adb_path  # 从loadData获取adb路径
-                device_serial = loadData.device_serial  # 从loadData获取设备号
-                subprocess.run(f"{adb_path} connect {device_serial}", shell=True, check=True)
                 self.first_recognize = False
-            screenshot = loadData.capture_screenshot()
+            screenshot = self.adb_connector.capture_screenshot()
 
         results = self.recognizer.process_regions(screenshot=screenshot)
         self.reset_entries()
@@ -612,6 +615,7 @@ class ArknightsApp:
     def toggle_auto_fetch(self):
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
             self.auto_fetch = AutoFetch(
+                self.adb_connector,
                 self.game_mode,
                 self.is_invest,
                 reset=self.reset_entries,
@@ -628,10 +632,10 @@ class ArknightsApp:
     def update_device_serial(self):
         """更新设备序列号"""
         new_serial = self.device_serial.get()
-        loadData.set_device_serial(new_serial)
+        self.adb_connector.set_device_serial(new_serial)
         # 重新初始化设备连接
-        loadData.device_serial = None  # 重置device_serial
-        loadData.get_device_serial()  # 重新获取设备序列号
+        self.adb_connector.device_serial = None  # 重置device_serial
+        self.adb_connector.get_device_serial()  # 重新获取设备序列号
         messagebox.showinfo("提示", f"已更新模拟器序列号为: {new_serial}")
 
 

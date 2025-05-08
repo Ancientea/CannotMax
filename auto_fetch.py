@@ -18,9 +18,11 @@ from collections.abc import Callable
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 class AutoFetch:
     def __init__(
         self,
+        adb_connector: loadData.AdbConnector,
         game_mode,
         is_invest,
         reset: Callable[[], None],
@@ -30,6 +32,7 @@ class AutoFetch:
         stop_callback: Callable[[], None],
         training_duration,
     ):
+        self.adb_connector = adb_connector
         self.game_mode = game_mode  # 游戏模式（30人或自娱自乐）
         self.is_invest = is_invest  # 是否投资
         self.current_prediction = 0.5  # 当前预测结果，初始值为0.5
@@ -46,7 +49,7 @@ class AutoFetch:
         self.auto_fetch_running = False  # 自动获取数据的状态
         self.start_time = time.time()  # 记录开始时间
         self.training_duration = training_duration  # 训练时长
-        self.data_folder = Path(f"data")# 数据文件夹路径
+        self.data_folder = Path(f"data")  # 数据文件夹路径
 
     def fill_data(self, battle_result, recoginze_results, image, image_name, result_image):
         image_data = np.zeros((1, MONSTER_COUNT * 2))
@@ -86,7 +89,7 @@ class AutoFetch:
                 # 缩放到128像素高度
                 (h, w) = result_image.shape[:2]
                 new_height = 128
-                resized_image = cv2.resize(result_image, (int(w * (new_height/h)), new_height))
+                resized_image = cv2.resize(result_image, (int(w * (new_height / h)), new_height))
                 image_path = self.data_folder / "images" / result_image_name
                 cv2.imwrite(str(image_path), resized_image)
                 logger.info(f"保存结果图片到 {image_path}")
@@ -113,7 +116,7 @@ class AutoFetch:
 
         # 获取左上角和右上角颜色
         left_top = image[0, 0]
-        right_top = image[0, width-1]  # 右上角坐标为(width-1, 0)
+        right_top = image[0, width - 1]  # 右上角坐标为(width-1, 0)
 
         # 计算饱和度
         sat_left = get_saturation(left_top)
@@ -130,15 +133,14 @@ class AutoFetch:
         # 返回左上角是否比右上角饱和度更高
         return saturation_diff > 20
 
-    @staticmethod
-    def save_recoginze_image(results, screenshot):
+    def save_recoginze_image(self, results, screenshot):
         """
         生成复核图片
         """
-        x1 = int(0.2479 * loadData.screen_width)
-        y1 = int(0.8444 * loadData.screen_height)
-        x2 = int(0.7526 * loadData.screen_width)
-        y2 = int(0.9491 * loadData.screen_height)
+        x1 = int(0.2479 * self.adb_connector.screen_width)
+        y1 = int(0.8444 * self.adb_connector.screen_height)
+        x2 = int(0.7526 * self.adb_connector.screen_width)
+        y2 = int(0.9491 * self.adb_connector.screen_height)
         # 截取指定区域
         roi = screenshot[y1:y2, x1:x2]
         # 处理结果
@@ -179,7 +181,7 @@ class AutoFetch:
             (0.4979, 0.6324),  # 本轮观望
         ]
         timea = time.time()
-        screenshot = loadData.capture_screenshot()
+        screenshot = self.adb_connector.capture_screenshot()
         if screenshot is None:
             logger.error("截图失败，无法继续操作")
             return
@@ -190,29 +192,27 @@ class AutoFetch:
         for idx, score in results:
             if score > 0.5:
                 if idx == 0:
-                    loadData.click(relative_points[0])
+                    self.adb_connector.click(relative_points[0])
                     logger.info("加入赛事")
                 elif idx == 1:
                     if self.game_mode == "30人":
-                        loadData.click(relative_points[1])
+                        self.adb_connector.click(relative_points[1])
                         logger.info("竞猜对决30人")
                         time.sleep(2)
-                        loadData.click(relative_points[0])
+                        self.adb_connector.click(relative_points[0])
                         logger.info("开始游戏")
                     else:
-                        loadData.click(relative_points[2])
+                        self.adb_connector.click(relative_points[2])
                         logger.info("自娱自乐")
                 elif idx == 2:
-                    loadData.click(relative_points[0])
+                    self.adb_connector.click(relative_points[0])
                     logger.info("开始游戏")
                 elif idx in [3, 4, 5, 15]:
                     time.sleep(1)
                     # 归零
                     self.reset()
                     # 识别怪物类型数量
-                    self.current_prediction, self.recognize_results, screenshot = (
-                        self.recognizer()
-                    )
+                    self.current_prediction, self.recognize_results, screenshot = self.recognizer()
                     # 人工审核保存测试用截图
                     if intelligent_workers_debug:  # 如果处于debug模式且处于自动模式
                         self.image, self.image_name = self.save_recoginze_image(
@@ -223,22 +223,22 @@ class AutoFetch:
                         # 根据预测结果点击投资左/右
                         if self.current_prediction > 0.5:
                             if idx == 4:
-                                loadData.click(relative_points[0])
+                                self.adb_connector.click(relative_points[0])
                             else:
-                                loadData.click(relative_points[2])
+                                self.adb_connector.click(relative_points[2])
                             logger.info("投资右")
                             time.sleep(3)
                         else:
                             if idx == 4:
-                                loadData.click(relative_points[1])
+                                self.adb_connector.click(relative_points[1])
                             else:
-                                loadData.click(relative_points[3])
+                                self.adb_connector.click(relative_points[3])
                             logger.info("投资左")
                             time.sleep(3)
                         if self.game_mode == "30人":
                             time.sleep(20)  # 30人模式下，投资后需要等待20秒
                     else:  # 不投资
-                        loadData.click(relative_points[4])
+                        self.adb_connector.click(relative_points[4])
                         logger.info("本轮观望")
                         time.sleep(3)
 
@@ -246,12 +246,16 @@ class AutoFetch:
                     # 判断本次是否填写错误，结果不等于None（不是平局或者其他）才能继续
                     if self.calculate_average_yellow(screenshot) != None:
                         if self.calculate_average_yellow(screenshot):
-                            self.fill_data("L", self.recognize_results, self.image, self.image_name, screenshot)
+                            self.fill_data(
+                                "L", self.recognize_results, self.image, self.image_name, screenshot
+                            )
                             if self.current_prediction > 0.5:
                                 self.incorrect_fill_count += 1  # 更新填写×次数
                             logger.info("填写数据左赢")
                         else:
-                            self.fill_data("R", self.recognize_results, self.image, self.image_name, screenshot)
+                            self.fill_data(
+                                "R", self.recognize_results, self.image, self.image_name, screenshot
+                            )
                             if self.current_prediction < 0.5:
                                 self.incorrect_fill_count += 1  # 更新填写×次数
                             logger.info("填写数据右赢")
@@ -264,7 +268,7 @@ class AutoFetch:
                 elif idx in [6, 7, 14]:
                     logger.info("等待战斗结束")
                 elif idx in [12, 13]:  # 返回主页
-                    loadData.click(relative_points[0])
+                    self.adb_connector.click(relative_points[0])
                     logger.info("返回主页")
                 break  # 匹配到第一个结果后退出
 
@@ -310,8 +314,12 @@ class AutoFetch:
                 header += ["Result", "ImgPath"]
                 writer = csv.writer(file)
                 writer.writerow(header)
-            self.log_file_handler = logging.FileHandler(self.data_folder / f"AutoFetch_{start_time}.log", "a", "utf-8")
-            file_formatter = logging.Formatter("%(asctime)s - %(filename)s - %(levelname)s - %(message)s")
+            self.log_file_handler = logging.FileHandler(
+                self.data_folder / f"AutoFetch_{start_time}.log", "a", "utf-8"
+            )
+            file_formatter = logging.Formatter(
+                "%(asctime)s - %(filename)s - %(levelname)s - %(message)s"
+            )
             self.log_file_handler.setFormatter(file_formatter)
             self.log_file_handler.setLevel(logging.INFO)
             logging.getLogger().addHandler(self.log_file_handler)
@@ -323,8 +331,8 @@ class AutoFetch:
 
     def stop_auto_fetch(self):
         self.auto_fetch_running = False
-        self.stop_callback()
         self.save_statistics_to_log()
         logger.info("停止自动获取")
+        self.stop_callback()
         logging.getLogger().removeHandler(self.log_file_handler)
         # 结束自动获取数据的线程

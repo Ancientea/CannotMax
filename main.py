@@ -31,14 +31,18 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class ADBConnector(QThread):
+class ADBConnectorThread(QThread):
     """
-    Worker thread to run loadData.connect() without blocking the UI.
+    Worker thread to run loadData.AdbConnector.connect() without blocking the UI.
     """
     connect_finished = pyqtSignal()
 
+    def __init__(self, app:"ArknightsApp"):
+        super().__init__()
+        self.app = app
+
     def run(self):
-        loadData.connect()
+        self.app.adb_connector.connect()
         self.connect_finished.emit()
 
 
@@ -96,16 +100,17 @@ class ArknightsApp(QMainWindow):
     def __init__(self):
         super().__init__()
         # 尝试连接模拟器
-        self.adb_connector = ADBConnector()
-        self.adb_connector.connect_finished.connect(self.on_adb_connected)
-        self.adb_connector.start()
+        self.adb_connector = loadData.AdbConnector()
+        self.adb_connector_thread = ADBConnectorThread(self)
+        self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
+        self.adb_connector_thread.start()
 
         self.auto_fetch_running = False
         self.no_region = True
         self.first_recognize = True
         self.is_invest = False
         self.game_mode = "单人"
-        self.device_serial = loadData.manual_serial
+        self.device_serial = self.adb_connector.manual_serial
 
         self.left_monsters = {}
         self.right_monsters = {}
@@ -770,24 +775,21 @@ class ArknightsApp(QMainWindow):
 
     def recognize(self):
         if self.auto_fetch_running:
-            screenshot = loadData.capture_screenshot()
+            screenshot = self.adb_connector.capture_screenshot()
         else:
             screenshot = None
 
         if self.no_region:
             if self.first_recognize:
+                self.adb_connector.connect()
                 self.recognizer.main_roi = [
-                    (int(0.2479 * loadData.screen_width),
-                     int(0.8410 * loadData.screen_height)),
-                    (int(0.7526 * loadData.screen_width),
-                     int(0.9510 * loadData.screen_height))
+                    (int(0.2479 * self.adb_connector.screen_width),
+                     int(0.8410 * self.adb_connector.screen_height)),
+                    (int(0.7526 * self.adb_connector.screen_width),
+                     int(0.9510 * self.adb_connector.screen_height))
                 ]
-                adb_path = loadData.adb_path
-                device_serial = loadData.device_serial
-                subprocess.run(
-                    f'{adb_path} connect {device_serial}', shell=True, check=True)
                 self.first_recognize = False
-            screenshot = loadData.capture_screenshot()
+            screenshot = self.adb_connector.capture_screenshot()
 
         results = self.recognizer.process_regions(screenshot=screenshot)
         self.reset_entries()
@@ -1090,6 +1092,7 @@ class ArknightsApp(QMainWindow):
     def toggle_auto_fetch(self):
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
             self.auto_fetch = auto_fetch.AutoFetch(
+                self.adb_connector,
                 self.game_mode,
                 self.is_invest,
                 reset=self.reset_entries_callback,
@@ -1115,9 +1118,9 @@ class ArknightsApp(QMainWindow):
 
     def update_device_serial(self):
         new_serial = self.serial_entry.text()
-        loadData.set_device_serial(new_serial)
-        loadData.device_serial = None
-        loadData.get_device_serial()
+        self.adb_connector.set_device_serial(new_serial)
+        self.adb_connector.device_serial = None
+        self.adb_connector.get_device_serial()
         QMessageBox.information(self, "提示", f"已更新模拟器序列号为: {new_serial}")
 
     def start_callback(self):
