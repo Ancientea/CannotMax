@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QLabel, QPushButton, QLineEdit, QCheckBox, QComboBox,
                              QGroupBox, QScrollArea, QMessageBox, QGridLayout, QSizePolicy, QGraphicsDropShadowEffect,
                              QFrame)
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 from sklearn.metrics.pairwise import cosine_similarity
 import PyQt5.QtCore as QtCore
@@ -30,7 +30,60 @@ logging.getLogger().addHandler(stream_handler)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# loadData.connect()
+
+class ADBConnector(QThread):
+    """
+    Worker thread to run loadData.connect() without blocking the UI.
+    """
+    connect_finished = pyqtSignal()
+
+    def run(self):
+        loadData.connect()
+        self.connect_finished.emit()
+
+
+class HistoryLoader(QThread):
+    """
+    Worker thread to load HistoryMatch without blocking the UI.
+    """
+    history_loaded = pyqtSignal(object)
+
+    def run(self):
+        history_match = similar_history_match.HistoryMatch()
+        # Ensure feat_past and N_history are initialized
+        try:
+            history_match.feat_past = np.hstack([history_match.past_left,
+                                                history_match.past_right])
+        except Exception:
+            history_match.feat_past = None
+        history_match.N_history = 0 if history_match.labels is None else len(
+            history_match.labels)
+
+        self.history_loaded.emit(history_match)
+
+
+class AsyncHistoryMatch(QObject):
+    """
+    Proxy wrapper for HistoryMatch loaded asynchronously.
+    """
+    history_loaded = pyqtSignal(object)
+
+    def __init__(self):
+        super().__init__()
+        self._match = None
+        self._loader = HistoryLoader()
+        self._loader.history_loaded.connect(self._on_loaded)
+        self._loader.start()
+
+    def _on_loaded(self, history_match):
+        self._match = history_match
+        # Emit the signal with the fully prepared object
+        self.history_loaded.emit(history_match)
+
+    def __getattr__(self, name):
+        if self._match is None:
+            raise AttributeError(f"HistoryMatch not loaded yet: '{name}'")
+        return getattr(self._match, name)
 
 
 class ArknightsApp(QMainWindow):
@@ -43,7 +96,7 @@ class ArknightsApp(QMainWindow):
     def __init__(self):
         super().__init__()
         # 尝试连接模拟器
-        self.adb_connector = loadData.ADBConnector()
+        self.adb_connector = ADBConnector()
         self.adb_connector.connect_finished.connect(self.on_adb_connected)
         self.adb_connector.start()
 
@@ -70,7 +123,7 @@ class ArknightsApp(QMainWindow):
         self.history_scroll_area = None
 
         # 初始化UI后加载历史数据
-        self.history_match = similar_history_match.AsyncHistoryMatch()
+        self.history_match = AsyncHistoryMatch()
         self.history_match.history_loaded.connect(self.on_history_loaded)
 
         # 初始化特殊怪物语言触发处理程序
@@ -1035,7 +1088,6 @@ class ArknightsApp(QMainWindow):
 
     def toggle_auto_fetch(self):
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
-            print("1")
             self.auto_fetch = auto_fetch.AutoFetch(
                 self.game_mode,
                 self.is_invest,
@@ -1049,7 +1101,6 @@ class ArknightsApp(QMainWindow):
             )
             self.auto_fetch.start_auto_fetch()
         else:
-            print("2")
             self.auto_fetch.stop_auto_fetch()
 
     def update_statistics(self):

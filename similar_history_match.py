@@ -1,52 +1,6 @@
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
-from PyQt5.QtCore import QThread, pyqtSignal, QObject
-
-
-class HistoryLoader(QThread):
-    """
-    Worker thread to load HistoryMatch without blocking the UI.
-    """
-    history_loaded = pyqtSignal(object)
-
-    def run(self):
-        history_match = HistoryMatch()
-        # Ensure feat_past and N_history are initialized
-        try:
-            history_match.feat_past = np.hstack([history_match.past_left,
-                                                history_match.past_right])
-        except Exception:
-            history_match.feat_past = None
-        history_match.N_history = 0 if history_match.labels is None else len(
-            history_match.labels)
-
-        self.history_loaded.emit(history_match)
-
-
-class AsyncHistoryMatch(QObject):
-    """
-    Proxy wrapper for HistoryMatch loaded asynchronously. All attributes and methods
-    of the real HistoryMatch are available via __getattr__ once loaded.
-    """
-    history_loaded = pyqtSignal(object)
-
-    def __init__(self):
-        super().__init__()
-        self._match = None
-        self._loader = HistoryLoader()
-        self._loader.history_loaded.connect(self._on_loaded)
-        self._loader.start()
-
-    def _on_loaded(self, history_match):
-        self._match = history_match
-        # Emit the signal with the fully prepared object
-        self.history_loaded.emit(history_match)
-
-    def __getattr__(self, name):
-        if self._match is None:
-            raise AttributeError(f"HistoryMatch not loaded yet: '{name}'")
-        return getattr(self._match, name)
 
 
 class HistoryMatch:

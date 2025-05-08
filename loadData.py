@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 import logging
 import gzip
-from PyQt5.QtCore import QThread, pyqtSignal
 
 
 logger = logging.getLogger(__name__)
@@ -18,17 +17,6 @@ screen_width = 0
 screen_height = 0
 device_serial = ""
 process_images = []
-
-
-class ADBConnector(QThread):
-    """
-    Worker thread to run loadData.connect() without blocking the UI.
-    """
-    connect_finished = pyqtSignal()
-
-    def run(self):
-        connect()
-        self.connect_finished.emit()
 
 
 def set_device_serial(serial):
