@@ -263,7 +263,7 @@ class AutoFetch:
                             else:
                                 right_counts[matched_id -1] = number
                         else:
-                            raise RuntimeError("获取数据有错误，本轮跳过")
+                            logger.error("识别结果有错误，本轮跳过")
                     self.current_prediction = self.cannot_model.get_prediction(left_counts, right_counts)
                     self.update_prediction_callback(self.current_prediction)
                     # 人工审核保存测试用截图
