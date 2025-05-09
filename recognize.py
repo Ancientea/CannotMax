@@ -228,7 +228,7 @@ class RecognizeMonster:
                 results.append(
                     {"region_id": idx, "matched_id": matched_id, "number": "N/A", "error": str(e)}
                 )
-                return results
+                continue
             try:
                 # ================== OCR数字识别部分 ==================
                 rel_num = relative_regions_nums[idx]
