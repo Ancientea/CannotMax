@@ -13,6 +13,13 @@ class HistoryMatch:
         self.feat_past = None
         self.N_history = None
 
+        # 初始化历史记录缓存
+        self.last_try = False
+        self.last_left = None
+        self.last_right = None
+        self.swap = None
+        self.top20_idx = None
+
         # 读取数据集
         self.load_history_data()
 
@@ -37,6 +44,14 @@ class HistoryMatch:
         self.N_history = len(self.past_left)
 
     def render_similar_matches(self, left_counts: np.typing.ArrayLike, right_counts: np.typing.ArrayLike):
+        if not (self.last_try and np.all(left_counts == self.last_left) and np.all(right_counts == self.last_right)):
+            self.last_left, self.last_right = left_counts, right_counts
+            self.last_try = True
+            self.search_similar_matches(left_counts, right_counts)
+            print("错题本匹配成功")
+        self.render_matches(left_counts, right_counts)
+
+    def search_similar_matches(self, left_counts: np.typing.ArrayLike, right_counts: np.typing.ArrayLike):
         try:
             cur_left = left_counts
             cur_right = right_counts
@@ -125,10 +140,21 @@ class HistoryMatch:
 
             # 确保按照相似度降序排列
             top20_idx = np.concatenate((good, backup))[:20]
-            top20_idx = top20_idx[np.argsort(-sims[top20_idx])]  # 按相似度重新排序
+            # 按相似度重新排序
+            self.top20_idx = top20_idx[np.argsort(-sims[top20_idx])]
+            self.swap = swap
+            self.cur_left = cur_left
+            self.cur_right = cur_right
+            self.sims = sims
+            self.swap = swap
+        except Exception as e:
+            print("[匹配错题本失败]", e)
 
-            # 前5条记录
-            top5_idx = top20_idx[:5]
+    def render_matches(self, left_counts: np.typing.ArrayLike, right_counts: np.typing.ArrayLike):
+        try:
+            cur_left = left_counts
+            cur_right = right_counts
+            top5_idx = self.top20_idx[:5]
 
             # 胜率计算和标题渲染
             tgtL = max(
@@ -144,7 +170,7 @@ class HistoryMatch:
             for idx in top5_idx:
                 lab = self.labels[idx]
                 Lh, Rh = self.past_left[idx], self.past_right[idx]
-                if swap[idx]:
+                if self.swap[idx]:
                     lab = "L" if lab == "R" else "R"
                     Lh, Rh = Rh, Lh
                 if tgtL is not None:
@@ -158,11 +184,5 @@ class HistoryMatch:
 
             self.left_rate = left_rate
             self.right_rate = right_rate
-            self.cur_left = cur_left
-            self.cur_right = cur_right
-            self.sims = sims
-            self.swap = swap
-            self.top20_idx = top20_idx
         except Exception as e:
-            print("[匹配错题本失败]", e)
-
+            print("[渲染错题本失败]", e)
