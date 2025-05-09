@@ -1,14 +1,10 @@
 import csv
 import datetime
 import logging
-import os
 from pathlib import Path
 import threading
 import time
-from tkinter import image_names
-
 import cv2
-import keyboard
 import numpy as np
 from sympy import N
 import loadData
@@ -339,17 +335,14 @@ class AutoFetch:
                 self.updater()  # 更新统计信息
                 elapsed_time = time.time() - self.start_time
                 if self.training_duration != -1 and elapsed_time >= self.training_duration:
+                    logger.info("已达到设定时长，结束自动获取")
                     break
                 # 检测一次间隔时间——————————————————————————————————
                 time.sleep(0.1)
-                if keyboard.is_pressed("esc"):
-                    break
             except Exception as e:
                 logger.exception(f"自动获取数据出错:\n{e}")
                 break
             # time.sleep(2)
-            if keyboard.is_pressed("esc"):
-                break
         else:
             logger.info("auto_fetch_running is False, exiting loop")
             return

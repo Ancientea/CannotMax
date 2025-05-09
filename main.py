@@ -1082,7 +1082,7 @@ class ArknightsApp(QMainWindow):
         return team_widget
 
     def reselect_roi(self):
-        self.recognizer.main_roi = self.recognizer.select_roi()
+        self.recognizer.select_roi()
         self.no_region = False
 
     def toggle_auto_fetch(self):

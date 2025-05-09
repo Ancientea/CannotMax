@@ -586,7 +586,7 @@ class ArknightsApp:
         return prediction, results, screenshot
 
     def reselect_roi(self):
-        self.recognizer.main_roi = self.recognizer.select_roi()
+        self.recognizer.select_roi()
         self.no_region = False
 
     def start_training(self):

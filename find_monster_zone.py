@@ -1,9 +1,11 @@
+import logging
 import cv2
 import numpy as np
-import warnings
 from scipy.optimize import least_squares
 from scipy.spatial.distance import pdist, squareform
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # 类伽马变换函数
 def adjust_quasi_gamma(image):
@@ -101,9 +103,9 @@ def find_big(crop, x_ratio, minR, maxR, width, p1=30, p2=35):
             for m in circles_big_bias:
                 j = np.append(m, x_ratio.index(i))
                 results.append(j)
-                print(j)
+                logger.debug(f"big circle: {j}")
         else:
-            print(f"section{x_ratio.index(i)} circle not detected")
+            logger.warning(f"section{x_ratio.index(i)} big circle not detected")
 
     results = np.array(results)
     return results
@@ -128,10 +130,10 @@ def find_small(crop_small, x_ratio_small, x_ratio, minR, maxR, width):
             for m in circles_small_bias:
                 j = np.append(m, x_ratio.index(i))
                 results.append(j)
-                print(j)
+                logger.debug(f"small circle: {j}")
 
         else:
-            print(f"section{x_ratio.index(i)} circle not detected")
+            logger.warning(f"section{x_ratio.index(i)} small circle not detected")
 
     results = np.array(results)
     return results
@@ -214,7 +216,7 @@ def filter(results_big, results_small, height):
     big_key = 0
     # 开始清洗数据
     if results_big.shape == (0,):
-        warnings.warn("未识别到大圆，自动进入高容差模式")
+        logger.warning("未识别到大圆，自动进入高容差模式")
         high_tol = 1
         big_key = 1
     small_key = 0  # 0代表小圆正常
@@ -244,7 +246,7 @@ def filter(results_big, results_small, height):
     if small_key == 0:
         if big_key == 1:
             filtered_big = []
-            warnings.warn("仅使用小圆进入最小二乘")
+            logger.warning("仅使用小圆进入最小二乘")
         else:
             r_refer = np.abs(filtered_small[1, 0] - filtered_small[0, 0]) / 16.39  # 大圆的参考半径
             diff_r = np.abs(results_big[:, 2] - r_refer)
@@ -254,8 +256,8 @@ def filter(results_big, results_small, height):
             while std_y > 0.02 * r_refer:
                 # 如果数组为空，报错
                 if filtered_big.size == 0:
-                    print(results_big)
-                    raise IndexError("筛选出现问题，请检查以上数据输入是否合法")
+                    logger.error(results_big)
+                    raise IndexError("std_y筛选出现问题，请检查以上数据输入是否合法")
 
                 mean_value = np.mean(filtered_big[:, 1])
                 abs_diff = np.abs(filtered_big[:, 1] - mean_value)
@@ -277,8 +279,8 @@ def filter(results_big, results_small, height):
             while std_x > 0.5 * r_refer:
                 # 如果数组为空，报错
                 if filtered_big_p.size == 0:
-                    print(results_big)
-                    raise IndexError("筛选出现问题，请检查以上数据输入是否合法")
+                    logger.error(results_big)
+                    raise IndexError("std_x筛选出现问题，请检查以上数据输入是否合法")
 
                 mean_value = np.mean(filtered_big_p[:, -1])
                 abs_diff = np.abs(filtered_big_p[:, -1] - mean_value)
@@ -287,14 +289,14 @@ def filter(results_big, results_small, height):
                 std_x = np.std(filtered_big_p[:, -1])
 
             filtered_big = filtered_big_p[:, :-1]
-            print(filtered_big)
+            logger.debug(filtered_big)
 
     # 小圆识别错误的情况
     elif small_key == 3:
-        warnings.warn("小圆识别异常，将进入高容差模式")
+        logger.warning("小圆识别异常，将进入高容差模式")
         if big_key == 0:
             if results_big.shape[0] <= 2:  # 大圆数量不够筛选
-                warnings.warn(
+                logger.warning(
                     "大圆数量不足，直接进入最小二乘"
                 )  # 这里最好是抛出一个Error然后回到范围选择
                 filtered_big = results_big
@@ -316,7 +318,7 @@ def filter(results_big, results_small, height):
     elif small_key == 1:
         if big_key == 0:
             if results_big.shape[0] <= 2:  # 大圆数量不够筛选
-                warnings.warn(
+                logger.warning(
                     "警告：大圆数量不足，直接进入最小二乘"
                 )  # 这里最好是抛出一个Error然后回到范围选择
                 filtered_big = results_big
@@ -334,7 +336,7 @@ def filter(results_big, results_small, height):
                 filtered_big = np.delete(results_big, out_index, axis=0)
         else:
             filtered_big = []
-            warnings.warn("警告：大圆数量不足，仅以唯一小圆进入框架创建")
+            logger.warning("警告：大圆数量不足，仅以唯一小圆进入框架创建")
             small_key = 4
         high_tol = 1
 
@@ -371,7 +373,7 @@ def cutFrame(image, high_tol=False):
             )
             filtered_big, filtered_small, high_tol = filter(results_big, results_small, height)
         except IndexError:
-            print("备用参数捕捉失败！请重新框选试试")
+            logger.error("备用参数捕捉失败！请重新框选试试")
 
     # 开始最小二乘筛选
     def residuals(params, large_circles, small_circles):  # 定义目标函数
