@@ -1,9 +1,11 @@
 import csv
 import datetime
+from enum import Enum, auto
 import logging
 from pathlib import Path
 import threading
 import time
+from typing import Literal
 import cv2
 import numpy as np
 from sympy import N
@@ -201,6 +203,60 @@ class AutoFetch:
         with open("log.txt", "a", encoding="utf-8") as log_file:
             log_file.write(stats_text)
 
+    def recognize_and_predict(self, screenshot = None):
+        if screenshot is None:
+            screenshot = self.adb_connector.capture_screenshot()
+        self.recognize_results = self.recognizer.process_regions(screenshot)
+        # 获取预测结果
+        self.update_monster_callback(self.recognize_results)
+        left_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
+        right_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
+        for res in self.recognize_results:
+            if 'error' not in res:
+                region_id = res['region_id']
+                matched_id = res['matched_id']
+                number = res['number']
+                if matched_id == 0:
+                    continue
+                if region_id < 3:
+                    left_counts[matched_id -1] = number
+                else:
+                    right_counts[matched_id -1] = number
+            else:
+                logger.error("识别结果有错误，本轮跳过")
+        self.current_prediction = self.cannot_model.get_prediction(left_counts, right_counts)
+        self.update_prediction_callback(self.current_prediction)
+        # 人工审核保存测试用截图
+        if intelligent_workers_debug:  # 如果处于debug模式且处于自动模式
+            self.image, self.image_name = self.save_recoginze_image(
+                self.recognize_results, screenshot
+            )
+            # ==============暂时保存图片全部================
+            self.image=screenshot
+
+    def battle_result(self, screenshot):
+        # 判断本次是否填写错误，结果不等于None（不是平局或者其他）才能继续
+        if self.calculate_average_yellow(screenshot) != None:
+            if self.calculate_average_yellow(screenshot):
+                self.fill_data(
+                    "L", self.recognize_results, self.image, self.image_name, screenshot
+                )
+                if self.current_prediction > 0.5:
+                    self.incorrect_fill_count += 1  # 更新填写×次数
+                logger.info("填写数据左赢")
+            else:
+                self.fill_data(
+                    "R", self.recognize_results, self.image, self.image_name, screenshot
+                )
+                if self.current_prediction < 0.5:
+                    self.incorrect_fill_count += 1  # 更新填写×次数
+                logger.info("填写数据右赢")
+            self.total_fill_count += 1  # 更新总填写次数
+            self.updater()  # 更新统计信息
+            logger.info("下一轮")
+            # 为填写数据操作设置冷却期
+            # 平局或者其他也照常休息5秒
+
     def auto_fetch_data(self):
         relative_points = [
             (0.9297, 0.8833),  # 右ALL、返回主页、加入赛事、开始游戏
@@ -244,36 +300,8 @@ class AutoFetch:
                 elif idx in [3, 4, 5, 15]:
                     time.sleep(1)
                     # 识别怪物类型数量
-                    # self.current_prediction, self.recognize_results, screenshot = self.recognizer()
                     screenshot = self.adb_connector.capture_screenshot()
-                    self.recognize_results = self.recognizer.process_regions(screenshot)
-                    # 获取预测结果
-                    self.update_monster_callback(self.recognize_results)
-                    left_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
-                    right_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
-                    for res in self.recognize_results:
-                        if 'error' not in res:
-                            region_id = res['region_id']
-                            matched_id = res['matched_id']
-                            number = res['number']
-                            if matched_id == 0:
-                                continue
-                            if region_id < 3:
-                                left_counts[matched_id -1] = number
-                            else:
-                                right_counts[matched_id -1] = number
-                        else:
-                            logger.error("识别结果有错误，本轮跳过")
-                    self.current_prediction = self.cannot_model.get_prediction(left_counts, right_counts)
-                    self.update_prediction_callback(self.current_prediction)
-                    # 人工审核保存测试用截图
-                    if intelligent_workers_debug:  # 如果处于debug模式且处于自动模式
-                        self.image, self.image_name = self.save_recoginze_image(
-                            self.recognize_results, screenshot
-                        )
-                        # ==============暂时保存图片全部================
-                        self.image=screenshot
-
+                    self.recognize_and_predict(screenshot)
                     # 点击下一轮
                     if self.is_invest:  # 投资
                         # 根据预测结果点击投资左/右
@@ -299,27 +327,7 @@ class AutoFetch:
                         time.sleep(3)
 
                 elif idx in [8, 9, 10, 11]:
-                    # 判断本次是否填写错误，结果不等于None（不是平局或者其他）才能继续
-                    if self.calculate_average_yellow(screenshot) != None:
-                        if self.calculate_average_yellow(screenshot):
-                            self.fill_data(
-                                "L", self.recognize_results, self.image, self.image_name, screenshot
-                            )
-                            if self.current_prediction > 0.5:
-                                self.incorrect_fill_count += 1  # 更新填写×次数
-                            logger.info("填写数据左赢")
-                        else:
-                            self.fill_data(
-                                "R", self.recognize_results, self.image, self.image_name, screenshot
-                            )
-                            if self.current_prediction < 0.5:
-                                self.incorrect_fill_count += 1  # 更新填写×次数
-                            logger.info("填写数据右赢")
-                        self.total_fill_count += 1  # 更新总填写次数
-                        self.updater()  # 更新统计信息
-                        logger.info("下一轮")
-                        # 为填写数据操作设置冷却期
-                        # 平局或者其他也照常休息5秒
+                    self.battle_result(screenshot)
                     time.sleep(5)
                 elif idx in [6, 7, 14]:
                     logger.info("等待战斗结束")
@@ -332,7 +340,6 @@ class AutoFetch:
         while self.auto_fetch_running:
             try:
                 self.auto_fetch_data()
-                self.updater()  # 更新统计信息
                 elapsed_time = time.time() - self.start_time
                 if self.training_duration != -1 and elapsed_time >= self.training_duration:
                     logger.info("已达到设定时长，结束自动获取")
