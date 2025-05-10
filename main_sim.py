@@ -121,7 +121,8 @@ class SandboxSimulator:
         self.create_widgets()
         self.master.protocol("WM_DELETE_WINDOW", self.hide_window)
         self.state_machine = StateMachine(self.update_ui_state)
-        self.state_machine.transition_to(AppState.INITIAL)
+        self.state_machine.transition_to(AppState.INITIAL)        
+        self.enter_setup_phase()
 
     def update_ui_state(self):
         """根据当前状态更新所有控件状态"""
@@ -143,7 +144,6 @@ class SandboxSimulator:
 
         if states['timer']['text'] != '':
             self.timer_label.config(text=states['timer']['text'])
-        
 
     def hide_window(self):
         if self.state_machine.state == AppState.SIMULATING:  # 如果正在模拟，先停止
@@ -340,6 +340,9 @@ class SandboxSimulator:
         self.restore_button = tk.Button(control_frame, text="恢复站位", command=self.restore_initial_positions, state=tk.DISABLED)
         self.restore_button.pack(side=tk.LEFT, padx=5)
 
+        self.game_over_label = tk.Label(control_frame, text="", fg="red") # 模拟结果信息标签
+        self.game_over_label.pack(side=tk.LEFT, padx=5)
+
         self.canvas = tk.Canvas(self.master, width=self.canvas_width, height=self.canvas_height, bg='white')
         self.canvas.pack(pady=10)
         self.draw_grid()  # 先画一次网格
@@ -525,6 +528,7 @@ class SandboxSimulator:
 
         # self.confirm_start_button.config(state=tk.NORMAL)
         # self.deploy_button.config(text="重新部署")
+        self.game_over_label.config(text="") # 清空游戏结束信息标签
         print("进入部署阶段。使用 self.battle_data 初始化战场。")
         self.state_machine.transition_to(AppState.SETUP)
         self.init_battlefield_for_setup()
@@ -554,6 +558,7 @@ class SandboxSimulator:
         # self.battle_field.current_spawn_right = 0
         print("战斗模拟开始！")
         self.state_machine.transition_to(AppState.SIMULATING)
+        self.game_over_label.config(text="") # 清空游戏结束信息标签
         self.simulate()
 
     def simulate(self):
@@ -572,18 +577,23 @@ class SandboxSimulator:
             # self.deploy_button.config(text="部署怪物")
             self.state_machine.transition_to(AppState.ENDED)
             winner_faction = result
+            game_over_message = ""
             if winner_faction == Faction.LEFT:
-                messagebox.showinfo("游戏结束", "左方胜利！")
+                game_over_message = "左方胜利！"
+                self.game_over_label.config(text=game_over_message, fg="red")
             elif winner_faction == Faction.RIGHT:
-                messagebox.showinfo("游戏结束", "右方胜利！")
+                game_over_message = "右方胜利！"
+                self.game_over_label.config(text=game_over_message, fg="blue")
             else:
-                messagebox.showinfo("游戏结束", f"游戏结束，结果: {result}")
+                game_over_message = f"游戏结束，结果: {result}"
+                self.game_over_label.config(text=game_over_message, fg="black")
         else:
             interval = max(1, 33)
             self.simulation_id = self.master.after(interval, self.simulate)
 
     def show_result(self, message):
-        messagebox.showinfo("游戏结束", message)
+        # messagebox.showinfo("游戏结束", message) # 移除 messagebox 调用
+        self.game_over_label.config(text=message) # 在标签中显示游戏结束信息
 
     def clear_sandbox(self):
         if self.state_machine.state == AppState.SIMULATING:
@@ -603,6 +613,7 @@ class SandboxSimulator:
         # self.pause_button.config(text="暂停", state=tk.DISABLED)
         if self.canvas:
             self.refresh_canvas_display()
+        self.game_over_label.config(text="") # 清空游戏结束信息标签
         print("战场已清空。")
 
     def restore_initial_positions(self):
@@ -627,7 +638,7 @@ class SandboxSimulator:
         #     self.deploy_button.config(text="部署怪物")
         self.refresh_canvas_display()
 
-if __name__ == "__main__":
+def main():
     root = tk.Tk()
     root.withdraw()
 
@@ -653,6 +664,23 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"从 stdin 读取或解析时发生未知错误: {e}，将使用默认配置。")
 
+    if len(initial_battle_setup["left"]) == 0 or len(initial_battle_setup["left"]) == 0:
+        messagebox.showerror("怪物为空！", "怪物为空！")
+        return
+
+    for key in initial_battle_setup["left"]:
+        match key:
+            case "矿脉守卫"|"鳄鱼"|"凋零萨卡兹"|"1750哥"|"高能源石虫":
+                messagebox.showerror("警告：存在已知问题怪物！", key)
+    for key in initial_battle_setup["right"]:
+        match key:
+            case "矿脉守卫"|"鳄鱼"|"凋零萨卡兹"|"1750哥"|"高能源石虫":
+                messagebox.showerror("警告：存在已知问题怪物！", key)
+
     app = SandboxSimulator(root, initial_battle_setup)
     app.master.deiconify()
     root.mainloop()
+
+
+if __name__ == "__main__":
+    main()

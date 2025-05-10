@@ -623,22 +623,17 @@ class ArknightsApp(QMainWindow):
                 row += 1
 
     def update_input_display(self):
+        # 清除现有显示
         for i in reversed(range(self.left_input_layout.count())):
             widget = self.left_input_layout.itemAt(i).widget()
             if widget:
                 widget.setParent(None)
-
-            # 清除右侧现有显示
         for i in reversed(range(self.right_input_layout.count())):
             widget = self.right_input_layout.itemAt(i).widget()
             if widget:
                 widget.setParent(None)
 
-            # 检查是否有输入
-        left_has_input = False
-        right_has_input = False
-
-        # 更新左侧人物显示
+        left_has_input, right_has_input = False, False
         for i in range(1, MONSTER_COUNT + 1):
             left_value = self.left_monsters[str(i)].text()
             right_value = self.right_monsters[str(i)].text()
@@ -1234,7 +1229,7 @@ class ArknightsApp(QMainWindow):
             # 启动main_sim.py子进程 (非阻塞)
             # Use sys.executable to ensure the same Python interpreter is used
             process = subprocess.Popen(
-                [sys.executable, "main_sim.py"], stdin=subprocess.PIPE, text=True
+                [sys.executable, "main_sim.py"], stdin=subprocess.PIPE, text=True, encoding="utf-8"
             )
             # 通过stdin传递JSON数据并关闭stdin
             process.stdin.write(json_data)
