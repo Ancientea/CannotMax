@@ -300,32 +300,49 @@ class SandboxSimulator:
             danger_zone = min(self.battle_field.danger_zone_size(), self.grid_height / 2 + 1)
             self.canvas.create_rectangle(0, 0, self.canvas_width, danger_zone * self.cell_size, fill='#cccc00',
                                          outline="")
-            self.canvas.create_rectangle(0, 0, danger_zone * self.cell_size, self.canvas_height, fill='#cccc00',
+            self.canvas.create_rectangle(0, 0, (danger_zone+1) * self.cell_size , self.canvas_height, fill='#cccc00',
                                          outline="")
-            self.canvas.create_rectangle(self.canvas_width, 0, self.canvas_width - danger_zone * self.cell_size,
+            self.canvas.create_rectangle(self.canvas_width, 0, self.canvas_width - (danger_zone+1) * self.cell_size,
                                          self.canvas_height, fill='#cccc00', outline="")
             self.canvas.create_rectangle(self.canvas_width, self.canvas_height, 0,
                                          self.canvas_height - danger_zone * self.cell_size, fill='#cccc00', outline="")
 
-        # 绘制最左侧的红色列
-        self.canvas.create_rectangle(0, 0, self.cell_size, self.canvas_height, fill='red', outline="")
-        # 绘制最右侧的蓝色列
+        # 绘制最左侧的柔和红色列
+        soft_red_fill = '#F08080'  # 亮珊瑚色
+        soft_red_line = '#D87070'  # 稍暗的亮珊瑚色
+        self.canvas.create_rectangle(0, 0, self.cell_size, self.canvas_height, fill=soft_red_fill, outline="")
+
+        # 绘制最右侧的柔和蓝色列
+        soft_blue_fill = '#ADD8E6'  # 浅蓝色
+        soft_blue_line = '#9CC2D0'  # 稍暗的浅蓝色
         self.canvas.create_rectangle(self.canvas_width - self.cell_size, 0, self.canvas_width, self.canvas_height,
-                                     fill='blue', outline="")
+                                     fill=soft_blue_fill, outline="")
 
         for i in range(self.grid_width + 1):
             x = i * self.cell_size
             if i == 0 or i == self.grid_width:
                 continue
             if i == 1:  # 红色列的右边缘线
-                self.canvas.create_line(x, 0, x, self.canvas_height, fill='darkred')
+                self.canvas.create_line(x, 0, x, self.canvas_height, fill=soft_red_line)
             elif i == self.grid_width - 1:  # 蓝色列的左边缘线
-                self.canvas.create_line(x, 0, x, self.canvas_height, fill='darkblue')
+                self.canvas.create_line(x, 0, x, self.canvas_height, fill=soft_blue_line)
             else:
-                self.canvas.create_line(x, 0, x, self.canvas_height, fill='lightgray')
+                self.canvas.create_line(x, 0, x, self.canvas_height, fill='lightgray')  # 垂直网格线
+
+        # 绘制水平网格线
         for i in range(self.grid_height + 1):
             y = i * self.cell_size
-            self.canvas.create_line(0, y, self.canvas_width, y, fill='lightgray')
+            # 左边红色区域的水平线可以特殊处理，使其在红色背景上更明显，或者保持lightgray
+            if self.cell_size > 0:  # 确保 cell_size > 0 避免问题
+                # 在红色区域内绘制颜色稍浅的水平线，或者使用对比色
+                self.canvas.create_line(0, y, self.cell_size, y, fill='#E07070')  # 示例：红色区域内的水平线
+                # 在蓝色区域内绘制颜色稍浅的水平线
+                self.canvas.create_line(self.canvas_width - self.cell_size, y, self.canvas_width, y,
+                                        fill='#9CBED0')  # 示例：蓝色区域内的水平线
+                # 中间区域的水平线
+                self.canvas.create_line(self.cell_size, y, self.canvas_width - self.cell_size, y, fill='lightgray')
+            else:  # 如果 cell_size 为0或负，则绘制完整线条
+                self.canvas.create_line(0, y, self.canvas_width, y, fill='lightgray')
 
     def refresh_canvas_display(self):
         if not self.canvas: return

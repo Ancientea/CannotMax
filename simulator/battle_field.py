@@ -190,9 +190,9 @@ class Battlefield:
                 return result
 
     def danger_zone_size(self):
-        if self.gameTime < 60:
+        if self.gameTime < 40:
             return 0
-        return int((self.gameTime - 60) / 20) + 1
+        return int((self.gameTime - 40) / 20) + 1
     
     def add_new_zone(self, zone):
         self.effect_zones.append(zone)
