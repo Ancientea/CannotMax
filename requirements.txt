@@ -1,0 +1,16 @@
+numpy
+opencv-python
+Pillow
+torch
+torchvision
+keyboard
+matplotlib
+pandas
+scikit-learn
+yt-dlp
+psutil
+onnxruntime
+rapidocr
+pyqt6
+seaborn
+windows-capture
