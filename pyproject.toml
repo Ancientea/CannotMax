@@ -20,6 +20,9 @@ dependencies = [
     "torchvision",
 ]
 
+[tool.uv]
+python-install-mirror = "https://mirror.nju.edu.cn/github-release/astral-sh/python-build-standalone/"
+
 [[tool.uv.index]]
 url = "https://mirrors.cloud.tencent.com/pypi/simple/"
 default = true
