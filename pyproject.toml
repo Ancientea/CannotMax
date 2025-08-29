@@ -18,13 +18,6 @@ dependencies = [
     "seaborn",
 ]
 
-[tool.uv]
-python-install-mirror = "https://mirror.nju.edu.cn/github-release/astral-sh/python-build-standalone/"
-
-[[tool.uv.index]]
-url = "https://mirrors.cloud.tencent.com/pypi/simple/"
-default = true
-
 [dependency-groups]
 dev = [
     "pyinstaller>=6.15.0",
@@ -42,6 +35,7 @@ cu128 = [
 ]
 
 [tool.uv]
+python-install-mirror = "https://mirror.nju.edu.cn/github-release/astral-sh/python-build-standalone/"
 conflicts = [
   [
     { extra = "cpu" },
@@ -58,6 +52,10 @@ torchvision = [
   { index = "pytorch-cpu", extra = "cpu" },
   { index = "pytorch-cu128", extra = "cu128" },
 ]
+
+[[tool.uv.index]]
+url = "https://mirrors.cloud.tencent.com/pypi/simple/"
+default = true
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
