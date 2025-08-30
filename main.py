@@ -29,7 +29,7 @@ from ctypes import wintypes
 def list_visible_window_titles() -> list[str]:
     """列出所有**可见**窗口的标题（去重并按字典序排序）。"""
     EnumWindows = ctypes.windll.user32.EnumWindows
-    EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM),
+    EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     IsWindowVisible = ctypes.windll.user32.IsWindowVisible
     GetWindowTextW = ctypes.windll.user32.GetWindowTextW
     GetWindowTextLengthW = ctypes.windll.user32.GetWindowTextLengthW
@@ -1400,3 +1400,4 @@ if __name__ == "__main__":
     window = ArknightsApp()
     window.show()
     app.exec()
+
