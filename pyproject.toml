@@ -16,6 +16,7 @@ dependencies = [
     "rapidocr",
     "scikit-learn",
     "seaborn",
+    "windows-capture",
     "toml",
 ]
 

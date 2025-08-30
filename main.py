@@ -1,47 +1,73 @@
 import json
 import logging
-
 import subprocess
 import sys
 import time
-import toml
+from typing import List
+
 import numpy as np
-from pathlib import Path
-import onnxruntime # workaround: Pre-import to avoid ImportError: DLL load failed while importing onnxruntime_pybind11_state: 动态链接库(DLL)初始化例程失败。
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QLabel, QPushButton, QLineEdit, QCheckBox, QComboBox,
-                             QGroupBox, QScrollArea, QMessageBox, QGridLayout, QSizePolicy, QGraphicsDropShadowEffect,
-                             QFrame)
+import recognize
+from PyQt6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,
+    QListWidget,QLabel,QPushButton,QLineEdit,QCheckBox,QComboBox,
+    QGroupBox,QScrollArea,QMessageBox,QGridLayout,QSizePolicy,QGraphicsDropShadowEffect,
+    QFrame,QDialog)
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
 from PyQt6.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
+from sklearn.metrics.pairwise import cosine_similarity
 import PyQt6.QtCore as QtCore
 
 import loadData
 import auto_fetch
 import similar_history_match
-import recognize
 from recognize import MONSTER_COUNT, intelligent_workers_debug
 from specialmonster import SpecialMonsterHandler
-import data_package
+
+import ctypes
+from ctypes import wintypes
+
+
+def list_visible_window_titles() -> list[str]:
+    """列出所有**可见**窗口的标题（去重并按字典序排序）。"""
+    EnumWindows = ctypes.windll.user32.EnumWindows
+    EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM),
+    IsWindowVisible = ctypes.windll.user32.IsWindowVisible
+    GetWindowTextW = ctypes.windll.user32.GetWindowTextW
+    GetWindowTextLengthW = ctypes.windll.user32.GetWindowTextLengthW
+
+    titles: List[str] = []
+
+    def foreach(hwnd, lParam):
+        if IsWindowVisible(hwnd):
+            length = GetWindowTextLengthW(hwnd)
+            if length > 0:
+                buff = ctypes.create_unicode_buffer(length + 1)
+                GetWindowTextW(hwnd, buff, length + 1)
+                t = buff.value.strip()
+                if t:
+                    titles.append(t)
+        return True
+
+    EnumWindows(EnumWindowsProc(foreach), 0)
+    return sorted(set(titles))
+
+
+# 动态加载推理模型（Torch/ONNX 二选一）
+try:
+    from predict import CannotModel
+    from train import UnitAwareTransformer
+except Exception:
+    from predict_onnx import CannotModel
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.getLogger("PIL").setLevel(logging.INFO)
 stream_handler = logging.StreamHandler()
 formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 stream_handler.setFormatter(formatter)
 logging.getLogger().addHandler(stream_handler)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-try:
-    from predict import CannotModel
-    from train import UnitAwareTransformer
-    logger.info("Using PyTorch model for predictions.")
-except:
-    from predict_onnx import CannotModel
-    logger.info("Using ONNX model for predictions.")
 
 
 class ADBConnectorThread(QThread):
@@ -152,14 +178,7 @@ class ArknightsApp(QMainWindow):
         self.load_images()
 
     def init_ui(self):
-        try:
-            with open("pyproject.toml", "r", encoding="utf-8") as f:
-                pyproject_data = toml.load(f)
-                version = pyproject_data["project"]["version"]
-        except (FileNotFoundError, KeyError):
-            version = "unknown"
-        model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
-        self.setWindowTitle(f"铁鲨鱼_Arknights Neural Network - v{version} - model: {model_name}")
+        self.setWindowTitle("铁鲨鱼_Arknights Neural Network")
         self.setWindowIcon(QIcon("ico/icon.ico"))
         self.setGeometry(100, 100, 1700, 800)
         self.background = QPixmap("ico/background.png")
@@ -230,24 +249,16 @@ class ArknightsApp(QMainWindow):
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 background: none;  /* 隐藏箭头按钮 */
             }
-            QScrollArea {
-                background-color: rgba(0, 0, 0, 0);
-                border:0px
-            }
-            QScrollArea > QWidget > QWidget {
-                background: transparent;
-            }
-            QScrollBar:vertical {
-                background: rgba(50, 50, 50, 100);
-                width: 12px;
-                margin: 15px 0 15px 0;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(100, 100, 100, 150);
-                min-height: 20px;
-                border-radius: 6px;
-            }
-        """
+            QScrollBar::handle:horizontal { background: rgba(100,100,100,150); min-height: 20px; border-radius: 8px; }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { background: none; }
+            QScrollBar:vertical { background: rgba(0, 0, 0, 0); width: 12px; margin: 0px; }
+            QScrollBar::handle:vertical { background: rgba(100,100,100,150); min-height: 20px; border-radius: 8px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { background: none; }
+            QScrollArea { background-color: rgba(0, 0, 0, 0); border:0px }
+            QScrollArea > QWidget > QWidget { background: transparent; }
+            QScrollBar:vertical { background: rgba(50, 50, 50, 100); width: 12px; margin: 15px 0 15px 0; }
+            QScrollBar::handle:vertical { background: rgba(100,100,100,150); min-height: 20px; border-radius: 6px; }
+            """
         )
 
         scroll_content = QWidget()
@@ -255,7 +266,7 @@ class ArknightsApp(QMainWindow):
         self.scroll_grid.setSpacing(5)
         self.scroll_grid.setContentsMargins(5, 5, 5, 5)
 
-        # 设置5列布局
+        # 设置7列布局
         self.COLUMNS = 7
         self.ROW_HEIGHT = 120  # 每个单元的高度
 
@@ -268,7 +279,7 @@ class ArknightsApp(QMainWindow):
         right_panel.setFixedWidth(550)  # 固定右侧面板宽度
         right_layout = QVBoxLayout(right_panel)
 
-        # 顶部区域 - 输入显示
+        # 顶部区域 - 输入展示
         input_display = QGroupBox()
         input_display.setStyleSheet(
             """
@@ -331,14 +342,6 @@ class ArknightsApp(QMainWindow):
         self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         result_layout.addWidget(self.result_label)
 
-        # 添加模型名称显示
-        model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
-        self.model_name_label = QLabel(f"model: {model_name}")
-        self.model_name_label.setFont(QFont("Microsoft YaHei", 8))
-        self.model_name_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-        self.model_name_label.setStyleSheet("color: #888888;") # 小字灰色
-        result_layout.addWidget(self.model_name_label)
-
         result_button = QWidget()
         result_button_layout = QHBoxLayout(result_button)
 
@@ -363,10 +366,9 @@ class ArknightsApp(QMainWindow):
                 }
             """
         )
-        self.predict_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
         self.reset_button = QPushButton("重置")
         self.reset_button.clicked.connect(self.reset_entries)
+        self.reset_button = QPushButton("重置"); self.reset_button.clicked.connect(self.reset_entries)
         self.reset_button.setStyleSheet(
             """
                 QPushButton {
@@ -418,10 +420,6 @@ class ArknightsApp(QMainWindow):
         row1_layout.addWidget(self.mode_menu)
         row1_layout.addWidget(self.invest_checkbox)
 
-        self.package_data_button = QPushButton("数据打包")
-        self.package_data_button.clicked.connect(self.package_data_and_show)
-        row1_layout.addWidget(self.package_data_button)
-
         # 第二行按钮
         row2 = QWidget()
         row2_layout = QHBoxLayout(row2)
@@ -455,7 +453,8 @@ class ArknightsApp(QMainWindow):
 
         self.reselect_button = QPushButton("选择范围")
         self.reselect_button.clicked.connect(self.reselect_roi)
-
+        self.choose_window_button = QPushButton("选择截屏窗口")
+        self.choose_window_button.clicked.connect(self.choose_capture_window)
         self.serial_label = QLabel("模拟器序列号:")
         self.serial_entry = QLineEdit()
         self.serial_entry.setFixedWidth(100)
@@ -464,6 +463,7 @@ class ArknightsApp(QMainWindow):
         self.serial_button = QPushButton("更新")
         self.serial_button.clicked.connect(self.update_device_serial)
 
+        row3_layout.addWidget(self.choose_window_button)
         row3_layout.addWidget(self.reselect_button)
         row3_layout.addWidget(self.serial_label)
         row3_layout.addWidget(self.serial_entry)
@@ -536,10 +536,6 @@ class ArknightsApp(QMainWindow):
         )
         right_layout.addWidget(self.history_button)
 
-        # 连接输入框变化信号
-        for entry in self.left_monsters.values():
-            entry.textChanged.connect(self.update_input_display)
-
         # 自动获取数据的定时器
         # self.timer = QTimer()
         # self.timer.timeout.connect(self.auto_fetch_update)
@@ -554,6 +550,10 @@ class ArknightsApp(QMainWindow):
         self.update_prediction_signal.connect(self.update_prediction)
         self.update_statistics_signal.connect(self.update_statistics)
 
+        # 主布局拼装
+        main_layout.addWidget(left_panel, 1)
+        main_layout.addWidget(right_panel, 1)
+        self.setCentralWidget(main_widget)
     def on_adb_connected(self):
         logger.info("模拟器初始化完成")
 
@@ -567,6 +567,108 @@ class ArknightsApp(QMainWindow):
         self.N_history = history_match.N_history
         self.history_data_loaded = True
         logger.info("错题本加载成功")
+
+    # ------------------------- 截屏源选择对话框 -------------------------
+    class WindowPickerDialog(QDialog):
+        """列出可见窗口标题，并内置“整屏(1/2/3)”选项。双击确定。"""
+
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.setWindowTitle("选择截屏窗口")
+            self.resize(520, 480)
+            self.selected_title = None
+
+            self.search = QLineEdit(self)
+            self.search.setPlaceholderText("输入关键字过滤（支持大小写不敏感）")
+
+            self.listw = QListWidget(self)
+            # 预置“整屏（主屏0/副屏1/2）”选项在最上面
+            self.listw.addItem("【整屏】主屏(1)")
+            self.listw.addItem("【整屏】副屏(2)")
+            self.listw.addItem("【整屏】副屏(3)")
+            self.listw.addItem("—————— 窗口列表 ——————")
+
+            self._all_titles = list_visible_window_titles()
+            for t in self._all_titles:
+                self.listw.addItem(t)
+
+            self.search.textChanged.connect(self._filter)
+            self.listw.itemDoubleClicked.connect(self._accept)
+
+            layout = QVBoxLayout(self)
+            layout.addWidget(self.search)
+            layout.addWidget(self.listw)
+
+        def _filter(self, text: str):
+            text_low = (text or "").lower()
+            self.listw.clear()
+            self.listw.addItem("【整屏】主屏(1)")
+            self.listw.addItem("【整屏】副屏(2)")
+            self.listw.addItem("【整屏】副屏(3)")
+            self.listw.addItem("—————— 窗口列表 ——————")
+            for t in self._all_titles:
+                if text_low in t.lower():
+                    self.listw.addItem(t)
+
+        def _accept(self):
+            self.accept()
+
+        def get_selection(self):
+            item = self.listw.currentItem()
+            if not item:
+                return None
+            text = item.text()
+            if text.startswith("【整屏】"):
+                # 返回 monitor_index
+                if "(1)" in text:
+                    return {"monitor_index": 1}
+                if "(2)" in text:
+                    return {"monitor_index": 2}
+                if "(3)" in text:
+                    return {"monitor_index": 3}
+            elif text.startswith("——————"):
+                return None
+            else:
+                # 返回 window_name
+                return {"window_name": text}
+
+    # ------------------------------ 功能操作 ------------------------------
+    def choose_capture_window(self):
+        """弹出窗口选择器，切换 WinRT 截屏源（窗口标题或整屏）。"""
+        import traceback, cv2
+        if getattr(self, "_switching_source", False):
+            return
+        self._switching_source = True
+        self.choose_window_button.setEnabled(False)
+        try:
+            try:
+                cv2.destroyAllWindows()
+            except Exception:
+                pass
+            dlg = self.WindowPickerDialog(self)
+            if dlg.exec():
+                sel = dlg.get_selection()
+                if not sel:
+                    QMessageBox.information(self, "提示", "未选择任何项")
+                    return
+                ok = False
+                if "window_name" in sel:
+                    ok = self.recognizer.update_capture_target(window_name=sel["window_name"], monitor_index=None)
+                    hint = f"已切换至窗口：{sel['window_name']}"
+                else:
+                    idx = max(1, sel["monitor_index"])
+                    ok = self.recognizer.update_capture_target(window_name=None, monitor_index=idx)
+                    hint = f"已切换至整屏：显示器 {sel['monitor_index']}"
+                if ok:
+                    self.no_region = True
+                    QMessageBox.information(self, "成功", hint + "\n建议重新选择范围。")
+                else:
+                    QMessageBox.critical(self, "失败", "切换截屏目标失败，请重试。")
+        except Exception as e:
+            QMessageBox.critical(self, "异常", f"{e}\n\n{traceback.format_exc()}")
+        finally:
+            self._switching_source = False
+            self.choose_window_button.setEnabled(True)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -648,7 +750,7 @@ class ArknightsApp(QMainWindow):
                 row += 1
 
     def update_input_display(self):
-        # 清除现有显示
+        # 清空现有显示
         for i in reversed(range(self.left_input_layout.count())):
             widget = self.left_input_layout.itemAt(i).widget()
             if widget:
@@ -690,7 +792,6 @@ class ArknightsApp(QMainWindow):
         shadow.setColor(QColor("#313131"))  # 发光颜色
         shadow.setOffset(2)  # 偏移量（0表示均匀四周发光）
         widget.setGraphicsEffect(shadow)
-
         widget.setStyleSheet(
             """
                 QWidget {
@@ -953,7 +1054,7 @@ class ArknightsApp(QMainWindow):
         # 设置滚动区域内容
         self.history_scroll_area.setWidget(self.history_widget)
 
-        # 添加到主界面
+        # 添加到主页面
         self.centralWidget().layout().addWidget(self.history_scroll_area)
 
     def hide_history_panel(self):
@@ -965,7 +1066,6 @@ class ArknightsApp(QMainWindow):
 
     def render_similar_matches(self):
         try:
-            # 获取当前输入
             cur_left = np.zeros(MONSTER_COUNT, dtype=float)
             cur_right = np.zeros(MONSTER_COUNT, dtype=float)
             for name, entry in self.left_monsters.items():
@@ -1180,15 +1280,17 @@ class ArknightsApp(QMainWindow):
         hours, remainder = divmod(elapsed_time, 3600)
         minutes, _ = divmod(remainder, 60)
         stats_text = (
-            f"总共填写次数: {self.auto_fetch.total_fill_count},    "
-            f"填写×次数: {self.auto_fetch.incorrect_fill_count},    "
+            f"总共填写次数: {self.auto_fetch.total_fill_count}, "
+            f"填写×次数: {self.auto_fetch.incorrect_fill_count}, "
             f"当次运行时长: {int(hours)}小时{int(minutes)}分钟"
         )
         self.stats_label.setText(stats_text)
 
     def update_device_serial(self):
         new_serial = self.serial_entry.text()
-        self.adb_connector.update_device_serial(new_serial)
+        self.adb_connector.set_device_serial(new_serial)
+        self.adb_connector.device_serial = None
+        self.adb_connector.get_device_serial()
         QMessageBox.information(self, "提示", f"已更新模拟器序列号为: {new_serial}")
 
     def start_callback(self):
@@ -1220,7 +1322,6 @@ class ArknightsApp(QMainWindow):
                 # Need to map monster_id (string) to monster name
                 # Assuming MONSTER_MAPPING is accessible or can be imported
                 try:
-                    # Convert monster_id string to int for mapping
                     monster_name = self.get_monster_name_by_id(int(monster_id))
                     if monster_name:
                         left_monsters_data[monster_name] = int(count)
@@ -1234,7 +1335,6 @@ class ArknightsApp(QMainWindow):
             count = entry.text()
             if count.isdigit() and int(count) > 0:
                 try:
-                    # Convert monster_id string to int for mapping
                     monster_name = self.get_monster_name_by_id(int(monster_id))
                     if monster_name:
                         right_monsters_data[monster_name] = int(count)
@@ -1246,7 +1346,7 @@ class ArknightsApp(QMainWindow):
         simulation_data = {"left": left_monsters_data, "right": right_monsters_data}
 
         json_data = json.dumps(simulation_data, ensure_ascii=False)
-        logger.info(f"Simulation data JSON: {json_data}")
+        logger.error(f"Simulation data JSON: {json_data}")
 
         try:
             # 启动main_sim.py子进程 (非阻塞)
@@ -1293,19 +1393,6 @@ class ArknightsApp(QMainWindow):
             self.image_display.height(),
             Qt.AspectRatioMode.KeepAspectRatio
         ))
-
-
-    def package_data_and_show(self):
-        try:
-            zip_filename = data_package.package_data()
-            if zip_filename:
-                # 在文件浏览器中高亮显示文件
-                subprocess.run(f'explorer /select,"{zip_filename}"')
-                QMessageBox.information(self, "成功", f"数据已打包到 {zip_filename}")
-            else:
-                QMessageBox.warning(self, "警告", "没有找到可以打包的数据目录。")
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"打包数据时发生错误: {str(e)}")
 
 
 if __name__ == "__main__":
