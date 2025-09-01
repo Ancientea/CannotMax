@@ -190,6 +190,7 @@ class RecognizeMonster:
         # 如果没有提供adb 图像，则获取屏幕截图（仅截取主区域）
         if image_adb is None:
             logger.info("未提供ADB图像，使用手动截图")
+            ocr_threshold = 0.8  # 对于手动截图，降低OCR阈值以避免漏识别
             screenshot = self.get_manual_screenshot()
         else:
             logger.info("使用ADB图像")
