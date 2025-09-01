@@ -3,13 +3,17 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
+import logging
 import math
+import csv # 添加csv模块导入
 
 import numpy as np
 
 from typing import TYPE_CHECKING
 
 from .vector2d import FastVector
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .battle_field import Battlefield
@@ -132,69 +136,27 @@ class SpatialHash:
         for obj_id, pos in updates.items():
             self.insert(obj_id, pos)
 
+def load_monster_mapping_from_csv(file_path='monster.csv'):
+    """从CSV文件加载怪物ID和原始名称的映射"""
+    mapping = {}
+    try:
+        with open(file_path, mode='r', encoding='utf-8-sig') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                try:
+                    monster_id = int(row['id']) - 1  # 转为0-based索引
+                    original_name = row['原始名称']
+                    mapping[monster_id] = original_name
+                except ValueError:
+                    print(f"Skipping row due to invalid ID or missing '原始名称': {row}")
+    except FileNotFoundError:
+        print(f"Error: {file_path} not found. Using empty monster mapping.")
+    except Exception as e:
+        logger.exception(f"Error loading monster mapping from CSV: {e}")
+    return mapping
 
-# ID与怪物名称映射表 
-MONSTER_MAPPING = {
-    0: "狗pro",
-    1: "酸液源石虫",
-    2: "大盾哥",
-    3: "萨卡兹大剑手",
-    4: "高能源石虫",
-    5: "宿主流浪者",
-    6: "庞贝",
-    7: "1750哥",
-    8: "石头人",
-    9: "鳄鱼",
-    10: "保鲜膜",
-    11: "拳击囚犯",
-    12: "阿咬",
-    13: "大喷蛛",
-    14: "船长",
-    15: "Vvan",
-    16: "冰原术师",
-    17: "萨卡兹链术师",
-    18: "高塔术师",
-    19: "萨克斯",
-    20: "食腐狗",
-    21: "镜神",
-    22: "光剑",
-    23: "绵羊",
-    25: "鼠鼠",
-    24: "雪球",
-    26: "驮兽",
-    27: "杰斯顿",
-    28: "自在",
-    29: "狼神",
-    30: "雷德",
-    31: "海螺",
-    32: "污染躯壳",
-    33: "矿脉守卫",
-    34: "炮god",
-    35: "红刀哥",
-    36: "大斧",
-    37: "护盾哥",
-    38: "冰爆虫",
-    39: "机鳄",
-    40: "沸血骑士",
-    41: "衣架",
-    42: "畸变之矛",
-    43: "榴弹佣兵",
-    44: "标枪恐鱼",
-    45: "雪境精锐",
-    46: "狂躁珊瑚",
-    47: "拳击手",
-    48: "洗地车",
-    49: "凋零萨卡兹",
-    50: "高普尼克",
-    51: "跑男",
-    52: "门",
-    53: "小锤",
-    54: "爱蟹者",
-    55: "酒桶",
-    56: "小喷蛛",
-    57: "大君之赐"
-    # 根据实际数据继续扩展...
-}
+# ID与怪物名称映射表
+MONSTER_MAPPING = load_monster_mapping_from_csv()
 
 # 创建反向映射字典（名字到ID）
 REVERSE_MONSTER_MAPPING = {name: id for id, name in MONSTER_MAPPING.items()}

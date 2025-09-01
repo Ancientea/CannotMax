@@ -5,12 +5,17 @@ import json
 import re
 from collections import defaultdict
 from PIL import Image
-import onnxruntime as ort
+
+# 导入 PyTorch 相关库
+import torch
+import torch.nn as nn
+from torchvision import models, transforms
 
 # ==============================================================================
-# SECTION 1: 游戏画面元素识别模块 (无变更)
+# SECTION 1: 游戏画面元素识别模块 (PyTorch + GPU)
 # ==============================================================================
 
+# ROI 坐标保持不变
 ROI_COORDINATES = {
     "middle_row_blocks": [{"x": 674, "y": 411, "width": 574, "height": 135}],
     "side_fire_cannon": [{"x": 139, "y": 343, "width": 138, "height": 97},
@@ -24,52 +29,65 @@ ROI_COORDINATES = {
 }
 
 
-def preprocess_pil_image(img: Image.Image) -> np.ndarray:
-    img = img.resize((224, 224), Image.Resampling.LANCZOS)
-    img_array = np.array(img, dtype=np.float32) / 255.0
-    img_array = img_array.transpose(2, 0, 1)
-    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
-    std = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
-    normalized_array = (img_array - mean) / std
-    return np.expand_dims(normalized_array, axis=0)
+def load_pytorch_model(model_path: str, num_classes: int, device: torch.device):
+    """
+    加载 PyTorch 模型并设置为评估模式。
+    """
+    print(f"正在加载 PyTorch 模型: {model_path}")
+    model = models.mobilenet_v3_small(weights=None)
+    num_ftrs = model.classifier[-1].in_features
+    model.classifier[-1] = nn.Linear(num_ftrs, num_classes)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.to(device)
+    model.eval()
+    print("模型加载成功并已切换到评估模式。")
+    return model
 
 
-def softmax(x: np.ndarray) -> np.ndarray:
-    e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum(axis=-1, keepdims=True)
-
-
-def predict_scene(session: ort.InferenceSession, idx_to_class: dict, image_path: str, threshold: float = 0.5) -> list[
-    str]:
+def predict_scene_pytorch(
+        model: nn.Module,
+        idx_to_class: dict,
+        image_path: str,
+        transform: transforms.Compose,
+        device: torch.device,
+        threshold: float = 0.5
+) -> list[str]:
+    """
+    使用 PyTorch 模型对给定图片的所有 ROI 进行分类预测。
+    """
     try:
         full_image = Image.open(image_path).convert('RGB')
     except Exception:
         return []
+
     if full_image.size != (1920, 1080):
         return []
-    input_name, output_name = session.get_inputs()[0].name, session.get_outputs()[0].name
+
     detected_classes = []
-    for location, boxes in ROI_COORDINATES.items():
-        for i, box in enumerate(boxes):
-            x, y, w, h = box['x'], box['y'], box['width'], box['height']
-            roi_pil = full_image.crop((x, y, x + w, y + h))
-            input_tensor = preprocess_pil_image(roi_pil)
-            outputs = session.run([output_name], {input_name: input_tensor})
-            logits = outputs[0][0]
-            probabilities = softmax(logits)
-            predicted_index = np.argmax(probabilities)
-            if probabilities[predicted_index] >= threshold:
-                predicted_class = idx_to_class[predicted_index]
-                if not predicted_class.endswith('_none'):
-                    detected_classes.append(predicted_class)
+    with torch.no_grad():
+        for location, boxes in ROI_COORDINATES.items():
+            for i, box in enumerate(boxes):
+                x, y, w, h = box['x'], box['y'], box['width'], box['height']
+                roi_pil = full_image.crop((x, y, x + w, y + h))
+                input_tensor = transform(roi_pil).unsqueeze(0)
+                input_tensor = input_tensor.to(device)
+                outputs = model(input_tensor)
+                probabilities = torch.nn.functional.softmax(outputs, dim=1)[0]
+                max_prob, predicted_index_tensor = torch.max(probabilities, 0)
+                predicted_index = predicted_index_tensor.item()
+
+                if max_prob.item() >= threshold:
+                    predicted_class = idx_to_class[predicted_index]
+                    if not predicted_class.endswith('_none'):
+                        detected_classes.append(predicted_class)
     return detected_classes
 
 
 # ==============================================================================
-# SECTION 2: 数据清洗主模块 (修改了最后的合并与保存部分)
+# SECTION 2: 数据清洗主模块 (已修改最后的合并与保存部分)
 # ==============================================================================
 
-def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, class_map_path):
+def clean_data(file_path, output_path, screenshots_base_path, pth_model_path, class_map_path):
     print(f"开始清洗数据文件: {file_path}")
     try:
         data = pd.read_csv(file_path, header=0)
@@ -77,12 +95,12 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
         print(f"错误: 找不到数据文件 '{file_path}'")
         return
     data['original_index'] = data.index + 1
+
     # --- 原始清洗逻辑部分 (无变更) ---
     features = data.iloc[:, :-3]
     labels = data.iloc[:, -3]
     pic_names = data.iloc[:, -2]
     print(f"原始特征总数: {features.shape[1]}")
-    # ... (其余清洗逻辑与原脚本完全相同)
     last_row_features = features.iloc[-1].values
     last_row_valid = True
     if abs(last_row_features[27]) > 6 or abs(last_row_features[61]) > 6: last_row_valid = False
@@ -97,19 +115,25 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
     cleaned_data = cleaned_data.drop_duplicates(subset=cleaned_data.columns[:-3], keep='first').reset_index(drop=True)
     features_cleaned, labels_cleaned, pic_names_cleaned = cleaned_data.iloc[:, :-3], cleaned_data.iloc[:,
                                                                                      -3], cleaned_data.iloc[:, -2]
-    # ... (异常波动筛选逻辑完全相同)
-
 
     # --- 画面元素识别集成部分 (无变更) ---
-    print("\n开始识别截图中的游戏元素...")
+    print("\n开始使用 PyTorch 和 GPU 识别截图中的游戏元素...")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"将使用的推理设备: {device}")
     try:
-        session = ort.InferenceSession(onnx_model_path)
         with open(class_map_path, 'r', encoding='utf-8') as f:
             class_to_idx = json.load(f)
         idx_to_class = {v: k for k, v in class_to_idx.items()}
+        num_classes = len(class_to_idx)
+        model = load_pytorch_model(pth_model_path, num_classes, device)
     except Exception as e:
-        print(f"错误：加载模型或class_map文件失败: {e}");
+        print(f"错误：加载模型或 class_map 文件失败: {e}");
         return
+    pytorch_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
     grouped_elements = defaultdict(list)
     for class_name in class_to_idx.keys():
         if class_name.endswith('_none'):
@@ -124,11 +148,13 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
         print(f"\r处理图片: {idx + 1}/{total_pics} ({pic_name})", end="")
         image_path = os.path.join(screenshots_base_path, str(pic_name))
         if not os.path.exists(image_path):
-            row_image_data = {col: -1 for col in image_feature_columns}
+            row_image_data = {col: -10 for col in image_feature_columns}
             all_rows_image_data.append(row_image_data)
             continue
         try:
-            detected_full_names = set(predict_scene(session, idx_to_class, image_path, threshold=0.5))
+            detected_full_names = set(predict_scene_pytorch(
+                model, idx_to_class, image_path, pytorch_transform, device, threshold=0.5
+            ))
             row_image_data = {}
             for condensed_name, full_names in grouped_elements.items():
                 num_positions = len(full_names)
@@ -144,6 +170,7 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
                     else:
                         row_image_data[condensed_name] = -1
         except Exception as e:
+            print(f"\n处理图片 {pic_name} 时发生错误: {e}")
             row_image_data = {col: -20 for col in image_feature_columns}
         all_rows_image_data.append(row_image_data)
     print("\n截图元素识别完成。")
@@ -204,12 +231,18 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
 
 
 if __name__ == "__main__":
-    # 路径配置与之前保持一致
     input_file = r"arknights.csv"
-    output_file = r"arknights_with_field_recognize_v2.csv"
+    # 建议的输出文件名，以区分ONNX版本
+    output_file = r"arknights_with_field_recognize.csv"
     screenshots_base_path = r"images"
 
     model_dir = r"battlefield_recognize"
-    onnx_model_path = os.path.join(model_dir, 'field_recognize.onnx')
+    pth_model_path = os.path.join(model_dir, 'field_recognize.pth')
     class_map_path = os.path.join(model_dir, 'class_to_idx.json')
-    clean_data(input_file, output_file, screenshots_base_path, onnx_model_path, class_map_path)
+
+    if not os.path.exists(pth_model_path):
+        print(f"错误: 找不到 PyTorch 模型文件 '{pth_model_path}'。")
+    elif not os.path.exists(class_map_path):
+        print(f"错误: 找不到类别映射文件 '{class_map_path}'。")
+    else:
+        clean_data(input_file, output_file, screenshots_base_path, pth_model_path, class_map_path)

@@ -2,6 +2,7 @@ from pathlib import Path
 import zipfile
 import re
 from datetime import datetime
+import shutil
 
 
 def create_zip_package(output_zip_path):
@@ -28,6 +29,14 @@ def create_zip_package(output_zip_path):
                     # 在压缩包中保留相对目录结构
                     arcname = file_path.relative_to(data_folder)
                     zipf.write(file_path, arcname=str(arcname))
+
+    # 打包完成后删除原文件夹
+    for folder in time_folders:
+        try:
+            shutil.rmtree(folder)
+            print(f"已删除文件夹：{folder}")
+        except Exception as e:
+            print(f"删除文件夹 {folder} 时出错：{e}")    
 
     print(f"压缩包已创建：{output_zip_path}")
 

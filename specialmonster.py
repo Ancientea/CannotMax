@@ -41,7 +41,7 @@ class SpecialMonsterHandler:
                 'lose_message': "你相信门能创造奇迹吗？"
             },
             28: {
-                'name': '杰斯顿',
+                'name': '杰斯顿·威廉姆斯',
                 'win_message': "幽默杰斯顿",
                 'lose_message': "幽默杰斯顿"
             },

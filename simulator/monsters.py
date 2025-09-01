@@ -555,7 +555,7 @@ class Monster:
 
 
 class AcidSlug(Monster):
-    """酸液源石虫"""
+    """酸液源石虫·α"""
 
     def on_spawn(self):
         self.attack_animation = AttackAnimation(0.05, 0.5, 0.45, self)
@@ -595,7 +595,7 @@ class HighEnergySlug(Monster):
         super().on_death()
 
 
-class 巧克力虫(Monster):
+class 炽焰源石虫(Monster):
     """灼热源石虫"""
 
     def apply_damage_to_target(self, target: Monster, damage):
@@ -605,8 +605,8 @@ class 巧克力虫(Monster):
         return False
 
 
-class 冰爆虫(Monster):
-    """冰爆虫"""
+class 冰爆源石虫(Monster):
+    """冰爆源石虫"""
 
     def on_death(self):
         # 实现自爆逻辑
@@ -684,8 +684,8 @@ class 大喷蛛(Monster):
         ))
 
 
-class 鳄鱼(Monster):
-    """鳄鱼"""
+class 提亚卡乌好战者(Monster):
+    """提亚卡乌好战者"""
 
     def on_spawn(self):
         self.attack_animation = AttackAnimation(0.32, 0.2, 0.48, self)
@@ -725,8 +725,8 @@ class 宿主流浪者(Monster):
         self.lastLifeRegenTime = self.battlefield.gameTime
 
 
-class 保鲜膜射手(Monster):
-    """保鲜膜射手"""
+class 呼啸骑士团学徒(Monster):
+    """呼啸骑士团学徒"""
 
     def on_spawn(self):
         self.shieldCounter = 30
@@ -741,7 +741,7 @@ class 保鲜膜射手(Monster):
             self.phy_def -= 3000
             self.magic_resist -= 95
             self.shieldMode = False
-            debug_print(f"{self.name} 保鲜膜失效")
+            debug_print(f"{self.name} 呼啸骑士团学徒失效")
 
 
 class 狂暴宿主组长(Monster):
@@ -800,8 +800,8 @@ class 海螺(Monster):
             debug_print(f"{self.name} 退出防御模式")
 
 
-class 拳击囚犯(Monster):
-    """拳击囚犯"""
+class 拳手囚犯(Monster):
+    """拳手囚犯"""
 
     def on_spawn(self):
         self.attack_speed -= 50
@@ -1004,7 +1004,7 @@ class 鼠鼠(Monster):
             self.speed_boost_counter -= delta_time
 
 
-class 雪球(Monster):
+class 投石机(Monster):
     """恐怖雪球投掷手"""
 
     def on_spawn(self):
@@ -1019,7 +1019,7 @@ class 雪球(Monster):
                 return
 
             self.battlefield.projectiles_manager.spawn_projectile(
-                AOE炸弹锁定(0.2, self.get_attack_power() * 1.5, DamageType.MAGIC, self, targets[0], name="雪球",
+                AOE炸弹锁定(0.2, self.get_attack_power() * 1.5, DamageType.MAGIC, self, targets[0], name="“投石机”",
                             aoeType=AOEType.Grid4))
             self.attack_range = 0.8
             self.first_attack = False
@@ -1059,7 +1059,7 @@ class 船长(Monster):
         return False
 
 
-class 杰斯顿(Monster):
+class 杰斯顿·威廉姆斯(Monster):
     """洁厕灵"""
 
     def on_spawn(self):
@@ -1151,8 +1151,8 @@ class 杰斯顿(Monster):
             super().on_death()
 
 
-class 镜神(Monster):
-    """山海众司魅人"""
+class 山海众窥魅人(Monster):
+    """山海众窥魅人"""
 
     def on_spawn(self):
         # 技力
@@ -1612,7 +1612,7 @@ class 狂躁珊瑚(Monster):
                 debug_print(f"{self.name} 被动叠了15层")
 
 
-class 炮god(Monster):
+class 炮击组长(Monster):
     """炮神"""
 
     def on_spawn(self):
@@ -1895,8 +1895,8 @@ class 酒桶(Monster):
             self.battlefield.add_new_zone(WineZone(target.position, self.battlefield, 12, self.faction))
 
 
-class 红刀哥(Monster):
-    """红刀哥"""
+class 复仇者(Monster):
+    """复仇者"""
 
     def on_spawn(self):
         self.stage = 0
@@ -1907,7 +1907,7 @@ class 红刀哥(Monster):
             self.stage = 1
 
 
-class 拳击手(Monster):
+class 湖畔志愿者(Monster):
     """拳击手"""
 
     def on_spawn(self):
@@ -1927,8 +1927,8 @@ class 拳击手(Monster):
                 debug_print(f"{self.name}{self.id} 停止闪避")
 
 
-class 沸血骑士(Monster):
-    """沸血骑士"""
+class 沸血骑士团精锐(Monster):
+    """沸血骑士团精锐"""
 
     def on_spawn(self):
         self.stage = 0
@@ -2138,32 +2138,32 @@ class 自在(Monster):
 
 class MonsterFactory:
     _monster_classes = {
-        "酸液源石虫": AcidSlug,
+        "酸液源石虫·α": AcidSlug,
         "高能源石虫": HighEnergySlug,
         "污染躯壳": 污染躯壳,
-        "鳄鱼": 鳄鱼,
+        "提亚卡乌好战者": 提亚卡乌好战者,
         "宿主流浪者": 宿主流浪者,
-        "保鲜膜": 保鲜膜射手,
-        "1750哥": 狂暴宿主组长,
+        "呼啸骑士团学徒": 呼啸骑士团学徒,
+        "狂暴宿主组长": 狂暴宿主组长,
         "海螺": 海螺,
-        "拳击囚犯": 拳击囚犯,
+        "拳手囚犯": 拳手囚犯,
         "高塔术师": 高塔术师,
         "冰原术师": 冰原术师,
         "矿脉守卫": 矿脉守卫,
-        "庞贝": 庞贝,
+        "“庞贝”": 庞贝,
         "食腐狗": 食腐狗,
         "鼠鼠": 鼠鼠,
-        "雪球": 雪球,
+        "“投石机”": 投石机,
         "光剑": 光剑,
         "船长": 船长,
-        "杰斯顿": 杰斯顿,
-        "镜神": 镜神,
+        "杰斯顿·威廉姆斯": 杰斯顿·威廉姆斯,
+        "山海众窥魅人": 山海众窥魅人,
         "Vvan": Vvan,
         "萨克斯": 萨克斯,
         "大喷蛛": 大喷蛛,
         "萨卡兹链术师": 萨卡兹链术师,
         "大君之赐": 大君之赐,
-        "冰爆虫": 冰爆虫,
+        "冰爆源石虫": 冰爆源石虫,
         "高普尼克": 高普尼克,
         "狂躁珊瑚": 狂躁珊瑚,
         "雪境精锐": 雪境精锐,
@@ -2174,10 +2174,10 @@ class MonsterFactory:
         "标枪恐鱼": 标枪恐鱼,
         "护盾哥": 护盾哥,
         "酒桶": 酒桶,
-        "巧克力虫": 巧克力虫,
-        "红刀哥": 红刀哥,
-        "沸血骑士": 沸血骑士,
-        "拳击手": 拳击手,
+        "炽焰源石虫": 炽焰源石虫,
+        "复仇者": 复仇者,
+        "沸血骑士团精锐": 沸血骑士团精锐,
+        "湖畔志愿者": 湖畔志愿者,
         "门": 门,
         "爱蟹者": 爱蟹者,
         "绵羊": 绵羊,
@@ -2186,7 +2186,7 @@ class MonsterFactory:
         # "扎罗": 扎罗,
 
         # 添加更多映射...
-        "炮god": 炮god
+        "炮击组长": 炮击组长
     }
 
     @classmethod

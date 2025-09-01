@@ -21,11 +21,13 @@ CONFIG = {
         r"C:\Windows\System32\msvcp140.dll",
         r"C:\Windows\System32\vcruntime140.dll",
         r"C:\Windows\System32\vcruntime140_1.dll",
-        "arknights.csv",
-        "models",
+        # "arknights.csv",
+        "models/best_model_full.onnx",
         "images",
         "platform-tools",
         "ico",
+        "pyproject.toml",
+        "monster.csv",
     ]
 }
 
@@ -47,7 +49,7 @@ def build_exe():
         "--exclude-module", "torchvision",
         # "--exclude-module", "onnxruntime",
         "--exclude-module", "predict",
-        "--exclude-module", "toml",
+        # "--exclude-module", "toml",
         # "--add-binary", ".venv/Lib/site-packages/onnxruntime/capi/onnxruntime_providers_shared.dll;.",
     ]
 
@@ -84,6 +86,8 @@ def copy_additional_files():
 
         try:
             if src.is_dir():
+                # 确保目标目录存在
+                dest.mkdir(parents=True, exist_ok=True)
                 # 特殊处理images目录，排除tmp和nums子目录
                 if src.name == "images":
                     def ignore_func(dir, names):
@@ -98,6 +102,8 @@ def copy_additional_files():
                     shutil.copytree(src, dest, dirs_exist_ok=True)
                 print(f"已复制目录：{src} -> {dest}")
             else:
+                # 确保目标文件的父目录存在
+                dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dest)
                 print(f"已复制文件：{src} -> {dest}")
         except Exception as e:

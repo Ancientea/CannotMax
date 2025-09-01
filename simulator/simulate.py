@@ -61,10 +61,10 @@ def main():
     matches = 0
     for scene_config in tqdm(battle_data):
         if VISUALIZATION_MODE:
-            scene_config = {"left": {"宿主流浪者": 7, "污染躯壳": 14, "凋零萨卡兹": 5}, "right": {"大喷蛛": 4, "杰斯顿": 1, "衣架": 10}, "result": "right"}
+            scene_config = {"left": {"宿主流浪者": 7, "污染躯壳": 14, "凋零萨卡兹": 5}, "right": {"大喷蛛": 4, "杰斯顿·威廉姆斯": 1, "衣架": 10}, "result": "right"}
 
 
-        #{ "left": { "护盾哥": 5, "污染躯壳": 11, "船长": 5 }, "right": { "炮god": 4, "沸血骑士": 4, "雪境精锐": 4}, "result": "left" }
+        #{ "left": { "护盾哥": 5, "污染躯壳": 11, "船长": 5 }, "right": { "炮击组长": 4, "沸血骑士团精锐": 4, "雪境精锐": 4}, "result": "left" }
 
         # 用户配置
         left_army = scene_config["left"]

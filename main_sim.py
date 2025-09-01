@@ -1,19 +1,23 @@
 import copy
 from enum import Enum, auto
 import tkinter as tk
-# from tkinter import messagebox # messagebox 已被自定义提示替代，可以注释或移除
+from tkinter import messagebox
 from PIL import Image, ImageTk
 import math
-from simulator.battle_field import Battlefield  # 确保 Battlefield 已导入
-from simulator.monsters import MonsterFactory  # 确保 MonsterFactory 已导入
-from simulator.utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction  # 根据你的实际路径调整
-from simulator.vector2d import FastVector  # 确保 FastVector 已导入
 from unit import Unit  # 确保 Unit 已导入
 import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import random  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import sys  # Import sys for stdin
-from simulator.monsters import AttackState, Monster, MonsterFactory
+import logging
 
+from simulator.battle_field import Battlefield  # 确保 Battlefield 已导入
+from simulator.monsters import MonsterFactory  # 确保 MonsterFactory 已导入
+from simulator.utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction  # 根据你的实际路径调整
+from simulator.vector2d import FastVector  # 确保 FastVector 已导入
+from simulator.monsters import AttackState, Monster, MonsterFactory
+from recognize import MONSTER_COUNT
+
+logger = logging.getLogger(__name__)
 
 class AppState(Enum):
     INITIAL = auto()  # 初始状态
@@ -42,7 +46,7 @@ class StateMachine:
             self.state = new_state
             self.ui_update()
         else:
-            print(f"Illegal state transition from {self.state} to {new_state}")
+            logger.error(f"Illegal state transition from {self.state} to {new_state}")
 
     def get_control_states(self):
         """返回各控件的状态字典"""
@@ -95,7 +99,7 @@ class SandboxSimulator:
     def __init__(self, master: tk.Tk, battle_data):
         self.master = master
         self.master.title("沙盒模拟器")
-        self.num_monsters = 58  # 根据你的怪物总数调整
+        self.num_monsters = MONSTER_COUNT  # 根据你的怪物总数调整
 
         self.battle_data = battle_data  # 初始化时传入的怪物配置
 
@@ -164,7 +168,7 @@ class SandboxSimulator:
             with open("simulator/monsters.json", encoding='utf-8') as f:
                 self.monster_data = json.load(f)["monsters"]
         except FileNotFoundError:
-            print("错误: monsters.json 未找到，请检查路径！")
+            logger.error("错误: monsters.json 未找到，请检查路径！")
             self.monster_data = []
 
             return
@@ -179,7 +183,7 @@ class SandboxSimulator:
                 }
             except Exception as e:
                 # 同样，show_message_below_button 可能还不可用
-                print(f"加载图标错误 (图标键: {i}, 文件名ID: {image_file_id}): {str(e)}")
+                logger.error(f"加载图标错误 (图标键: {i}, 文件名ID: {image_file_id}): {str(e)}")
                 self.icons[i] = {
                     "red": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray")),
                     "blue": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray"))
@@ -367,6 +371,7 @@ class SandboxSimulator:
                 ui_unit.team = 'red' if monster.faction == Faction.LEFT else 'blue'
                 display_id_for_icon = REVERSE_MONSTER_MAPPING.get(monster.name)
                 if display_id_for_icon is None:
+                    logger.error(f"怪物名 {monster.name} 在 REVERSE_MONSTER_MAPPING 中未找到!")
                     self.show_message_below_button(f"怪物名 {monster.name} 在 REVERSE_MONSTER_MAPPING 中未找到!",
                                                    is_error=True)
                     display_id_for_icon = 0
@@ -473,7 +478,7 @@ class SandboxSimulator:
             # 简单起见，直接中断，不弹出确认框
             pass
         self.game_over_label.config(text="")
-        print("进入部署阶段。使用 self.battle_data 初始化战场。")
+        logger.info("进入部署阶段。使用 self.battle_data 初始化战场。")
         self.state_machine.transition_to(AppState.SETUP)
         self.init_battlefield_for_setup()  # 这会调用 refresh_canvas_display，进而清除旧的胜利信息
 
@@ -485,7 +490,7 @@ class SandboxSimulator:
             self.show_message_below_button("战场上没有怪物，无法开始模拟。")
             return
         self.initial_battlefield = copy.deepcopy(self.battle_field)
-        print("战斗模拟开始！")
+        logger.info("战斗模拟开始！")
         self.state_machine.transition_to(AppState.SIMULATING)
         self.game_over_label.config(text="")
         self.canvas.delete("victory_text")  # 开始战斗前清除旧的胜利信息
@@ -544,7 +549,7 @@ class SandboxSimulator:
             self.refresh_canvas_display()  # 会调用 draw_grid 并清除 "all" 包括 "victory_text"
         self.game_over_label.config(text="")
         self.clear_message_below_button()
-        print("战场已清空。")
+        logger.info("战场已清空。")
 
     def restore_initial_positions(self):
         if not self.initial_battlefield:
@@ -555,13 +560,14 @@ class SandboxSimulator:
         if self.state_machine.state in [AppState.PAUSED, AppState.ENDED]:
             self.state_machine.transition_to(AppState.SETUP)
         self.refresh_canvas_display()  # 会清除 "victory_text"
+        logger.info("已恢复到初始站位。")
 
 
 def main():
     root = tk.Tk()
     # root.withdraw() # 如果不需要立即隐藏主窗口，可以注释掉
 
-    initial_battle_setup = {"left": {"Vvan": 4, "炮god": 3, "庞贝": 2}, "right": {"大喷蛛": 6, "冰爆虫": 23},
+    initial_battle_setup = {"left": {"Vvan": 4, "炮击组长": 3, "“庞贝”": 2}, "right": {"大喷蛛": 6, "冰爆源石虫": 23},
                             "result": "left"}
 
     sys.stdin.reconfigure(encoding='utf-8')
@@ -570,18 +576,24 @@ def main():
             json_data = sys.stdin.read()
             if json_data:
                 initial_battle_setup = json.loads(json_data)
-                print("成功从 stdin 加载战斗配置。")
+                logger.info("成功从 stdin 加载战斗配置。")
             else:
-                print("stdin 中没有数据，使用默认配置。")
+                logger.error("stdin 中没有数据，使用默认配置。")
         else:
-            print("stdin 是交互式终端，使用默认配置。")
+            logger.info("stdin 是交互式终端，使用默认配置。")
     except json.JSONDecodeError:
-        print("错误: 无法解析 stdin 中的 JSON 数据，请检查格式，将使用默认配置。")
+        logger.error("错误: 无法解析 stdin 中的 JSON 数据，请检查格式，将使用默认配置。")
 
     except Exception as e:
-        print(f"从 stdin 读取或解析时发生未知错误: {e}，将使用默认配置。")
+        logger.error(f"从 stdin 读取或解析时发生未知错误: {e}，将使用默认配置。")
 
-    app = SandboxSimulator(root, initial_battle_setup)
+    try:
+        app = SandboxSimulator(root, initial_battle_setup)
+    except Exception as e:
+        logger.error(f"初始化模拟器时发生错误: {e}")
+        messagebox.showerror("初始化错误", f"无法初始化模拟器: {e}")
+        root.destroy()
+        return
 
     error_messages = []
     if not app.monster_data:  # 检查 monsters.json 是否加载成功
@@ -591,7 +603,7 @@ def main():
         error_messages.append("错误：至少一方的怪物列表为空！")
 
     problematic_monsters_found = []
-    problematic_monster_names = ["矿脉守卫", "鳄鱼", "凋零萨卡兹", "1750哥", "高能源石虫"]
+    problematic_monster_names = ["矿脉守卫", "提亚卡乌好战者", "凋零萨卡兹", "狂暴宿主组长", "高能源石虫"]
 
     for team_key in ["left", "right"]:
         for monster_name in initial_battle_setup.get(team_key, {}):
@@ -605,7 +617,7 @@ def main():
     if error_messages:
         app.show_message_below_button(" | ".join(error_messages), is_error=True, duration=10000)
         if "monsters.json 未找到或为空" in " | ".join(error_messages):
-            print("由于 monsters.json 缺失或错误，模拟器可能无法正常工作。")
+            logger.error("由于 monsters.json 缺失或错误，模拟器可能无法正常工作。")
 
 
     if not root.winfo_exists():
@@ -615,4 +627,11 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger("PIL").setLevel(logging.INFO)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    ))
+    logging.getLogger().addHandler(stream_handler)
     main()

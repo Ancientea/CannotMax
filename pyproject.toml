@@ -5,7 +5,6 @@ description = "这是一个基于深度学习的明日方舟游戏辅助工具�
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "keyboard",
     "matplotlib",
     "numpy",
     "onnxruntime",
