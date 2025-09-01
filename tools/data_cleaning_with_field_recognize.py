@@ -99,7 +99,6 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
                                                                                      -3], cleaned_data.iloc[:, -2]
     # ... (异常波动筛选逻辑完全相同)
 
-
     # --- 画面元素识别集成部分 (无变更) ---
     print("\n开始识别截图中的游戏元素...")
     try:
