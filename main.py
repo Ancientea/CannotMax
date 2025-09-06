@@ -11,7 +11,7 @@ import onnxruntime  # workaround: Pre-import to avoid ImportError: DLL load fail
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout
 from PyQt6.QtWidgets import QLabel, QPushButton, QLineEdit, QCheckBox, QComboBox
 from PyQt6.QtWidgets import QGroupBox, QMessageBox, QGraphicsDropShadowEffect, QFrame
-from PyQt6.QtCore import Qt, pyqtSignal, QThread
+from PyQt6.QtCore import Qt, pyqtSignal, QThread, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
 import PyQt6.QtCore as QtCore
 
@@ -63,7 +63,6 @@ class ADBConnectorThread(QThread):
     def run(self):
         self.app.adb_connector.connect()
         self.connect_finished.emit()
-
 
 class ArknightsApp(QMainWindow):
     # 添加自定义信号
@@ -138,24 +137,19 @@ class ArknightsApp(QMainWindow):
         self.setGeometry(100, 100, 500, 580)
         self.background = QPixmap("ico/background.png")
 
-        # TODO: 发光效果无效
-        # qss = """
-        #         QWidget {
-        #             /* 添加发光效果 */
-        #             qproperty-effect: true;
-        #             qproperty-glow-color: rgba(255, 165, 0, 150);
-        #             qproperty-glow-radius: 10px;
-        #         }
-        #         """
-
-        # self.setStyleSheet(qss)
+        # 初始化动画对象
+        self.size_animation = QPropertyAnimation(self, b"size")
+        self.size_animation.setDuration(300)
+        self.size_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         # 主布局
         main_widget = QWidget()
         main_layout = QHBoxLayout(main_widget)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # 左侧面板
         self.input_panel = InputPanelUI()
+        self.input_panel.setMinimumWidth(280)
         self.input_panel.predict_requested.connect(self.predict)
         self.input_panel.reset_requested.connect(self.reset_entries)
         self.input_panel.input_changed.connect(self.update_input_display)
@@ -451,8 +445,22 @@ class ArknightsApp(QMainWindow):
         self.input_panel.setVisible(not is_visible)
         if not is_visible:
             self.toggle_input_button.setText("隐藏输入面板")
+            target_width = self.width() + self.input_panel.width()
         else:
             self.toggle_input_button.setText("显示输入面板")
+            target_width = self.width() - self.input_panel.width()
+        self.animate_size_change(target_width)
+
+    def animate_size_change(self, target_width, target_height=None):
+        """通用的尺寸动画方法"""
+        if target_height is None:
+            target_height = self.height()
+        if self.size_animation.state() == QPropertyAnimation.State.Running:
+            self.size_animation.stop()
+
+        self.size_animation.setStartValue(self.size())
+        self.size_animation.setEndValue(QtCore.QSize(target_width, target_height))
+        self.size_animation.start()
 
     def on_adb_connected(self):
         logger.info("模拟器初始化完成")
@@ -734,6 +742,7 @@ class ArknightsApp(QMainWindow):
 
     def toggle_history_panel(self):
         """切换历史对局面板的显示"""
+        target_width = self.width()
         if self.history_match is None:
             QMessageBox.warning(self, "警告", "历史数据加载失败，无法显示历史对局")
             return
@@ -744,8 +753,11 @@ class ArknightsApp(QMainWindow):
             self.history_button.setText("隐藏历史对局")
             left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
             self.history_match_ui.render_similar_matches(left_monsters_dict, right_monsters_dict)
+            self.target_width = target_width
         else:
             self.history_button.setText("显示历史对局")
+            target_width = self.target_width
+        self.animate_size_change(target_width)
 
     def reselect_roi(self):
         self.recognizer.select_roi()
