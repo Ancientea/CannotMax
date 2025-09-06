@@ -11,8 +11,7 @@ from predict import CannotModel
 import loadData
 import recognize
 from train import UnitAwareTransformer
-from recognize import MONSTER_COUNT, intelligent_workers_debug
-from sklearn.metrics.pairwise import cosine_similarity
+from recognize import MONSTER_COUNT
 from similar_history_match import HistoryMatch
 from auto_fetch import AutoFetch
 

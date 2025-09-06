@@ -7,7 +7,8 @@ import numpy as np
 import torch
 import logging
 
-from recognize import MONSTER_COUNT
+from config import MONSTER_COUNT
+from config import FIELD_FEATURE_COUNT
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +179,67 @@ class CannotModel:
             # 使用修改后的模型前向传播流程
             prediction = self.model(
                 left_signs, left_counts, right_signs, right_counts
+            ).item()
+
+            # 确保预测值在有效范围内
+            if np.isnan(prediction) or np.isinf(prediction):
+                logger.warning("警告: 预测结果包含NaN或Inf，返回默认值0.5")
+                prediction = 0.5
+
+            # 检查预测结果是否在[0,1]范围内
+            if prediction < 0 or prediction > 1:
+                prediction = max(0, min(1, prediction))
+
+        return prediction
+
+    def get_prediction_with_terrain(self, full_features: np.typing.ArrayLike):
+        """使用包含地形特征的完整特征向量进行预测"""
+        if self.model is None:
+            raise RuntimeError("模型未正确初始化")
+
+        # 检查特征向量长度
+        expected_length = MONSTER_COUNT * 2 + FIELD_FEATURE_COUNT * 2  # 77L + 6L + 77R + 6R = 166
+        if len(full_features) != expected_length:
+            logger.warning(f"特征向量长度不匹配: 期望{expected_length}, 实际{len(full_features)}")
+            # 如果长度不匹配，回退到原始方法
+            left_counts = full_features[:MONSTER_COUNT]
+            right_counts = full_features[MONSTER_COUNT:MONSTER_COUNT*2]
+            return self.get_prediction(left_counts, right_counts)
+
+        # 提取各个部分
+        left_monsters = full_features[:MONSTER_COUNT]  # 1L-77L
+        left_terrain = full_features[MONSTER_COUNT:MONSTER_COUNT+FIELD_FEATURE_COUNT]  # 78L-83L
+        right_monsters = full_features[MONSTER_COUNT+FIELD_FEATURE_COUNT:MONSTER_COUNT*2+FIELD_FEATURE_COUNT]  # 1R-77R
+        right_terrain = full_features[MONSTER_COUNT*2+FIELD_FEATURE_COUNT:MONSTER_COUNT*2+FIELD_FEATURE_COUNT*2]  # 78R-83R
+        
+        # 合并怪物特征和地形特征（按照训练时的格式）
+        left_counts = np.concatenate([left_monsters, left_terrain])
+        right_counts = np.concatenate([right_monsters, right_terrain])
+
+        # 转换为张量并处理符号和绝对值
+        # 对于怪物特征，使用符号和绝对值
+        # 对于地形特征，不需要符号处理（地形特征本身就是0/1值）
+        left_monster_signs = torch.sign(torch.tensor(left_monsters, dtype=torch.int16))
+        left_terrain_signs = torch.ones_like(torch.tensor(left_terrain, dtype=torch.int16))  # 地形特征符号为1
+        left_signs = torch.cat([left_monster_signs, left_terrain_signs]).unsqueeze(0).to(self.device)
+        
+        left_monster_counts = torch.abs(torch.tensor(left_monsters, dtype=torch.int16))
+        left_terrain_counts = torch.tensor(left_terrain, dtype=torch.int16)  # 地形特征直接使用原值
+        left_counts_tensor = torch.cat([left_monster_counts, left_terrain_counts]).unsqueeze(0).to(self.device)
+        
+        right_monster_signs = torch.sign(torch.tensor(right_monsters, dtype=torch.int16))
+        right_terrain_signs = torch.ones_like(torch.tensor(right_terrain, dtype=torch.int16))  # 地形特征符号为1
+        right_signs = torch.cat([right_monster_signs, right_terrain_signs]).unsqueeze(0).to(self.device)
+        
+        right_monster_counts = torch.abs(torch.tensor(right_monsters, dtype=torch.int16))
+        right_terrain_counts = torch.tensor(right_terrain, dtype=torch.int16)  # 地形特征直接使用原值
+        right_counts_tensor = torch.cat([right_monster_counts, right_terrain_counts]).unsqueeze(0).to(self.device)
+
+        # 预测流程
+        with torch.no_grad():
+            # 使用修改后的模型前向传播流程，现在包含地形特征
+            prediction = self.model(
+                left_signs, left_counts_tensor, right_signs, right_counts_tensor
             ).item()
 
             # 确保预测值在有效范围内

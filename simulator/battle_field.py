@@ -4,11 +4,13 @@ import random
 import time
 import numpy as np
 from enum import Enum
+import logging
 
 from typing import TYPE_CHECKING
 
 from .vector2d import FastVector
 
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .monsters import Monster
@@ -90,7 +92,7 @@ class Battlefield:
         for (name, count) in left_army.items():
             data = next((m for m in monster_data if m["名字"] == name), None)
             if data is None:
-                return False
+                raise ValueError(f"左侧怪物 {name} 在 monster_data 中未找到!")
             for _ in range(count):
                 pos = FastVector(
                     random.uniform(0, 0.5),
@@ -102,7 +104,7 @@ class Battlefield:
         for (name, count) in right_army.items():
             data = next((m for m in monster_data if m["名字"] == name), None)
             if data is None:
-                return False
+                raise ValueError(f"右侧怪物 {name} 在 monster_data 中未找到!")
             for _ in range(count):
                 pos = FastVector(
                     random.uniform(MAP_SIZE[0]-0.5, MAP_SIZE[0]),
@@ -170,9 +172,9 @@ class Battlefield:
         self.alive_monsters = [m for m in self.monsters if m.is_alive]
         winner = self.check_victory()
         if winner:
-            print(f"\nVictory for {winner.name}!")
+            logger.info(f"\nVictory for {winner.name}!")
             left = len([m for m in self.alive_monsters if m.is_alive and m.faction == Faction.LEFT])
-            print(f"左边存活{left} / 右边存活{len(self.alive_monsters) - left}")
+            logger.info(f"左边存活{left} / 右边存活{len(self.alive_monsters) - left}")
             return winner
         
         self.gameTime += VIRTUAL_TIME_DELTA
@@ -212,9 +214,9 @@ class Battlefield:
                     symbol = m.char_icon
                 grid[y, x] = symbol
         
-        print(f"\nRound {self.round}")
+        logger.info(f"\nRound {self.round}")
         for row in grid:
-            print(' '.join(row))
+            logger.info(' '.join(row))
 
     def get_grid(self, target):
         x, y = int(target.position.x), int(target.position.y)

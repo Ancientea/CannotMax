@@ -9,7 +9,6 @@ data/[0-9][0-9][0-9][0-9]_[0-1][0-9]_[0-3][0-9]__[0-2][0-9]_[0-5][0-9]_[0-5][0-9
 images/nums/
 *.log
 models/Local_models/*
-*.csv
 !arknights.csv
 build/
 output/

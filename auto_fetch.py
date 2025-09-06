@@ -50,6 +50,7 @@ class AutoFetch:
         stop_callback: Callable[[], None],
         training_duration,
     ):
+        logger.info(f"初始化 AutoFetch, {game_mode=}, {is_invest=}, {training_duration=}")
         self.adb_connector = adb_connector
         self.game_mode = game_mode  # 游戏模式（30人或自娱自乐）
         self.is_invest = is_invest  # 是否投资
@@ -110,10 +111,11 @@ class AutoFetch:
         )
 
         if intelligent_workers_debug:  # 如果处于debug模式，保存人工审核图片到本地
+            image_name = image_name + ".jpg"
             data_row.append(image_name)
             if image is not None:
                 image_path = self.data_folder / "images" / image_name
-                cv2.imwrite(image_path, image)
+                cv2.imwrite(image_path, image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
 
             # if previous_image is not None:
             #     image_path = self.data_folder / "images" / (image_name+"1s.png")
@@ -191,7 +193,7 @@ class AutoFetch:
         timestamp = int(time.time())
         # 将处理的怪物 ID 拼接到文件名中
         monster_ids_str = "_".join(map(str, processed_monster_ids))
-        current_image_name = f"{timestamp}_{monster_ids_str}.png"
+        current_image_name = f"{timestamp}_{monster_ids_str}"
         current_image = cv2.resize(
             roi, (roi.shape[1] // 2, roi.shape[0] // 2)
         )  # 保存缩放后的图片到内存
@@ -230,9 +232,7 @@ class AutoFetch:
                     right_counts[matched_id -1] = number
             else:
                 logger.error("识别结果有错误，本轮跳过")
-        #收集数据阶段无模型，不进行结果预测
-        # self.current_prediction = self.cannot_model.get_prediction(left_counts, right_counts)
-        self.current_prediction = 0.5
+        self.current_prediction = self.cannot_model.get_prediction(left_counts, right_counts)
         self.update_prediction_callback(self.current_prediction)
 
         # 人工审核保存测试用截图

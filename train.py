@@ -11,6 +11,8 @@ import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from recognize import MONSTER_COUNT
+from config import FIELD_FEATURE_COUNT
+
 
 @cache
 def get_device(prefer_gpu=True):
@@ -29,6 +31,14 @@ def get_device(prefer_gpu=True):
 
 device = get_device()
 
+# 获取场地特征数量
+# field_recognizer = FieldRecognizer()
+# FIELD_FEATURE_COUNT = len(field_recognizer.get_feature_columns()) if field_recognizer.is_ready() else 0
+print(f"场地特征数量: {FIELD_FEATURE_COUNT}")
+
+# 计算总特征数量 (怪物特征 + 场地特征) * 2 + Result + ImgPath
+TOTAL_FEATURE_COUNT = (MONSTER_COUNT + FIELD_FEATURE_COUNT) * 2
+
 
 def preprocess_data(csv_file):
     """预处理CSV文件，将异常值修正为合理范围"""
@@ -39,11 +49,14 @@ def preprocess_data(csv_file):
     print(f"原始数据形状: {data.shape}")
 
     # 检查数据形状
-    if data.shape[1] != MONSTER_COUNT * 2 + 2:
-        print(f"数据与怪物数量不符！")
-        raise Exception("数据与怪物数量不符")
+    expected_columns = TOTAL_FEATURE_COUNT + 2  # +2 for Result and ImgPath
+    if data.shape[1] != expected_columns:
+        print(f"数据列数不符！期望 {expected_columns} 列，实际 {data.shape[1]} 列")
+        print(
+            f"期望格式: {MONSTER_COUNT}(怪物L) + {FIELD_FEATURE_COUNT}(场地L) + {MONSTER_COUNT}(怪物R) + {FIELD_FEATURE_COUNT}(场地R) + 1(Result) + 1(ImgPath)")
+        raise Exception("数据格式不符")
 
-    data = data.iloc[:, 0 : MONSTER_COUNT * 2 + 1]
+    data = data.iloc[:, 0: TOTAL_FEATURE_COUNT + 1]  # 保留特征和结果列，去掉ImgPath
 
     # 检查特征范围
     features = data.iloc[:, :-1]
@@ -78,21 +91,33 @@ class ArknightsDataset(Dataset):
     def __init__(self, csv_file, max_value=None):
         data = pd.read_csv(csv_file, header=None, skiprows=1)
         # 检查数据形状
-        if data.shape[1] != MONSTER_COUNT * 2 + 2:
-            print(f"数据与怪物数量不符！")
-            raise Exception("数据与怪物数量不符")
-        data = data.iloc[:, 0 : MONSTER_COUNT * 2 + 1]
+        expected_columns = TOTAL_FEATURE_COUNT + 2  # +2 for Result and ImgPath
+        if data.shape[1] != expected_columns:
+            print(f"数据列数不符！期望 {expected_columns} 列，实际 {data.shape[1]} 列")
+            raise Exception("数据格式不符")
+        data = data.iloc[:, 0: TOTAL_FEATURE_COUNT + 1]  # 保留特征和结果列，去掉ImgPath
         features = data.iloc[:, :-1].values.astype(np.float32)
         labels = data.iloc[:, -1].map({"L": 0, "R": 1}).values
         labels = np.where((labels != 0) & (labels != 1), 0, labels).astype(np.float32)
 
-        # 分割双方单位
-        feature_count = features.shape[1]
-        midpoint = feature_count // 2
-        left_counts = np.abs(features[:, :midpoint])
-        right_counts = np.abs(features[:, midpoint:])
-        left_signs = np.sign(features[:, :midpoint])
-        right_signs = np.sign(features[:, midpoint:])
+        # 分割双方单位和场地特征
+        # 数据格式: [怪物L(77), 场地L(6), 怪物R(77), 场地R(6)]
+        left_monster_end = MONSTER_COUNT
+        left_field_end = MONSTER_COUNT + FIELD_FEATURE_COUNT
+        right_monster_end = MONSTER_COUNT + FIELD_FEATURE_COUNT + MONSTER_COUNT
+        right_field_end = MONSTER_COUNT + FIELD_FEATURE_COUNT + MONSTER_COUNT + FIELD_FEATURE_COUNT
+
+        # 提取各部分特征
+        left_monster_features = features[:, :left_monster_end]
+        left_field_features = features[:, left_monster_end:left_field_end]
+        right_monster_features = features[:, left_field_end:right_monster_end]
+        right_field_features = features[:, right_monster_end:right_field_end]
+
+        # 合并怪物特征和场地特征（场地特征直接使用，不取绝对值和符号）
+        left_counts = np.concatenate([np.abs(left_monster_features), left_field_features], axis=1)
+        right_counts = np.concatenate([np.abs(right_monster_features), right_field_features], axis=1)
+        left_signs = np.concatenate([np.sign(left_monster_features), np.ones_like(left_field_features)], axis=1)
+        right_signs = np.concatenate([np.sign(right_monster_features), np.ones_like(right_field_features)], axis=1)
 
         if max_value is not None:
             left_counts = np.clip(left_counts, 0, max_value)
@@ -121,10 +146,11 @@ class ArknightsDataset(Dataset):
 class UnitAwareTransformer(nn.Module):
     def __init__(self, num_units, embed_dim=128, num_heads=8, num_layers=4):
         super().__init__()
-        # num_units，有多少种怪，计算多少种特征值
-        # 如果想将地形作为特征，需要额外加上地形的种类数量
-        # 建议把地形当做怪物id，例如存在弩箭地形时，将弩箭数量设置为1，不存在设置为0
+        # num_units，包括怪物种类和场地特征种类
+        # 怪物特征 + 场地特征 = 总特征数量
         self.num_units = num_units
+        self.monster_count = MONSTER_COUNT
+        self.field_count = FIELD_FEATURE_COUNT
         self.embed_dim = embed_dim
         self.num_layers = num_layers
 
@@ -143,6 +169,7 @@ class UnitAwareTransformer(nn.Module):
         self.friend_attentions = nn.ModuleList()
         self.enemy_ffn = nn.ModuleList()
         self.friend_ffn = nn.ModuleList()
+        self.norm = nn.ModuleList()
 
         for _ in range(num_layers):
             # 敌方注意力层
@@ -178,6 +205,8 @@ class UnitAwareTransformer(nn.Module):
             # 初始化注意力层参数
             nn.init.xavier_uniform_(self.enemy_attentions[-1].in_proj_weight)
             nn.init.xavier_uniform_(self.friend_attentions[-1].in_proj_weight)
+            self.norm.append(nn.LayerNorm(embed_dim))
+
 
         # 全连接输出层
         self.fc = nn.Sequential(
@@ -185,16 +214,16 @@ class UnitAwareTransformer(nn.Module):
         )
 
     def forward(self, left_sign, left_count, right_sign, right_count):
-        # 提取Top3兵种特征
-        # 目前是3 vs 3（ABC vs DEF）
-        # 如果需要ABC 弩地形=1，箱地形=1 vs DEF 弩地形=1，箱地形=1
-        # 这里topk的3需要改为至少5（可以多，不能少，会平方级别增加计算量）
-        left_values, left_indices = torch.topk(left_count, k=3, dim=1)
-        right_values, right_indices = torch.topk(right_count, k=3, dim=1)
+        # 提取TopK特征（怪物 + 场地）
+        # 由于现在包含场地特征，需要增加k值以确保重要特征不被遗漏
+        # k=8 可以保证包含主要怪物和所有场地特征
+        k = min(8, left_count.shape[1])  # 确保k不超过实际特征数
+        left_values, left_indices = torch.topk(left_count, k=k, dim=1)
+        right_values, right_indices = torch.topk(right_count, k=k, dim=1)
 
         # 嵌入
-        left_feat = self.unit_embed(left_indices)  # (B, 3, 128)
-        right_feat = self.unit_embed(right_indices)  # (B, 3, 128)
+        left_feat = self.unit_embed(left_indices)  # (B, k, 128)
+        right_feat = self.unit_embed(right_indices)  # (B, k, 128)
 
         embed_dim = self.embed_dim
 
@@ -202,7 +231,7 @@ class UnitAwareTransformer(nn.Module):
         left_feat = torch.cat(
             [
                 left_feat[..., : embed_dim // 2],  # 前x维
-                left_feat[..., embed_dim // 2 :]
+                left_feat[..., embed_dim // 2:]
                 * left_values.unsqueeze(-1),  # 后y维乘数量
             ],
             dim=-1,
@@ -210,7 +239,7 @@ class UnitAwareTransformer(nn.Module):
         right_feat = torch.cat(
             [
                 right_feat[..., : embed_dim // 2],
-                right_feat[..., embed_dim // 2 :] * right_values.unsqueeze(-1),
+                right_feat[..., embed_dim // 2:] * right_values.unsqueeze(-1),
             ],
             dim=-1,
         )
@@ -219,7 +248,7 @@ class UnitAwareTransformer(nn.Module):
         left_feat = left_feat + self.value_ffn(left_feat)
         right_feat = right_feat + self.value_ffn(right_feat)
 
-        # 生成mask (B, 3) 0.1防一手可能的浮点误差
+        # 生成mask (B, k) 0.1防一手可能的浮点误差
         left_mask = left_values > 0.1
         right_mask = right_values > 0.1
 
@@ -271,6 +300,8 @@ class UnitAwareTransformer(nn.Module):
             # FFN
             left_feat = left_feat + self.friend_ffn[i](left_feat)
             right_feat = right_feat + self.friend_ffn[i](right_feat)
+            left_feat = self.norm[i](left_feat)
+            right_feat = self.norm[i](right_feat)
 
         # 输出战斗力
         L = self.fc(left_feat).squeeze(-1) * left_mask
@@ -297,19 +328,19 @@ def train_one_epoch(model, train_loader, criterion, optimizer, scaler=None):
 
         # 检查输入值范围
         if (
-            torch.isnan(ls).any()
-            or torch.isnan(lc).any()
-            or torch.isnan(rs).any()
-            or torch.isnan(rc).any()
+                torch.isnan(ls).any()
+                or torch.isnan(lc).any()
+                or torch.isnan(rs).any()
+                or torch.isnan(rc).any()
         ):
             print("警告: 输入数据包含NaN，跳过该批次")
             continue
 
         if (
-            torch.isinf(ls).any()
-            or torch.isinf(lc).any()
-            or torch.isinf(rs).any()
-            or torch.isinf(rc).any()
+                torch.isinf(ls).any()
+                or torch.isinf(lc).any()
+                or torch.isinf(rs).any()
+                or torch.isinf(rc).any()
         ):
             print("警告: 输入数据包含Inf，跳过该批次")
             continue
@@ -321,7 +352,7 @@ def train_one_epoch(model, train_loader, criterion, optimizer, scaler=None):
 
         try:
             with torch.amp.autocast_mode.autocast(
-                device_type=device.type, enabled=(scaler is not None)
+                    device_type=device.type, enabled=(scaler is not None)
             ):
                 outputs = model(ls, lc, rs, rc).squeeze()
                 # 确保输出在合理范围内
@@ -379,14 +410,14 @@ def evaluate(model, data_loader, criterion):
 
             # 检查输入值范围
             if (
-                torch.isnan(ls).any()
-                or torch.isnan(lc).any()
-                or torch.isnan(rs).any()
-                or torch.isnan(rc).any()
-                or torch.isinf(ls).any()
-                or torch.isinf(lc).any()
-                or torch.isinf(rs).any()
-                or torch.isinf(rc).any()
+                    torch.isnan(ls).any()
+                    or torch.isnan(lc).any()
+                    or torch.isnan(rs).any()
+                    or torch.isnan(rc).any()
+                    or torch.isinf(ls).any()
+                    or torch.isinf(lc).any()
+                    or torch.isinf(rs).any()
+                    or torch.isinf(rc).any()
             ):
                 print("警告: 评估时输入数据包含NaN或Inf，跳过该批次")
                 continue
@@ -397,7 +428,7 @@ def evaluate(model, data_loader, criterion):
 
             try:
                 with torch.amp.autocast_mode.autocast(
-                    device_type=device.type, enabled=(device.type == "cuda")
+                        device_type=device.type, enabled=(device.type == "cuda")
                 ):
                     outputs = model(ls, lc, rs, rc).squeeze()
                     # 确保输出在合理范围内
@@ -447,13 +478,13 @@ def main():
     # 配置参数
     config = {
         "data_file": "arknights.csv",
-        "batch_size": 2048,  # 512
+        "batch_size": 1024,  # 512
         "test_size": 0.1,
-        "embed_dim": 256,  # 512
-        "n_layers": 4,  # 3也可以
-        "num_heads": 8,
-        "lr": 5e-4,  # 3e-4
-        "epochs": 100,  # 推荐500+
+        "embed_dim": 128,  # 512
+        "n_layers": 3,  # 3也可以
+        "num_heads": 16,
+        "lr": 3e-4,  # 3e-4
+        "epochs": 200,  # 推荐500+
         "seed": 42,  # 随机数种子
         "save_dir": "models",  # 存到哪里
         "max_feature_value": 100,  # 限制特征最大值，防止极端值造成不稳定
@@ -528,12 +559,16 @@ def main():
     )
 
     # 初始化模型
+    # num_units 现在包括怪物数量和场地特征数量
+    total_units = MONSTER_COUNT + FIELD_FEATURE_COUNT
     model = UnitAwareTransformer(
-        num_units=(num_data - 1) // 2,
+        num_units=total_units,
         embed_dim=config["embed_dim"],
         num_heads=config["num_heads"],
         num_layers=config["n_layers"],
     ).to(device)
+
+    print(f"模型使用特征数: 怪物({MONSTER_COUNT}) + 场地({FIELD_FEATURE_COUNT}) = {total_units}")
 
     print(
         f"模型参数数量: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
@@ -541,7 +576,7 @@ def main():
 
     # 损失函数和优化器
     criterion = nn.MSELoss()
-    optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=1e-4)
+    optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=1e-1)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs"])
 
     # 训练历史记录

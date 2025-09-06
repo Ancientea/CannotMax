@@ -261,9 +261,9 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
 
 if __name__ == "__main__":
     # 路径配置与原脚本保持一致
-    input_file = r"D:\chrome_download\CannotMax-bg-reco\recognition_0905\2025_09_05__00_20_15\arknights.csv"
-    output_file = r"D:\chrome_download\CannotMax-bg-reco\recognition_0905\2025_09_05__00_20_15\arknights_with_field_recognize_v2.csv"
-    screenshots_base_path = r"D:\chrome_download\CannotMax-bg-reco\recognition_0905\2025_09_05__00_20_15\images"
+    input_file = r"arknights.csv"
+    output_file = r"arknights_with_field_recognize_v2.csv"
+    screenshots_base_path = r"images"
 
     model_dir = r"battlefield_recognize"
     # 注意：这里仍然传入 .onnx 文件的路径，脚本内部会自动将其转换为 .pth 路径
