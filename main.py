@@ -135,6 +135,8 @@ class ArknightsApp(QMainWindow):
         self.setWindowTitle(f"铁鲨鱼_Arknights Neural Network - v{version} - model: {model_name}")
         self.setWindowIcon(QIcon("ico/icon.ico"))
         self.setGeometry(100, 100, 500, 580)
+        self.setMinimumWidth(580)
+        self.setMaximumWidth(580)
         self.background = QPixmap("ico/background.png")
 
         # 初始化动画对象
@@ -149,7 +151,7 @@ class ArknightsApp(QMainWindow):
 
         # 左侧面板
         self.input_panel = InputPanelUI()
-        self.input_panel.setMinimumWidth(280)
+        self.input_panel.setFixedWidth(528)
         self.input_panel.predict_requested.connect(self.predict)
         self.input_panel.reset_requested.connect(self.reset_entries)
         self.input_panel.input_changed.connect(self.update_input_display)
@@ -441,14 +443,15 @@ class ArknightsApp(QMainWindow):
 
     def toggle_input_panel(self):
         """切换输入面板的显示"""
+        target_width = self.width()
         is_visible = self.input_panel.isVisible()
         self.input_panel.setVisible(not is_visible)
         if not is_visible:
             self.toggle_input_button.setText("隐藏输入面板")
-            target_width = self.width() + self.input_panel.width()
+            target_width += self.input_panel.width()
         else:
             self.toggle_input_button.setText("显示输入面板")
-            target_width = self.width() - self.input_panel.width()
+            target_width -= self.input_panel.width()
         self.animate_size_change(target_width)
 
     def animate_size_change(self, target_width, target_height=None):
@@ -458,9 +461,18 @@ class ArknightsApp(QMainWindow):
         if self.size_animation.state() == QPropertyAnimation.State.Running:
             self.size_animation.stop()
 
+        self.setMinimumWidth(0)
+        self.setMaximumWidth(16777215)
+
         self.size_animation.setStartValue(self.size())
         self.size_animation.setEndValue(QtCore.QSize(target_width, target_height))
         self.size_animation.start()
+
+        def set_fixed_after_animation():
+            self.setMinimumWidth(target_width)
+            self.setMaximumWidth(target_width)
+
+        self.size_animation.finished.connect(set_fixed_after_animation)
 
     def on_adb_connected(self):
         logger.info("模拟器初始化完成")
@@ -753,10 +765,10 @@ class ArknightsApp(QMainWindow):
             self.history_button.setText("隐藏历史对局")
             left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
             self.history_match_ui.render_similar_matches(left_monsters_dict, right_monsters_dict)
-            self.target_width = target_width
+            target_width += 540
         else:
             self.history_button.setText("显示历史对局")
-            target_width = self.target_width
+            target_width -= 540
         self.animate_size_change(target_width)
 
     def reselect_roi(self):
