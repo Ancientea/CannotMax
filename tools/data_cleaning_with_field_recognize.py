@@ -12,15 +12,49 @@ import onnxruntime as ort
 # ==============================================================================
 
 ROI_COORDINATES = {
-    "middle_row_blocks": [{"x": 674, "y": 411, "width": 574, "height": 135}],
-    "side_fire_cannon": [{"x": 139, "y": 343, "width": 138, "height": 97},
-                         {"x": 1691, "y": 530, "width": 156, "height": 103}],
-    "top_crossbow": [{"x": 718, "y": 18, "width": 109, "height": 93}, {"x": 913, "y": 27, "width": 109, "height": 92},
-                     {"x": 1096, "y": 19, "width": 113, "height": 99}],
-    "top_fire_cannon": [{"x": 533, "y": 25, "width": 95, "height": 97},
-                        {"x": 1317, "y": 23, "width": 71, "height": 102}],
-    "two_row_blocks": [{"x": 696, "y": 239, "width": 528, "height": 125},
-                       {"x": 652, "y": 611, "width": 619, "height": 144}]
+    "altar_vertical": [
+        {"x": 910, "y": 174, "width": 95, "height": 104},
+        {"x": 910, "y": 429, "width": 102, "height": 108},
+        {"x": 900, "y": 755, "width": 120, "height": 108}
+    ],
+    "block_parallel": [
+        {"x": 694, "y": 240, "width": 530, "height": 122},
+        {"x": 651, "y": 614, "width": 620, "height": 143}
+    ],
+    "block_vertical": [
+        {"x": 647, "y": 233, "width": 153, "height": 523},
+        {"x": 1112, "y": 239, "width": 159, "height": 514}
+    ],
+    "coil_narrow": [
+        {"x": 915, "y": 110, "width": 85, "height": 89},
+        {"x": 815, "y": 257, "width": 86, "height": 98},
+        {"x": 1024, "y": 258, "width": 79, "height": 98},
+        {"x": 790, "y": 643, "width": 97, "height": 102},
+        {"x": 1031, "y": 639, "width": 102, "height": 108}
+    ],
+    "coil_wide": [
+        {"x": 719, "y": 181, "width": 81, "height": 89},
+        {"x": 602, "y": 346, "width": 81, "height": 94},
+        {"x": 578, "y": 535, "width": 81, "height": 95},
+        {"x": 669, "y": 759, "width": 91, "height": 95},
+        {"x": 1159, "y": 757, "width": 93, "height": 92},
+        {"x": 1257, "y": 533, "width": 94, "height": 102},
+        {"x": 1236, "y": 344, "width": 85, "height": 97},
+        {"x": 1120, "y": 180, "width": 75, "height": 91}
+    ],
+    "crossbow_top": [
+        {"x": 718, "y": 13, "width": 484, "height": 106}
+    ],
+    "fire_side_left": [
+        {"x": 98, "y": 246, "width": 184, "height": 281}
+    ],
+    "fire_side_right": [
+        {"x": 1656, "y": 430, "width": 235, "height": 315}
+    ],
+    "fire_top": [
+        {"x": 532, "y": 17, "width": 188, "height": 97},
+        {"x": 1325, "y": 14, "width": 60, "height": 100}
+    ]
 }
 
 
@@ -113,7 +147,8 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
     for class_name in class_to_idx.keys():
         if class_name.endswith('_none'):
             continue
-        condensed_name = re.sub(r'_position_\d+', '', class_name)
+        condensed_name = re.sub(r'_left_', '_', class_name)
+        condensed_name = re.sub(r'_right_', '_', condensed_name)
         grouped_elements[condensed_name].append(class_name)
     image_feature_columns = sorted(grouped_elements.keys())
     print(f"将聚合生成 {len(image_feature_columns)} 个新特征列。")
@@ -156,18 +191,18 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
     pic_names_cleaned.reset_index(drop=True, inplace=True)
 
     # 1. 检查并拆分155个原始特征为L(77)和R(78)两组
-    if features_cleaned.shape[1] != 155:
-        print(f"警告: 期望155个原始特征，但检测到{features_cleaned.shape[1]}个。将按前77列和剩余列进行分割。")
+    if features_cleaned.shape[1] != 122:
+        print(f"警告: 期望122个原始特征，但检测到{features_cleaned.shape[1]}个。将按前61列和剩余列进行分割。")
 
-    features_L = features_cleaned.iloc[:, :77]
-    features_R = features_cleaned.iloc[:, 77:]
+    features_L = features_cleaned.iloc[:, :61]
+    features_R = features_cleaned.iloc[:, 61:]
 
     # 2. 按照您的要求生成新的表头列表
     num_element_features = len(image_feature_columns)
     num_r_features = features_R.shape[1]
 
-    headers_L = [f"{i}L" for i in range(1, 78)]  # 1L to 77L
-    headers_elements_L = [f"{i}L" for i in range(78, 78 + num_element_features)]
+    headers_L = [f"{i}L" for i in range(1, 62)]  # 1L to 77L
+    headers_elements_L = [f"{i}L" for i in range(62, 62 + num_element_features)]
 
     headers_R = [f"{i}R" for i in range(1, num_r_features + 1)]  # 1R to 78R
     headers_elements_R = [f"{i}R" for i in range(num_r_features + 1, num_r_features + 1 + num_element_features)]
@@ -183,10 +218,10 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
 
     # 4. 按照新的顺序拼接所有数据部分
     final_cleaned_data = pd.concat([
-        features_L,  # 1L-77L
-        image_data_df,  # 6个元素特征
-        features_R,  # 1R-78R
-        image_data_df.copy(),  # 6个元素特征 (副本)
+        features_L,  # 1L-61L
+        image_data_df,  # 12个元素特征
+        features_R,  # 1R-61R
+        image_data_df.copy(),  # 12个元素特征 (副本)
         labels_cleaned,  # label
         pic_names_cleaned  # screenshot_filename
     ], axis=1)
