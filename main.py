@@ -77,7 +77,7 @@ class ArknightsApp:
         self.duration_label = tk.Label(self.button_frame, text="当次训练时长(小时):")
         self.duration_label.pack(side=tk.LEFT, padx=5)
         self.duration_entry = tk.Entry(self.button_frame, width=4)
-        self.duration_entry.insert(0, "-1")  # 默认值为-1表示无限训练时间
+        self.duration_entry.insert(0, "799325")  # 默认值为799325表示无限训练时间
         self.duration_entry.pack(side=tk.LEFT, padx=5)
 
         # self.train_button = tk.Button(self.button_frame, text="训练", command=self.train_model)
