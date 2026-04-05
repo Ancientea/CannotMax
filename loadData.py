@@ -33,27 +33,55 @@ def connect_to_emulator():
 
 connect_to_emulator()
 
+def decode_raw_data(data: bytes):
+    """
+    解析 ADB screencap 的 RAW 二进制流
+    """
+    if len(data) < 8:
+        return None
+    # 前8个字节分别是 width (4字节) 和 height (4字节)
+    w = data[0] << 0 | data[1] << 8 | data[2] << 16 | data[3] << 24
+    h = data[4] << 0 | data[5] << 8 | data[6] << 16 | data[7] << 24
+    # 计算 Raw 数据大小，跳过 Header
+    std_size = 4 * w * h
+    header_size = len(data) - std_size
+    # 转换为 numpy 数组并重塑形状 (RGBA 格式)
+    try:
+        img_array = np.frombuffer(data, dtype=np.uint8)[header_size:]
+        img_array = img_array.reshape((h, w, 4))
+        # 转换为 OpenCV 的 BGR 格式
+        return cv2.cvtColor(img_array, cv2.COLOR_RGBA2BGR)
+    except Exception as e:
+        print(f"图像重塑失败: {e}")
+        return None
+
+
 def capture_screenshot():
     """
-    参考新分支
+    采用新分支的 RAW + GZIP 方案
     """
     try:
-        get_png_cmd = f'{adb_path} -s {device_serial} exec-out "screencap -p | gzip -1"'
-        compressed_data = subprocess.check_output(get_png_cmd, shell=True)
+        get_raw_cmd = f'{adb_path} -s {device_serial} exec-out "screencap | gzip -1"'
+
+        compressed_data = subprocess.check_output(get_raw_cmd, shell=True)
+        if not compressed_data:
+            return None
         screenshot_data = gzip.decompress(compressed_data)
-        img_array = np.frombuffer(screenshot_data, dtype=np.uint8)
-        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        img = decode_raw_data(screenshot_data)
 
         if img is None:
             print("警告: 无法解码图像数据")
             return None
+
+        if img.shape[1] != screen_width or img.shape[0] != screen_height:
+            img = cv2.resize(img, (screen_width, screen_height))
 
         return img
     except subprocess.CalledProcessError as e:
         print(f"Screenshot capture failed (ADB 错误): {e}")
         return None
     except Exception as e:
-        print(f"Image processing error (解码错误): {e}")
+        print(f"Image processing error (处理错误): {e}")
         return None
 
 def match_images(screenshot, templates):
