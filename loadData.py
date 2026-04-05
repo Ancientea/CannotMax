@@ -1,14 +1,8 @@
-import tkinter as tk
-import time
 import cv2
-from PIL import Image
 import subprocess
-import threading
-import keyboard
 import time
-import re
-import io
-
+import gzip
+import numpy as np
 
 
 # 全局变量
@@ -40,12 +34,26 @@ def connect_to_emulator():
 connect_to_emulator()
 
 def capture_screenshot():
+    """
+    参考新分支
+    """
     try:
-        subprocess.run(f'{adb_path} -s {device_serial} shell screencap -p /sdcard/screenshot.png', shell=True, check=True)
-        subprocess.run(f'{adb_path} -s {device_serial} pull /sdcard/screenshot.png screenshot.png', shell=True, check=True)
-        return cv2.imread('screenshot.png')
+        get_png_cmd = f'{adb_path} -s {device_serial} exec-out "screencap -p | gzip -1"'
+        compressed_data = subprocess.check_output(get_png_cmd, shell=True)
+        screenshot_data = gzip.decompress(compressed_data)
+        img_array = np.frombuffer(screenshot_data, dtype=np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+        if img is None:
+            print("警告: 无法解码图像数据")
+            return None
+
+        return img
     except subprocess.CalledProcessError as e:
-        print(f"Screenshot capture failed: {e}")
+        print(f"Screenshot capture failed (ADB 错误): {e}")
+        return None
+    except Exception as e:
+        print(f"Image processing error (解码错误): {e}")
         return None
 
 def match_images(screenshot, templates):
