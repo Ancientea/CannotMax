@@ -1,884 +1,422 @@
-import json
-import logging
-
-import subprocess
-import sys
+import csv
+import os
+import tkinter as tk
+from tkinter import messagebox
 import time
-import toml
+
+import cv2
+import keyboard
 import numpy as np
-from pathlib import Path
-import onnxruntime  # workaround: Pre-import to avoid ImportError: DLL load failed while importing onnxruntime_pybind11_state: 动态链接库(DLL)初始化例程失败。
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout
-from PyQt6.QtWidgets import QLabel, QPushButton, QLineEdit, QCheckBox, QComboBox
-from PyQt6.QtWidgets import QGroupBox, QMessageBox, QGraphicsDropShadowEffect, QFrame
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
-import PyQt6.QtCore as QtCore
-
+import subprocess
 import loadData
-import auto_fetch
-import similar_history_match
+import threading
+import torch
+from train import UnitAwareTransformer
 import recognize
-from recognize import MONSTER_COUNT
-from specialmonster import SpecialMonsterHandler
-import data_package
-import winrt_capture
-from config import FIELD_FEATURE_COUNT, MONSTER_DATA
-from simular_history_match_ui import HistoryMatchUI
-from input_panel_ui import InputPanelUI
 
-logging.getLogger().setLevel(logging.DEBUG)
-logging.getLogger("PIL").setLevel(logging.INFO)
-stream_handler = logging.StreamHandler()
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-stream_handler.setFormatter(formatter)
-logging.getLogger().addHandler(stream_handler)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-
-try:
-    from predict import CannotModel
-    from train import UnitAwareTransformer
-
-    logger.info("Using PyTorch model for predictions.")
-except:
-    from predict_onnx import CannotModel
-
-    logger.info("Using ONNX model for predictions.")
-
-
-class ADBConnectorThread(QThread):
-    """
-    Worker thread to run loadData.AdbConnector.connect() without blocking the UI.
-    """
-
-    connect_finished = pyqtSignal()
-
-    def __init__(self, app: "ArknightsApp"):
-        super().__init__()
-        self.app = app
-
-    def run(self):
-        self.app.adb_connector.connect()
-        self.connect_finished.emit()
-
-class ArknightsApp(QMainWindow):
-    # 添加自定义信号
-    update_button_signal = pyqtSignal(str)  # 用于更新按钮文本
-    update_monster_signal = pyqtSignal(list)
-    update_prediction_signal = pyqtSignal(float)
-    update_statistics_signal = pyqtSignal()  # 用于更新统计信息
-    qt_button_style = """
-        QPushButton {
-            background-color: #313131;
-            color: #F3F31F;
-            border-radius: 16px;
-            padding: 8px;
-            font-weight: bold;
-            min-height: 30px;
-        }
-        QPushButton:hover {
-            background-color: #414141;
-        }
-        QPushButton:pressed {
-            background-color: #212121;
-        }
-    """
-
-    def __init__(self):
-        super().__init__()
-        # 尝试连接模拟器
-        self.adb_connector = loadData.AdbConnector()
-        self.adb_connector_thread = ADBConnectorThread(self)
-        self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
-        self.adb_connector_thread.start()
-
+class ArknightsApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Arknights Neural Network")
         self.auto_fetch_running = False
-        self.no_region = True
-        self.first_recognize = True
-        self.is_invest = False
-        self.game_mode = "单人"
-
-        # 模型
-        self.cannot_model = CannotModel()
-
-        # 怪物识别模块
-        self.recognizer = recognize.RecognizeMonster()
-
-        # 初始化UI后加载历史数据
-        logger.info("尝试获取错题本")
-        self.history_match = None
-        self.history_match = similar_history_match.HistoryMatch()
-        # Ensure feat_past and N_history are initialized
-        try:
-            self.history_match.feat_past = np.hstack([self.history_match.past_left, self.history_match.past_right])
-        except Exception:
-            self.history_match.feat_past = None
-        self.history_match.N_history = 0 if self.history_match.labels is None else len(self.history_match.labels)
-        logger.info("错题本加载成功")
-
-        # 初始化特殊怪物语言触发处理程序
-        self.special_monster_handler = SpecialMonsterHandler()
-
-        self.init_ui()
-
-    def init_ui(self):
-        try:
-            with open("pyproject.toml", "r", encoding="utf-8") as f:
-                pyproject_data = toml.load(f)
-                version = pyproject_data["project"]["version"]
-        except (FileNotFoundError, KeyError):
-            version = "unknown"
-        model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
-        self.setWindowTitle(f"铁鲨鱼_Arknights Neural Network - v{version} - model: {model_name}")
-        self.setWindowIcon(QIcon("ico/icon.ico"))
-        self.setGeometry(100, 100, 500, 580)
-        self.setMinimumWidth(580)
-        self.setMaximumWidth(580)
-        self.background = QPixmap("ico/background.png")
-
-        # 初始化动画对象
-        self.size_animation = QPropertyAnimation(self, b"size")
-        self.size_animation.setDuration(300)
-        self.size_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-        # 主布局
-        main_widget = QWidget()
-        main_layout = QHBoxLayout(main_widget)
-        main_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        # 左侧面板
-        self.input_panel = InputPanelUI()
-        self.input_panel.setFixedWidth(528)
-        self.input_panel.predict_requested.connect(self.predict)
-        self.input_panel.reset_requested.connect(self.reset_entries)
-        self.input_panel.input_changed.connect(self.update_input_display)
-        self.input_panel.terrain_changed.connect(self.predict)
-
-        # 中央面板 - 结果和控制区
-        center_panel = QWidget()
-        center_panel.setFixedWidth(550)  # 固定右侧面板宽度
-        center_layout = QVBoxLayout(center_panel)
-
-        # 顶部区域 - 输入显示
-        input_display = QGroupBox()
-        input_display.setStyleSheet(
-            """
-                QGroupBox {
-                    background-color: rgba(0, 0, 0, 120);
-                    border-radius: 15px;
-                    border: 5px solid #F5EA2D;
-                    margin-top: 10px;
-                    padding: 10px 0;
-                }
-                QGroupBox::title {
-                    color: white;
-                    subcontrol-origin: margin;
-                    left: 15px;
-                    padding: 0 5px;
-                }
-            """
-        )
-        input_layout = QHBoxLayout(input_display)
-
-        # 左侧人物显示
-        left_input_group = QWidget()
-        left_input_layout = QHBoxLayout(left_input_group)
-        self.left_input_content = QWidget()
-        self.left_input_layout = QHBoxLayout(self.left_input_content)
-        self.left_input_layout.setSpacing(5)
-        left_input_layout.addWidget(self.left_input_content)
-
-        # 右侧人物显示
-        right_input_group = QWidget()
-        right_input_layout = QHBoxLayout(right_input_group)
-        self.right_input_content = QWidget()
-        self.right_input_layout = QHBoxLayout(self.right_input_content)
-        self.right_input_layout.setSpacing(5)
-        right_input_layout.addWidget(self.right_input_content)
-
-        # 将左右两部分添加到主输入布局
-        input_layout.addWidget(left_input_group)
-        input_layout.addWidget(right_input_group)
-
-        center_layout.addWidget(input_display)
-
-        # 中部区域 - 预测结果
-        result_group = QGroupBox()
-        result_group.setStyleSheet(
-            """
-            QGroupBox {
-                background-color: rgba(120, 120, 120, 10);
-                border-radius: 15px;
-                border: 1px solid #747474;
-            }
-            """
-        )
-        result_layout = QVBoxLayout(result_group)
-        result_layout.setSpacing(10)
-        result_layout.setContentsMargins(10, 10, 10, 10)
-
-        self.result_label = QLabel("预测结果将显示在这里")
-        self.result_label.setFont(QFont("Microsoft YaHei", 12))
-        self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        result_layout.addWidget(self.result_label)
-
-        # 添加模型名称显示
-        model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
-        self.model_name_label = QLabel(f"model: {model_name}")
-        self.model_name_label.setFont(QFont("Microsoft YaHei", 8))
-        self.model_name_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-        self.model_name_label.setStyleSheet("color: #888888;")  # 小字灰色
-        result_layout.addWidget(self.model_name_label)
-
-        # 第二行按钮result_identify_group
-        result_identify_group = QWidget()
-        result_identify_layout = QHBoxLayout(result_identify_group)
-
-        self.recognize_button = QPushButton("识别并预测")
-        self.recognize_button.clicked.connect(self.recognize_and_predict)
-        self.recognize_button.setStyleSheet(self.qt_button_style)
-        result_identify_layout.addWidget(self.recognize_button)
-        result_layout.addWidget(result_identify_group)
-
-        center_layout.addWidget(result_group)
-
-        # 底部区域 - 控制面板
-        self.bottom_group = QWidget()
-        self.bottom_layout = QHBoxLayout(self.bottom_group)
-
-        control_group = QGroupBox("控制面板")
-        control_layout = QVBoxLayout(control_group)
-
-        # 第一行按钮
-        row1 = QWidget()
-        row1_layout = QHBoxLayout(row1)
-        row1_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.duration_label = QLabel("训练时长(小时):")
-        self.duration_entry = QLineEdit("-1")
-        self.duration_entry.setFixedWidth(50)
-
-        self.auto_fetch_button = QPushButton("自动获取数据")
-        self.auto_fetch_button.clicked.connect(self.toggle_auto_fetch)
-
-        self.mode_menu = QComboBox()
-        self.mode_menu.addItems(["单人", "30人"])
-        self.mode_menu.currentTextChanged.connect(self.update_game_mode)
-
-        self.invest_checkbox = QCheckBox("投资")
-        self.invest_checkbox.stateChanged.connect(self.update_invest_status)
-
-        row1_layout.addWidget(self.duration_label)
-        row1_layout.addWidget(self.duration_entry)
-        row1_layout.addWidget(self.auto_fetch_button)
-        row1_layout.addWidget(self.mode_menu)
-        row1_layout.addWidget(self.invest_checkbox)
-
-        # 第三行按钮
-        row2 = QWidget()
-        row2_layout = QHBoxLayout(row2)
-        row2_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.serial_label = QLabel("模拟器序列号:")
-        self.serial_entry = QLineEdit()
-        self.serial_entry.setFixedWidth(100)
-        self.serial_entry.setPlaceholderText("127.0.0.1:5555")  # 设置默认灰色文本
-
-        self.serial_button = QPushButton("更新")
-        self.serial_button.clicked.connect(self.update_device_serial)
-
-        self.package_data_button = QPushButton("数据打包")
-        self.package_data_button.clicked.connect(self.package_data_and_show)
-        row2_layout.addWidget(self.package_data_button)
-        row2_layout.addWidget(self.serial_label)
-        row2_layout.addWidget(self.serial_entry)
-        row2_layout.addWidget(self.serial_button)
-
-        # 第三行按钮
-        row3 = QWidget()
-        row3_layout = QHBoxLayout(row3)
-        row3_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.reselect_button = QPushButton("选择范围")
-        self.reselect_button.clicked.connect(self.reselect_roi)
-        self.choose_window_button = QPushButton("选择截屏窗口")
-        self.choose_window_button.clicked.connect(self.choose_capture_window)
-
-        row3_layout.addWidget(self.choose_window_button)
-        row3_layout.addWidget(self.reselect_button)
-
-        # 统计信息显示
-        self.stats_label = QLabel()
-        self.stats_label.setFont(QFont("Microsoft YaHei", 10))
-
-        # 添加所有行到控制布局
-        control_layout.addWidget(row1)
-        control_layout.addWidget(row2)
-        control_layout.addWidget(row3)
-
-        # GitHub链接
-        github_label = QLabel(
-            '<a href="https://github.com/Ancientea/CannotMax" style="color: #2196F3; text-decoration: none;">https://github.com/Ancientea/CannotMax</a>'
-        )
-        github_label.setMargin(0)
-        github_label.setAlignment(Qt.AlignmentFlag.AlignLeft)  # 改为左对齐
-        github_label.setOpenExternalLinks(True)
-        github_label.setFont(QFont("Microsoft YaHei", 9))
-        github_label.setContentsMargins(0, 0, 0, 0)  # 减少内边距和外边距
-
-        control_layout.addWidget(github_label)
-
-        control_layout.addWidget(self.stats_label)
-
-        # 第五行按钮 (其实是纵向的，懒得改名了)
-        row5 = QWidget()
-        row5_layout = QVBoxLayout(row5)
-
-        self.simulate_button = QPushButton("显示沙盒模拟")
-        self.simulate_button.clicked.connect(self.run_simulation)
-        self.simulate_button.setStyleSheet(self.qt_button_style)
-        row5_layout.addWidget(self.simulate_button)
-
-        # 在右侧面板添加显示输入面板按钮
-        self.toggle_input_button = QPushButton("显示输入面板")
-        self.toggle_input_button.clicked.connect(self.toggle_input_panel)
-        self.toggle_input_button.setStyleSheet(self.qt_button_style)
-        row5_layout.addWidget(self.toggle_input_button)
-
-        # 在右侧面板添加历史对局按钮
-        self.history_button = QPushButton("显示历史对局")
-        self.history_button.clicked.connect(self.toggle_history_panel)
-        self.history_button.setStyleSheet(self.qt_button_style)
-        row5_layout.addWidget(self.history_button)
-
-        # 窗口置顶按钮
-        self.always_on_top_button = QPushButton("窗口置顶")
-        self.always_on_top_button.clicked.connect(self.toggle_always_on_top)
-        self.always_on_top_button.setStyleSheet(self.qt_button_style)
-        row5_layout.addWidget(self.always_on_top_button)
-
-        # 排布按钮
-        self.bottom_layout.addWidget(control_group)
-        self.bottom_layout.addWidget(row5)
-
-        center_layout.addWidget(self.bottom_group)
-
-        # 创建并添加HistoryMatchUI实例
-        self.history_match_ui = HistoryMatchUI(self.history_match)
-        self.history_match_ui.setVisible(False)  # 初始隐藏
-
-        main_layout.addWidget(center_panel, 1)
-        main_layout.addWidget(self.input_panel)
-        main_layout.addWidget(self.history_match_ui)  # 添加到主布局
-
-        self.setCentralWidget(main_widget)
-        # 初始化输入面板状态
-        self.input_panel_visible = False
-        self.input_panel.setVisible(False)  # 默认折叠左侧输入面板
-
-        # 连接AutoFetch信号到槽
-        self.update_button_signal.connect(self.auto_fetch_button.setText)
-        self.update_monster_signal.connect(self.update_monster)
-        self.update_prediction_signal.connect(self.update_prediction)
-        self.update_statistics_signal.connect(self.update_statistics)
-
-    def toggle_input_panel(self):
-        """切换输入面板的显示"""
-        target_width = self.width()
-        is_visible = self.input_panel.isVisible()
-        self.input_panel.setVisible(not is_visible)
-        if not is_visible:
-            self.toggle_input_button.setText("隐藏输入面板")
-            target_width += self.input_panel.width()
-        else:
-            self.toggle_input_button.setText("显示输入面板")
-            target_width -= self.input_panel.width()
-        self.animate_size_change(target_width)
-
-    def animate_size_change(self, target_width, target_height=None):
-        """通用的尺寸动画方法"""
-        if target_height is None:
-            target_height = self.height()
-        if self.size_animation.state() == QPropertyAnimation.State.Running:
-            self.size_animation.stop()
-
-        self.setMinimumWidth(min(self.width(), target_width))
-        self.setMaximumWidth(max(self.width(), target_width))
-
-        self.size_animation.setStartValue(self.size())
-        self.size_animation.setEndValue(QtCore.QSize(target_width, target_height))
-        self.size_animation.start()
-
-        def set_fixed_after_animation():
-            self.setFixedWidth(self.width())
-
-        self.size_animation.finished.connect(set_fixed_after_animation)
-
-    def on_adb_connected(self):
-        logger.info("模拟器初始化完成")
-
-    def choose_capture_window(self):
-        """弹出窗口选择器，切换 WinRT 截屏源（窗口标题或整屏）。"""
-        import traceback, cv2
-
-        if getattr(self, "_switching_source", False):
-            return
-        self._switching_source = True
-        self.choose_window_button.setEnabled(False)
-        try:
-            try:
-                cv2.destroyAllWindows()
-            except Exception:
-                pass
-            dlg = winrt_capture.WindowPickerDialog(self)
-            if dlg.exec():
-                sel = dlg.get_selection()
-                logger.info(f"选择了截屏源: {sel}")
-                if not sel:
-                    QMessageBox.information(self, "提示", "未选择任何项")
-                    return
-                hint = ""
-                if "window_name" in sel:
-                    self.recognizer = recognize.RecognizeMonster(window_name=sel["window_name"], monitor_index=None)
-                    hint = f"已切换至窗口：{sel['window_name']}"
-                else:
-                    idx = max(1, sel["monitor_index"])
-                    self.recognizer = recognize.RecognizeMonster(window_name=None, monitor_index=idx)
-                    hint = f"已切换至整屏：显示器 {sel['monitor_index']}"
-
-                self.no_region = True
-                QMessageBox.information(self, "成功", hint + "\n建议重新选择范围。")
-        except Exception as e:
-            QMessageBox.critical(self, "异常", f"{e}\n\n{traceback.format_exc()}")
-        finally:
-            self._switching_source = False
-            self.choose_window_button.setEnabled(True)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        # 缩放图片以适应窗口（保持宽高比）
-        scaled_pixmap = self.background.scaled(
-            self.size(),
-            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        # 居中绘制
-        painter.drawPixmap(
-            (self.width() - scaled_pixmap.width()) // 2,
-            (self.height() - scaled_pixmap.height()) // 2,
-            scaled_pixmap,
-        )
-
-    def update_input_display(self):
-        left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-
-        def update_input_display_half(input_layout, monsters_dict):
-            # 清除现有显示
-            for i in reversed(range(input_layout.count())):
-                widget = input_layout.itemAt(i).widget()
-                if widget:
-                    widget.setParent(None)
-            has_input = False
-            for i in range(1, MONSTER_COUNT + 1):
-                value = monsters_dict[str(i)].text()
-                if value.isdigit() and int(value) > 0:
-                    has_input = True
-                    monster_widget = self.create_monster_display_widget(i, value)
-                    input_layout.addWidget(monster_widget)
-            # 如果没有输入，显示提示
-            if not has_input:
-                input_layout.addWidget(QLabel("无"))
-
-        update_input_display_half(self.left_input_layout, left_monsters_dict)
-        update_input_display_half(self.right_input_layout, right_monsters_dict)
-
-    def create_monster_display_widget(self, monster_id, count):
-        """创建人物显示组件"""
-        widget = QWidget()
-        widget.setFixedWidth(67)
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(0)  # 模糊半径（控制发光范围）
-        shadow.setColor(QColor("#313131"))  # 发光颜色
-        shadow.setOffset(2)  # 偏移量（0表示均匀四周发光）
-        widget.setGraphicsEffect(shadow)
-
-        widget.setStyleSheet(
-            """
-                QWidget {
-                    border-radius: 0px;
-                }
-            """
-        )
-
-        layout = QVBoxLayout(widget)
-        layout.setSpacing(2)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # 人物图片
-        img_label = QLabel()
-        img_label.setFixedSize(70, 70)
-        img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        try:
-            pixmap = QPixmap(f"images/{MONSTER_DATA['原始名称'][monster_id]}.png")
-            if not pixmap.isNull():
-                pixmap = pixmap.scaled(
-                    70, 70, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
-                )
-                img_label.setPixmap(pixmap)
-        except Exception as e:
-            logger.error(f"加载人物{monster_id}图片错误: {str(e)}")
-            pass
-
-        # 添加鼠标悬浮提示
-        if monster_id in MONSTER_DATA.index:
-            data = MONSTER_DATA.loc[monster_id].to_dict()
-            tooltip_text = ""
-            for key, value in data.items():
-                tooltip_text += f"{key}: {value}\n"
-            img_label.setToolTip(tooltip_text.strip())
-
-        # 数量标签
-        count_label = QLabel(count)
-        count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        count_label.setStyleSheet(
-            """
-            color: #EDEDED;
-            font: bold 20px SimHei;
-            border-radius: 5px;
-            padding: 2px 5px;
-            min-width: 20px;
-        """
-        )
-
-        layout.addWidget(img_label)
-        layout.addWidget(count_label)
-
-        return widget
+
+        self.left_monsters = {}
+        self.right_monsters = {}
+        self.images = {}
+        self.progress_var = tk.StringVar()
+        self.main_roi = None
+
+        # 添加统计信息的变量
+        self.total_fill_count = 0
+        self.incorrect_fill_count = 0
+        self.start_time = None
+
+        self.load_images()
+        self.create_widgets()
+
+    def load_images(self):
+        for i in range(1, 27):
+            original_image = tk.PhotoImage(file=f"images/{i}.png")
+            self.images[str(i)] = original_image.subsample(1, 1)  # Reduce size by 50%
+
+    def create_widgets(self):
+        # Create frames
+        self.top_frame = tk.Frame(self.root)
+        self.bottom_frame = tk.Frame(self.root)
+        self.button_frame = tk.Frame(self.root)
+        self.result_frame = tk.Frame(self.root)
+
+        self.top_frame.pack(side=tk.TOP, padx=10, pady=10)
+        self.bottom_frame.pack(side=tk.TOP, padx=10, pady=10)
+        self.button_frame.pack(side=tk.BOTTOM, padx=10, pady=10)
+        self.result_frame.pack(side=tk.BOTTOM, padx=10, pady=10)
+
+        # Create labels and entries for top and bottom monsters
+        for i in range(1, 14):
+            tk.Label(self.top_frame, image=self.images[str(i)]).grid(row=0, column=i-1)
+            self.left_monsters[str(i)] = tk.Entry(self.top_frame, width=10)
+            self.left_monsters[str(i)].grid(row=1, column=i-1)
+
+        for i in range(14, 27):
+            tk.Label(self.top_frame, image=self.images[str(i)]).grid(row=2, column=i-14)
+            self.left_monsters[str(i)] = tk.Entry(self.top_frame, width=10)
+            self.left_monsters[str(i)].grid(row=3, column=i-14)
+
+        for i in range(1, 14):
+            tk.Label(self.bottom_frame, image=self.images[str(i)]).grid(row=0, column=i-1)
+            self.right_monsters[str(i)] = tk.Entry(self.bottom_frame, width=10)
+            self.right_monsters[str(i)].grid(row=1, column=i-1)
+
+        for i in range(14, 27):
+            tk.Label(self.bottom_frame, image=self.images[str(i)]).grid(row=2, column=i-14)
+            self.right_monsters[str(i)] = tk.Entry(self.bottom_frame, width=10)
+            self.right_monsters[str(i)].grid(row=3, column=i-14)
+
+        # Create buttons
+        # 添加当次训练时长输入框
+        self.duration_label = tk.Label(self.button_frame, text="当次训练时长(小时):")
+        self.duration_label.pack(side=tk.LEFT, padx=5)
+        self.duration_entry = tk.Entry(self.button_frame, width=4)
+        self.duration_entry.insert(0, "999")  # 默认值为999表示无限训练时间
+        self.duration_entry.pack(side=tk.LEFT, padx=5)
+
+        # self.train_button = tk.Button(self.button_frame, text="训练", command=self.train_model)
+        # self.train_button.pack(side=tk.LEFT, padx=5)
+        self.auto_fetch_button = tk.Button(self.button_frame, text="自动获取数据", command=self.toggle_auto_fetch)
+        self.auto_fetch_button.pack(side=tk.LEFT, padx=5)
+
+        self.fill_correct_button = tk.Button(self.button_frame, text="填写√", command=self.fill_data_correct)
+        self.fill_correct_button.pack(side=tk.LEFT, padx=5)
+
+        self.fill_incorrect_button = tk.Button(self.button_frame, text="填写×", command=self.fill_data_incorrect)
+        self.fill_incorrect_button.pack(side=tk.LEFT, padx=5)
+
+        self.reset_button = tk.Button(self.button_frame, text="归零", command=self.reset_entries)
+        self.reset_button.pack(side=tk.LEFT, padx=5)
+
+        self.predict_button = tk.Button(self.button_frame, text="{----预测----}", command=self.predict)
+        self.predict_button.pack(side=tk.LEFT, padx=5)
+
+        self.recognize_button = tk.Button(self.button_frame, text="识别", command=self.recognize)
+        self.recognize_button.pack(side=tk.LEFT, padx=5)
+
+        self.reselect_button = tk.Button(self.button_frame, text="重选范围", command=self.reselect_roi)
+        self.reselect_button.pack(side=tk.LEFT, padx=5)
+
+        # Create result label
+        self.result_label = tk.Label(self.result_frame, text="Prediction: ", font=("Helvetica", 16))
+        self.result_label.pack()
+
+        # Create statistics label
+        self.stats_label = tk.Label(self.result_frame, text="", font=("Helvetica", 12))
+        self.stats_label.pack()
 
     def reset_entries(self):
-        self.result_label.setText("预测结果将显示在这里")
-        self.result_label.setStyleSheet("color: black;")
-        self.update_input_display()
+        for entry in self.left_monsters.values():
+            entry.delete(0, tk.END)
+            entry.config(bg="white")  # Reset color
+        for entry in self.right_monsters.values():
+            entry.delete(0, tk.END)
+            entry.config(bg="white")  # Reset color
+        self.result_label.config(text="Prediction: ")
+
+    def fill_data_correct(self):
+        result = 'R' if self.current_prediction > 0.5 else 'L'
+        self.fill_data(result)
+        self.total_fill_count += 1  # 更新总填写次数
+        self.update_statistics()  # 更新统计信息
+
+    def fill_data_incorrect(self):
+        result = 'L' if self.current_prediction > 0.5 else 'R'
+        self.fill_data(result)
+        self.total_fill_count += 1  # 更新总填写次数
+        self.incorrect_fill_count += 1  # 更新填写×次数
+        self.update_statistics()  # 更新统计信息
+
+    def fill_data(self, result):
+        image_data = np.zeros((1, 52))
+        for name, entry in self.left_monsters.items():
+            value = entry.get()
+            if value.isdigit():
+                image_data[0][int(name) - 1] = int(value)
+        for name, entry in self.right_monsters.items():
+            value = entry.get()
+            if value.isdigit():
+                image_data[0][int(name) + 26 - 1] = int(value)
+        image_data = np.append(image_data, result)
+        with open('arknights.csv', 'a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(image_data)
+        #messagebox.showinfo("Info", "Data filled successfully")
 
     def get_prediction(self):
         try:
-            left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-            left_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
-            right_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
+            # 检查模型文件是否存在
+            if not os.path.exists('best_model.pth'):
+                raise FileNotFoundError("未找到训练好的模型文件 'best_model.pth'，请先训练模型")
 
-            for name, entry in left_monsters_dict.items():
-                value = entry.text()
-                left_counts[int(name) - 1] = int(value) if value.isdigit() else 0
+            # 初始化模型（与train.py中的配置完全一致）
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            model = UnitAwareTransformer(
+                num_units=26,
+                embed_dim=128,
+                num_heads=8,
+                num_layers=4  # 注意：train.py中config['n_layers']=4
+            ).to(device)
 
-            for name, entry in right_monsters_dict.items():
-                value = entry.text()
-                right_counts[int(name) - 1] = int(value) if value.isdigit() else 0
+            # 加载模型权重（使用strict=False以兼容可能的微小差异）
+            model.load_state_dict(torch.load('best_model.pth', map_location=device), strict=False)
+            model.eval()
 
-            # 构建包含地形的完整特征向量
-            full_features = self.input_panel.build_terrain_features(left_counts, right_counts)
+            # 准备输入数据（完全匹配ArknightsDataset的处理方式）
+            left_counts = np.zeros(26, dtype=np.float32)
+            right_counts = np.zeros(26, dtype=np.float32)
 
-            prediction = self.cannot_model.get_prediction_with_terrain(full_features)
-            return prediction
+            # 从界面获取数据（空值处理为0）
+            for name, entry in self.left_monsters.items():
+                value = entry.get()
+                left_counts[int(name) - 1] = float(value) if value.isdigit() else 0.0
+
+            for name, entry in self.right_monsters.items():
+                value = entry.get()
+                right_counts[int(name) - 1] = float(value) if value.isdigit() else 0.0
+
+            # 转换为张量并处理符号和绝对值（关键步骤）
+            left_signs = torch.sign(torch.tensor(left_counts, dtype=torch.float32)).unsqueeze(0).to(device)
+            left_counts = torch.abs(torch.tensor(left_counts, dtype=torch.float32)).unsqueeze(0).to(device)
+            right_signs = torch.sign(torch.tensor(right_counts, dtype=torch.float32)).unsqueeze(0).to(device)
+            right_counts = torch.abs(torch.tensor(right_counts, dtype=torch.float32)).unsqueeze(0).to(device)
+
+            # 预测流程（与evaluate函数一致）
+            with torch.no_grad():
+                # 模型输出已经是sigmoid后的概率值
+                prediction = model(left_signs, left_counts, right_signs, right_counts).item()
         except FileNotFoundError:
-            QMessageBox.critical(self, "错误", "未找到模型文件，请先训练")
+            messagebox.showerror("错误", "未找到模型文件，请先点击「训练」按钮")
         except RuntimeError as e:
             if "size mismatch" in str(e):
-                QMessageBox.critical(self, "错误", "模型结构不匹配！请删除旧模型并重新训练")
+                messagebox.showerror("错误", "模型结构不匹配！请删除旧模型并重新训练")
             else:
-                QMessageBox.critical(self, "错误", f"模型加载失败: {str(e)}")
+                messagebox.showerror("错误", f"模型加载失败: {str(e)}")
         except ValueError:
-            QMessageBox.critical(self, "错误", "请输入有效的数字（0或正整数）")
+            messagebox.showerror("错误", "请输入有效的数字（0或正整数）")
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"预测时发生错误: {str(e)}")
+            messagebox.showerror("错误", f"预测时发生错误: {str(e)}")
+        return prediction
 
-        return 0.5
-
-    def update_prediction(self, prediction):
-        """更新预测结果显示"""
-        # 模型结果处理
-        right_win_prob = prediction
+    def predictText(self, prediction):
+        # 结果解释（注意：prediction直接对应标签'R'的概率）
+        right_win_prob = prediction  # 模型输出的是右方胜率
         left_win_prob = 1 - right_win_prob
 
-        # 判断胜负方向
-        winner = "左方" if left_win_prob > 0.5 else "右方"
-        if 0.6 > left_win_prob > 0.4:
-            winner = "难说"
+        # 格式化输出
+        result_text = (f"预测结果:\n"
+                       f"左方胜率: {left_win_prob:.2%}\n"
+                       f"右方胜率: {right_win_prob:.2%}")
 
-        # 设置结果标签样式
-        if winner == "左方":
-            self.result_label.setStyleSheet("color: #E23F25; font: bold,14px;")
+        # 根据胜率设置颜色（保持与之前一致）
+        self.result_label.config(text=result_text)
+        if left_win_prob > 0.7:
+            self.result_label.config(fg="#E23F25", font=("Helvetica", 12, "bold"))  # red
+        elif left_win_prob > 0.6:
+            self.result_label.config(fg="#E23F25", font=("Helvetica", 12, "bold"))
+        elif right_win_prob > 0.7:
+            self.result_label.config(fg="#25ace2", font=("Helvetica", 12, "bold"))  # blue
+        elif right_win_prob > 0.6:
+            self.result_label.config(fg="#25ace2", font=("Helvetica", 12, "bold"))
         else:
-            self.result_label.setStyleSheet("color: #25ace2; font: bold,14px;")
-
-        left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-        # 生成结果文本
-        if winner != "难说":
-            result_text = f"预测胜方: {winner}\n" f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
-        else:
-            result_text = (
-                f"这一把{winner}\n" f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n" f"难道说？难道说？难道说？\n"
-            )
-            self.result_label.setStyleSheet("color: black; font: bold,24px;")
-
-        # 添加特殊干员提示
-        special_messages = self.special_monster_handler.check_special_monsters(
-            left_monsters_dict, right_monsters_dict, winner
-        )
-        if special_messages:
-            result_text += "\n" + special_messages
-
-        self.result_label.setText(result_text)
+            self.result_label.config(fg="black", font=("Helvetica", 12, "bold"))
 
     def predict(self):
         prediction = self.get_prediction()
-        self.update_prediction(prediction)
-        self.update_input_display()
-
-        if self.history_match_ui.isVisible():
-            left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-            self.history_match_ui.render_similar_matches(left_monsters_dict, right_monsters_dict)
+        self.predictText(prediction)
+        # 保存当前预测结果用于后续数据收集
+        self.current_prediction = prediction
 
     def recognize(self):
+        self.reset_entries()
+        if self.main_roi is None:
+            #如果当前未执行自动获取数据，则提示用户选择区域
+            if not self.auto_fetch_running:
+                self.main_roi = recognize.select_roi()
+            else:
+                self.main_roi = [
+                    (int(0.3339 * loadData.screen_width), int(0.7787 * loadData.screen_height)),
+                    (int(0.8995 * loadData.screen_width), int(0.9111 * loadData.screen_height))
+                ]
+        ref_images = recognize.load_ref_images()
+        # 如果正在进行自动获取数据，从文件加载截图
         if self.auto_fetch_running:
-            screenshot = self.adb_connector.capture_screenshot()
+            screenshot = cv2.imread('screenshot.png')
         else:
             screenshot = None
 
-        if self.no_region:  # TODO: 判断需要移至recognize
-            if self.first_recognize:
-                self.adb_connector.connect()
-                self.first_recognize = False
-            screenshot = self.adb_connector.capture_screenshot()  # TODO: 如果 self.no_region 为 True，则会被调用两次。
-
-        results = self.recognizer.process_regions(screenshot)
-        return results, screenshot
-
-    def update_monster(self, results):
-        """
-        根据识别结果更新怪物面板
-        """
-        left_counts = {}
-        right_counts = {}
+        results = recognize.process_regions(self.main_roi, ref_images, screenshot)
+        # 输出结果
+        for region in self.main_roi:
+            print(f"Region: {region}")
+        # 处理结果
         for res in results:
-            if "error" not in res:
-                region_id = res["region_id"]
-                matched_id = res["matched_id"]
-                number = res["number"]
+            if 'error' not in res:
+                region_id = res['region_id']
+                matched_id = res['matched_id']
+                number = res['number']
                 if matched_id != 0:
                     if region_id < 3:
-                        left_counts[str(matched_id)] = int(number)
+                        entry = self.left_monsters[str(matched_id)]
                     else:
-                        right_counts[str(matched_id)] = int(number)
-        self.input_panel.set_monster_counts(left_counts, right_counts)
-
-    def recognize_and_predict(self):
-        results, screenshot = self.recognize()
-        self.update_monster(results)
-        prediction = self.get_prediction()
-        self.update_prediction(prediction)
-        # 历史对局
-        if self.history_match_ui.isVisible():
-            left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-            self.history_match_ui.render_similar_matches(left_monsters_dict, right_monsters_dict)
-        return prediction, results, screenshot
-
-    def toggle_history_panel(self):
-        """切换历史对局面板的显示"""
-        target_width = self.width()
-        if self.history_match is None:
-            QMessageBox.warning(self, "警告", "历史数据加载失败，无法显示历史对局")
-            return
-
-        is_visible = self.history_match_ui.isVisible()
-        self.history_match_ui.setVisible(not is_visible)
-        if not is_visible:
-            self.history_button.setText("隐藏历史对局")
-            left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-            self.history_match_ui.render_similar_matches(left_monsters_dict, right_monsters_dict)
-            target_width += 540
-        else:
-            self.history_button.setText("显示历史对局")
-            target_width -= 540
-        self.animate_size_change(target_width)
+                        entry = self.right_monsters[str(matched_id)]
+                    entry.delete(0, tk.END)
+                    entry.insert(0, number)
+                    # Highlight the image if the entry already has data
+                    if entry.get():
+                        entry.config(bg="yellow")
 
     def reselect_roi(self):
-        self.recognizer.select_roi()
-        self.no_region = False
+        self.main_roi = recognize.select_roi()
 
-    def toggle_auto_fetch(self):
-        if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
-            self.auto_fetch = auto_fetch.AutoFetch(
-                self.adb_connector,
-                self.game_mode,
-                self.is_invest,
-                update_prediction_callback=self.update_prediction_callback,
-                update_monster_callback=self.update_monster_callback,
-                updater=self.update_statistics_callback,
-                start_callback=self.start_callback,
-                stop_callback=self.stop_callback,
-                training_duration=float(self.duration_entry.text()) * 3600,  # 获取训练时长
-            )
-            self.auto_fetch.start_auto_fetch()
-        else:
-            self.auto_fetch.stop_auto_fetch()
+    def start_training(self):
+        threading.Thread(target=self.train_model).start()
 
-    def update_statistics(self):
-        elapsed_time = time.time() - self.auto_fetch.start_time if self.auto_fetch.start_time else 0
+    def train_model(self):
+        # Update progress
+        self.root.update_idletasks()
+
+        # Simulate training process
+        subprocess.run(["python", "train.py"])
+        self.root.update_idletasks()
+
+        messagebox.showinfo("Info", "Model trained successfully")
+
+    def calculate_average_green(self, image):#计算钱来钱去区域
+        if image is None:
+            print(f"Failed to load image")
+            return None
+        height, width, _ = image.shape
+        x1, y1, x2, y2 = (0.3406, 0.5759, 0.4182, 0.6194)
+        x1, y1, x2, y2 = int(x1 * width), int(y1 * height), int(x2 * width), int(y2 * height)
+
+        region = image[y1:y2, x1:x2]
+        green_channel = region[:, :, 1]
+        average_green = np.mean(green_channel)
+        return average_green
+
+    def save_statistics_to_log(self):
+        elapsed_time = time.time() - self.start_time if self.start_time else 0
         hours, remainder = divmod(elapsed_time, 3600)
         minutes, _ = divmod(remainder, 60)
-        stats_text = (
-            f"总共填写次数: {self.auto_fetch.total_fill_count},    "
-            f"填写×次数: {self.auto_fetch.incorrect_fill_count},    "
-            f"当次运行时长: {int(hours)}小时{int(minutes)}分钟"
-        )
-        self.stats_label.setText(stats_text)
+        stats_text = (f"总共填写次数: {self.total_fill_count}\n"
+                      f"填写×次数: {self.incorrect_fill_count}\n"
+                      f"当次运行时长: {int(hours)}小时{int(minutes)}分钟\n")
+        with open("log.txt", "a") as log_file:
+            log_file.write(stats_text)
 
-    def update_device_serial(self):
-        new_serial = self.serial_entry.text()
-        self.adb_connector.update_device_serial(new_serial)
-        QMessageBox.information(self, "提示", f"已更新模拟器序列号为: {new_serial}")
-
-    def start_callback(self):
-        self.update_button_signal.emit("停止自动获取数据")
-
-    def stop_callback(self):
-        self.update_button_signal.emit("自动获取数据")
-
-    def update_monster_callback(self, results: list):
-        self.update_monster_signal.emit(results)
-
-    def update_prediction_callback(self, prediction: float):
-        self.update_prediction_signal.emit(prediction)
-
-    def update_statistics_callback(self):
-        self.update_statistics_signal.emit()
-
-    def run_simulation(self):
-        """
-        获取左右怪物信息，转换为JSON格式，并通过stdin传递给main_sim.py子进程。
-        """
-        left_monsters_data = {}
-        right_monsters_data = {}
-
-        left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-
-        # 获取左侧怪物信息
-        for monster_id, entry in left_monsters_dict.items():
-            count = entry.text()
-            if count.isdigit() and int(count) > 0:
-                # Need to map monster_id (string) to monster name
-                # Assuming MONSTER_MAPPING is accessible or can be imported
-                try:
-                    # Convert monster_id string to int for mapping
-                    monster_name = self.get_monster_name_by_id(int(monster_id))
-                    if monster_name:
-                        left_monsters_data[monster_name] = int(count)
-                except ValueError:
-                    logger.error(f"Invalid monster ID: {monster_id}")
-                except Exception as e:
-                    logger.error(f"Error getting monster name for ID {monster_id}: {e}")
-
-        # 获取右侧怪物信息
-        for monster_id, entry in right_monsters_dict.items():
-            count = entry.text()
-            if count.isdigit() and int(count) > 0:
-                try:
-                    # Convert monster_id string to int for mapping
-                    monster_name = self.get_monster_name_by_id(int(monster_id))
-                    if monster_name:
-                        right_monsters_data[monster_name] = int(count)
-                    else:
-                        logger.error(f"Monster name not found for ID {monster_id}")
-                except ValueError:
-                    logger.error(f"Invalid monster ID: {monster_id}")
-                except Exception as e:
-                    logger.error(f"Error getting monster name for ID {monster_id}: {e}")
-
-        simulation_data = {"left": left_monsters_data, "right": right_monsters_data}
-
-        json_data = json.dumps(simulation_data, ensure_ascii=False)
-        logger.info(f"Simulation data JSON: {json_data}")
-
-        try:
-            # 启动main_sim.py子进程 (非阻塞)
-            # Use sys.executable to ensure the same Python interpreter is used
-            process = subprocess.Popen(
-                [sys.executable, "main_sim.py"], stdin=subprocess.PIPE, text=True, encoding="utf-8"
-            )
-            # 通过stdin传递JSON数据并关闭stdin
-            process.stdin.write(json_data)
-            process.stdin.close()
-        except FileNotFoundError:
-            QMessageBox.critical(self, "错误", "未找到 main_sim.py 文件，请检查路径。")
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"启动模拟器时发生错误: {str(e)}")
-
-    def get_monster_name_by_id(self, monster_id: int):
-        """根据怪物ID获取怪物名称"""
-        # Need to import MONSTER_MAPPING from simulator.utils
-        try:
-            from simulator.utils import MONSTER_MAPPING
-
-            # Adjust for 1-based UI IDs vs 0-based mapping keys
-            monster_name = MONSTER_MAPPING.get(monster_id - 1)
-            if not monster_name:
-                logger.error(f"Monster ID {monster_id} not found in MONSTER_MAPPING.")
-            return monster_name
-        except ImportError:
-            logger.error("Error importing MONSTER_MAPPING from simulator.utils")
-            return None
-
-    def update_game_mode(self, mode):
-        self.game_mode = mode
-
-    def update_invest_status(self, state):
-        self.is_invest = state == Qt.CheckState.Checked.value
-
-    def update_result(self, text):
-        self.result_label.setText(text)
-
-    def update_stats(self, total, incorrect, duration):
-        stats_text = f"总共: {total}, 错误: {incorrect}, 时长: {duration}"
-        self.stats_label.setText(stats_text)
-
-    def update_image_display(self, qimage):
-        self.image_display.setPixmap(
-            QPixmap.fromImage(qimage).scaled(
-                self.image_display.width(), self.image_display.height(), Qt.AspectRatioMode.KeepAspectRatio
-            )
-        )
-
-    def package_data_and_show(self):
-        try:
-            zip_filename = data_package.package_data()
-            if zip_filename:
-                # 在文件浏览器中高亮显示文件
-                subprocess.run(f'explorer /select,"{zip_filename}"')
-                QMessageBox.information(self, "成功", f"数据已打包到 {zip_filename}")
-            else:
-                QMessageBox.warning(self, "警告", "没有找到可以打包的数据目录。")
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"打包数据时发生错误: {str(e)}")
-
-
-    def toggle_always_on_top(self):
-        if self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint:
-            self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint)
-            self.always_on_top_button.setText("窗口置顶")
+    def toggle_auto_fetch(self):
+        if not self.auto_fetch_running:
+            self.auto_fetch_running = True
+            self.auto_fetch_button.config(text="停止自动获取数据")
+            self.start_time = time.time()  # 记录开始时间
+            self.total_fill_count = 0  # 重置总填写次数
+            self.incorrect_fill_count = 0  # 重置填写×次数
+            self.update_statistics()  # 更新统计信息
+            self.training_duration = float(self.duration_entry.get()) * 3600  # 获取训练时长（小时转秒）
+            threading.Thread(target=self.auto_fetch_loop).start()
         else:
-            self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            self.always_on_top_button.setText("取消置顶")
-        self.show() # Reapply window flags
+            self.auto_fetch_running = False
+            self.auto_fetch_button.config(text="自动获取数据")
+            self.update_statistics()  # 更新统计信息
+
+    def auto_fetch_loop(self):
+        while self.auto_fetch_running:
+            self.auto_fetch_data()
+            self.update_statistics()  # 更新统计信息
+            elapsed_time = time.time() - self.start_time
+            if self.training_duration != -1 and elapsed_time >= self.training_duration:
+                self.auto_fetch_running = False
+                self.auto_fetch_button.config(text="自动获取数据")
+                self.save_statistics_to_log()  # 保存统计信息到log.txt
+                break
+            time.sleep(2)
+            if keyboard.is_pressed('esc'):
+                self.auto_fetch_running = False
+                self.auto_fetch_button.config(text="自动获取数据")
+                break
+
+    def auto_fetch_data(self):
+        relative_points = [
+            (0.453, 0.95),  # 投资左
+            (0.779, 0.95),  # 投资右
+            (0.322, 0.88),  # 省点饭钱
+            (0.864, 0.88),  # 敬请见证
+            (0.864, 0.90)  # 下一轮
+        ]
+        screenshot = loadData.capture_screenshot()
+        if screenshot is not None:
+            results = loadData.match_images(screenshot, loadData.process_images)
+            results = sorted(results, key=lambda x: x[1], reverse=True)
+            #print("匹配结果：", results[0])
+            for idx, score in results:
+                if score > 0.5:
+                    if idx == 0:
+                        #归零
+                        self.reset_entries()
+                        # 识别怪物类型数量，导入模型进行预测
+                        self.recognize()
+                        prediction = self.get_prediction()
+                        self.predictText(prediction)
+                        # 保存当前预测结果用于后续数据收集
+                        self.current_prediction = prediction
+                        # 根据预测结果点击投资左/右
+                        if prediction > 0.5:
+                            loadData.click(relative_points[1])  # 投资右
+                            print("投资右")
+                        else:
+                            loadData.click(relative_points[0])  # 投资左
+                            print("投资左")
+                    elif idx in [1, 5]:
+                        loadData.click(relative_points[2])  # 点击省点饭钱
+                        print("点击省点饭钱")
+                    elif idx == 2:
+                        loadData.click(relative_points[3])  # 点击敬请见证
+                        print("点击敬请见证")
+                    elif idx in [3, 4]:
+                        #80值添加数据√
+                        #62值添加数据×
+                        # 计算平均绿色值
+                        average_green = self.calculate_average_green(screenshot)
+                        if average_green > 70:
+                            # 填写数据√
+                            self.fill_data_correct()
+                            print("填写数据√")
+                        else:
+                            # 填写数据×
+                            self.fill_data_incorrect()
+                            print("填写数据×")
+                        loadData.click(relative_points[4])  # 点击下一轮
+                        print("点击下一轮")
+                    # elif idx == 6:
+                    #     print("等待战斗结束")
+                    elif idx == 7:
+                        loadData.click(relative_points[4])  # 点击下一轮
+                        print("点击返回主页")
+                    elif idx == 8:
+                        loadData.click(relative_points[4])  # 点击下一轮
+                        print("下一局")
+                    break  # 匹配到第一个结果后退出
+        pass
+
+    # 更新统计信息
+    def update_statistics(self):
+        elapsed_time = time.time() - self.start_time if self.start_time else 0
+        hours, remainder = divmod(elapsed_time, 3600)
+        minutes, _ = divmod(remainder, 60)
+        stats_text = (f"总共填写次数: {self.total_fill_count} ，    "
+                      f"填写×次数: {self.incorrect_fill_count}，    "
+                      f"当次运行时长: {int(hours)}小时{int(minutes)}分钟")
+        self.stats_label.config(text=stats_text)
 
 
 if __name__ == "__main__":
-    app = QApplication([])
-    window = ArknightsApp()
-    window.show()
-    app.exec()
+    root = tk.Tk()
+    app = ArknightsApp(root)
+    root.mainloop()
