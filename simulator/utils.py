@@ -156,7 +156,7 @@ def load_monster_mapping_from_csv(file_path='monster.csv'):
     return mapping
 
 # ID与怪物名称映射表
-MONSTER_MAPPING = load_monster_mapping_from_csv()
+MONSTER_MAPPING = load_monster_mapping_from_csv('monster_greenvine.csv')
 
 # 创建反向映射字典（名字到ID）
 REVERSE_MONSTER_MAPPING = {name: id for id, name in MONSTER_MAPPING.items()}

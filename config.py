@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # 定义全局变量
-MONSTER_COUNT = 70  # 设置怪物数量
+MONSTER_COUNT = 60  # 设置怪物数量
 
 # 全局地形特征数量常量
 FIELD_FEATURE_COUNT = 12  # 默认值

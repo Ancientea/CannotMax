@@ -883,6 +883,12 @@ class ArknightsApp(QMainWindow):
             self.always_on_top_button.setText("取消置顶")
         self.show() # Reapply window flags
 
+    def closeEvent(self, event):
+        """窗口关闭时的处理"""
+        if hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running:
+            self.auto_fetch.stop_auto_fetch()
+        event.accept()
+
 
 if __name__ == "__main__":
     app = QApplication([])
