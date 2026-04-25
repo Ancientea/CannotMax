@@ -5,7 +5,7 @@ import numpy as np
 from PIL import ImageGrab
 from rapidocr import RapidOCR, EngineType
 
-from config import MONSTER_DATA, MONSTER_IMAGES
+from config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT as CONFIG_MONSTER_COUNT
 import find_monster_zone
 from winrt_capture import WinRTScreenCapture
 
@@ -16,7 +16,9 @@ logger.setLevel(logging.INFO)
 intelligent_workers_debug = True
 
 # 定义全局变量
-MONSTER_COUNT = 61  # 设置怪物数量
+MONSTER_IDS = tuple(sorted(int(monster_id) for monster_id in MONSTER_DATA.index.tolist()))
+MONSTER_COUNT = max(CONFIG_MONSTER_COUNT, MONSTER_IDS[-1] if MONSTER_IDS else 0)
+TEMPLATE_MATCH_SCALES = (0.8, 0.9, 1.0)
 
 # 数字区域相对坐标
 relative_regions_nums = [
@@ -412,13 +414,19 @@ def find_best_match(target: cv2.typing.MatLike, ref_images: dict[int, cv2.typing
 
     for img_id, ref_img in ref_images.items():
         try:
-            # 模板匹配
-            match_algorithm = cv2.TM_CCOEFF_NORMED
-            res = cv2.matchTemplate(target, ref_img, match_algorithm)
-            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-            if max_val > confidence:
-                confidence = max_val
-                best_id = img_id
+            for scale in TEMPLATE_MATCH_SCALES:
+                width = max(4, int(round(ref_img.shape[1] * scale)))
+                height = max(4, int(round(ref_img.shape[0] * scale)))
+                if width > target.shape[1] or height > target.shape[0]:
+                    continue
+
+                scaled_ref = cv2.resize(ref_img, (width, height))
+                match_algorithm = cv2.TM_CCOEFF_NORMED
+                res = cv2.matchTemplate(target, scaled_ref, match_algorithm)
+                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                if max_val > confidence:
+                    confidence = max_val
+                    best_id = img_id
         except Exception as e:
             logger.exception(f"处理参考图像 {img_id} 时出错:", e)
             continue
@@ -429,14 +437,14 @@ def find_best_match(target: cv2.typing.MatLike, ref_images: dict[int, cv2.typing
 def load_ref_images(ref_dir="images"):
     """加载参考图片库"""
     ref_images = {}
-    for i in range(MONSTER_COUNT + 1):
-        # path = os.path.join(ref_dir, f"{i}.png")
-        # if os.path.exists(path):
-            # img = cv2.imread(path, cv2.IMREAD_COLOR_BGR)
-        if i == 0:
-            img = MONSTER_IMAGES.get("empty")
-        else:
-            img = MONSTER_IMAGES.get(MONSTER_DATA["原始名称"][i])
+    ref_entries = [(0, "empty")]
+    ref_entries.extend((monster_id, MONSTER_DATA.loc[monster_id].iloc[1]) for monster_id in MONSTER_IDS)
+
+    for monster_id, image_name in ref_entries:
+        img = MONSTER_IMAGES.get(image_name)
+        if img is None:
+            logger.warning("reference image missing for id=%s name=%s", monster_id, image_name)
+            continue
         # 裁切模板匹配图像比例
         img = img[
             int(img.shape[0] * 0.16) : int(img.shape[0] * 0.80),  # 高度取靠上部分
@@ -450,10 +458,18 @@ def load_ref_images(ref_dir="images"):
             # 存储模板图像用于debug
             if not os.path.exists("images/tmp"):
                 os.makedirs("images/tmp")
-            cv2.imwrite(f"images/tmp/xref_{i}.png", ref_resized)
+            cv2.imwrite(f"images/tmp/xref_{monster_id}.png", ref_resized)
 
         if img is not None:
-            ref_images[i] = ref_resized
+            ref_images[monster_id] = ref_resized
+
+    expected_count = len(MONSTER_IDS) + 1
+    if len(ref_images) != expected_count:
+        logger.warning(
+            "loaded %s reference images, expected %s based on monster data",
+            len(ref_images),
+            expected_count,
+        )
     return ref_images
 
 
