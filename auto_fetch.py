@@ -13,8 +13,7 @@ from recognize import intelligent_workers_debug, RecognizeMonster
 from config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 from collections.abc import Callable
 from collections import deque
-if FIELD_FEATURE_COUNT > 0:
-    from field_recognition import FieldRecognizer
+from field_recognition import FieldRecognizer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -274,14 +273,15 @@ class AutoFetch:
         # 返回左上角是否比右上角饱和度更高
         return saturation_diff > 20
 
-    def cut_recoginze_image(self, screenshot):
+    def cut_recognize_image(self, screenshot):
         """
         裁切复核图片
         """
-        x1 = int(0.2479 * self.adb_connector.screen_width)
-        y1 = int(0.8444 * self.adb_connector.screen_height)
-        x2 = int(0.7526 * self.adb_connector.screen_width)
-        y2 = int(0.9491 * self.adb_connector.screen_height)
+        roi_rel = RecognizeMonster.ROI_RELATIVE
+        x1 = int(roi_rel[0][0] * self.adb_connector.screen_width)
+        y1 = int(roi_rel[0][1] * self.adb_connector.screen_height)
+        x2 = int(roi_rel[1][0] * self.adb_connector.screen_width)
+        y2 = int(roi_rel[1][1] * self.adb_connector.screen_height)
         # 截取指定区域
         roi = screenshot[y1:y2, x1:x2]
         current_image = cv2.resize(
