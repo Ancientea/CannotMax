@@ -34,7 +34,7 @@ relative_regions = [
     (0.8760, 0.1, 1.0000, 0.77),
 ]
 
-def get_rapidocr_engine(prefer_gpu=False):
+def get_rapidocr_engine(prefer_gpu=True):
     """
     prefer_gpu (bool): 是否优先尝试使用GPU
     """
@@ -57,8 +57,9 @@ def get_rapidocr_engine(prefer_gpu=False):
     return RapidOCR()
 
 class RecognizeMonster:
+    ROI_RELATIVE = [(0.2464, 0.8410), (0.7542, 0.9510)]
     def __init__(self, window_name: str | None = None, monitor_index: int | None = None):
-        self.roi_relative = [(0.2479, 0.8410), (0.7526, 0.9510)] # 16:9下怪物区域相对坐标
+        self.roi_relative = self.ROI_RELATIVE # 16:9下怪物区域相对坐标
         self.main_roi = [(0, 0), (1919, 1079)] # 主区域坐标
         # 鼠标交互全局变量
         self.roi_box = []
@@ -209,7 +210,7 @@ class RecognizeMonster:
     def process_regions(
         self,
         image_adb: cv2.typing.MatLike | None = None,
-        matched_threshold=0.4,
+        matched_threshold=0.1,
         ocr_threshold=0.95,
     ):
         """处理主区域中的所有区域（优化特征匹配）
@@ -244,7 +245,7 @@ class RecognizeMonster:
         if screenshot.size == 0:
             raise ValueError("截图为空，请检查区域选择或截图方法。")
         # 转换到标准1920*1080下目标区域
-        screenshot = cv2.resize(screenshot, (969, 119))
+        screenshot = cv2.resize(screenshot, (975, 119))
         main_height = screenshot.shape[0]
         main_width = screenshot.shape[1]
 
@@ -440,19 +441,14 @@ def load_ref_images(ref_dir="images"):
             img = MONSTER_IMAGES.get("empty")
         else:
             img = MONSTER_IMAGES.get(MONSTER_DATA["原始名称"][i])
-        
-        if img is None:
-            logger.error(f"无法加载参考图片 i={i}, 名称={MONSTER_DATA['原始名称'][i] if i > 0 else 'empty'}")
-            continue
-
         # 裁切模板匹配图像比例
-        img_crop = img[
+        img = img[
             int(img.shape[0] * 0.16) : int(img.shape[0] * 0.80),  # 高度取靠上部分
             int(img.shape[1] * 0.18) : int(img.shape[1] * 0.82),  # 宽度与高度一致
         ]
         # 调整参考图像大小以匹配目标图像
-        ref_resized = cv2.resize(img_crop, (75, 75))
-        ref_resized = ref_resized[0:65, :]
+        ref_resized = cv2.resize(img, (74, 74))
+        ref_resized = ref_resized[0:70, :]
 
         if intelligent_workers_debug:  # 如果处于debug模式
             # 存储模板图像用于debug
@@ -460,7 +456,8 @@ def load_ref_images(ref_dir="images"):
                 os.makedirs("images/tmp")
             cv2.imwrite(f"images/tmp/xref_{i}.png", ref_resized)
 
-        ref_images[i] = ref_resized
+        if img is not None:
+            ref_images[i] = ref_resized
     return ref_images
 
 
