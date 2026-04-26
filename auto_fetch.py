@@ -278,9 +278,9 @@ class AutoFetch:
         """
         裁切复核图片
         """
-        x1 = int(0.2479 * self.adb_connector.screen_width)
+        x1 = int(0.2464 * self.adb_connector.screen_width)
         y1 = int(0.8444 * self.adb_connector.screen_height)
-        x2 = int(0.7526 * self.adb_connector.screen_width)
+        x2 = int(0.7542 * self.adb_connector.screen_width)
         y2 = int(0.9491 * self.adb_connector.screen_height)
         # 截取指定区域
         roi = screenshot[y1:y2, x1:x2]
