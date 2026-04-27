@@ -13,6 +13,7 @@ from recognize import intelligent_workers_debug, RecognizeMonster
 from config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 from collections.abc import Callable
 from collections import deque
+from login import LoginManager
 if FIELD_FEATURE_COUNT > 0:
     from field_recognition import FieldRecognizer
 
@@ -71,6 +72,7 @@ class AutoFetch:
         self.recognizer = RecognizeMonster(method="ADB")
         self.cannot_model = CannotModel()
         self.last_state = GameState.UNKNOWN
+        self.login_manager = LoginManager(connector)
 
         # 初始化状态匹配模板，缩小匹配尺寸提高速度
         self.MATCH_WIDTH = 1920 // 4
@@ -112,7 +114,7 @@ class AutoFetch:
             results.append((idx, max_val))
         return results
 
-    def fill_data(self, battle_result, recoginze_results, monster_image, result_image, field_recoginze_result):
+    def fill_data(self, battle_result, recognize_results, monster_image, result_image, field_recognize_result):
         # 获取队列头的图片
         if self.image_buffer:
             _, previous_image, _ = self.image_buffer[0]  # 获取队列头的图片
@@ -124,34 +126,44 @@ class AutoFetch:
             logger.error("未找到2秒前的图片，无法保存")
             return
 
-        image_name = self.get_image_name(recoginze_results, battle_result)  # 生成图片名称
+        image_name = self.get_image_name(recognize_results, battle_result)  # 生成图片名称
+
+        # 确保images文件夹存在
+        images_folder = self.data_folder / "images"
+        try:
+            images_folder.mkdir(parents=True, exist_ok=True)
+            # logger.info(f"确保images文件夹存在: {images_folder}")
+        except Exception as e:
+            logger.error(f"创建images文件夹失败: {e}")
 
         if intelligent_workers_debug:  # 如果处于debug模式，保存人工审核图片到本地
             if monster_image is not None:
-                image_path = self.data_folder / "images" / (image_name + ".jpg")
-                cv2.imwrite(image_path, monster_image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-
-            # if previous_image is not None:
-            #     image_path = self.data_folder / "images" / (image_name+"1s.jpg")
-            #     cv2.imwrite(image_path, previous_image)
-            #     logger.info(f"保存1秒前的图片到 {image_path}")
+                try:
+                    image_path = images_folder / (image_name + ".jpg")
+                    cv2.imwrite(image_path, monster_image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                    # logger.info(f"保存怪物图片到 {image_path}")
+                except Exception as e:
+                    logger.error(f"保存怪物图片失败: {e}")
 
             # 新增保存结果图片逻辑
             if image_name:
-                result_image_name = image_name + "_result.jpg"
-                # 缩放到128像素高度
-                (h, w) = result_image.shape[:2]
-                new_height = 128
-                resized_image = cv2.resize(result_image, (int(w * (new_height / h)), new_height))
-                image_path = self.data_folder / "images" / result_image_name
-                cv2.imwrite(image_path, resized_image)
-                logger.info(f"保存结果图片到 {image_path}")
+                try:
+                    result_image_name = image_name + "_result.jpg"
+                    # 缩放到128像素高度
+                    (h, w) = result_image.shape[:2]
+                    new_height = 128
+                    resized_image = cv2.resize(result_image, (int(w * (new_height / h)), new_height))
+                    image_path = images_folder / result_image_name
+                    cv2.imwrite(image_path, resized_image)
+                    logger.info(f"保存结果图片到 {image_path}")
+                except Exception as e:
+                    logger.error(f"保存结果图片失败: {e}")
         
         # 原始怪物数据
         left_monster_data = np.zeros(MONSTER_COUNT)
         right_monster_data = np.zeros(MONSTER_COUNT)
 
-        for res in recoginze_results:
+        for res in recognize_results:
             region_id = res["region_id"]
             if "error" not in res:
                 matched_id = res["matched_id"]
@@ -256,36 +268,99 @@ class AutoFetch:
 
         height, width, _ = image.shape
 
-        # 避开边缘（如PC端的标题栏或黑边），向内偏移 5% 并取一个 10x10 的区域计算平均颜色
-        y_offset = int(height * 0.05)
-        x_offset = int(width * 0.05)
+        # 增加多个采样点，提高识别稳定性
+        sample_points = [
+            (0.1, 0.1),  # 左上区域
+            (0.1, 0.5),  # 左中区域
+            (0.9, 0.1),  # 右上区域
+            (0.9, 0.5),  # 右中区域
+        ]
         
-        # 确保区域不会越界
-        y_end = min(y_offset + 10, height)
-        x_left_end = min(x_offset + 10, width)
-        x_right_start = max(width - x_offset - 10, 0)
-        x_right_end = max(width - x_offset, 1)
-
-        left_region = image[y_offset:y_end, x_offset:x_left_end]
-        right_region = image[y_offset:y_end, x_right_start:x_right_end]
-
-        left_top = left_region.mean(axis=(0, 1))
-        right_top = right_region.mean(axis=(0, 1))
-
-        # 计算饱和度
-        sat_left = get_saturation(left_top)
-        sat_right = get_saturation(right_top)
-
-        # 计算饱和度差值
-        saturation_diff = sat_left - sat_right
-
-        # 检查差值是否符合要求，平局或者其他两边相等会被这个筛选掉
-        if abs(saturation_diff) <= 20:
-            logger.error(f"饱和度差值不足20 (左:{sat_left:.1f} vs 右:{sat_right:.1f})")
+        sample_size = 20  # 增大采样区域
+        left_saturations = []
+        right_saturations = []
+        
+        for y_ratio, x_ratio in sample_points:
+            y_offset = int(height * y_ratio)
+            
+            # 左侧采样点
+            x_left_offset = int(width * 0.1)
+            y_end = min(y_offset + sample_size, height)
+            x_left_end = min(x_left_offset + sample_size, width)
+            if y_end > y_offset and x_left_end > x_left_offset:
+                left_region = image[y_offset:y_end, x_left_offset:x_left_end]
+                left_mean = left_region.mean(axis=(0, 1))
+                left_saturations.append(get_saturation(left_mean))
+            
+            # 右侧采样点
+            x_right_offset = int(width * 0.9 - sample_size)
+            x_right_end = min(x_right_offset + sample_size, width)
+            if y_end > y_offset and x_right_end > x_right_offset:
+                right_region = image[y_offset:y_end, x_right_offset:x_right_end]
+                right_mean = right_region.mean(axis=(0, 1))
+                right_saturations.append(get_saturation(right_mean))
+        
+        if not left_saturations or not right_saturations:
+            logger.error("无法获取有效的采样区域")
             return None
+        
+        # 计算平均饱和度
+        avg_sat_left = sum(left_saturations) / len(left_saturations)
+        avg_sat_right = sum(right_saturations) / len(right_saturations)
+        
+        # 计算饱和度差值
+        saturation_diff = avg_sat_left - avg_sat_right
+        
+        # 使用自适应阈值，根据整体饱和度水平调整
+        base_threshold = 15
+        # 如果整体饱和度较低，降低阈值
+        avg_overall_sat = (avg_sat_left + avg_sat_right) / 2
+        if avg_overall_sat < 50:
+            threshold = 10
+        elif avg_overall_sat < 100:
+            threshold = 12
+        else:
+            threshold = base_threshold
+        
+        # 检查差值是否符合要求
+        if abs(saturation_diff) <= threshold:
+            logger.warning(f"饱和度差值不足 (左:{avg_sat_left:.1f} vs 右:{avg_sat_right:.1f}, 阈值:{threshold})")
+            # 尝试使用亮度差异作为备选方案
+            return AutoFetch.calculate_brightness_diff(image)
 
-        # 返回左上角是否比右上角饱和度更高
-        return saturation_diff > 20
+        # 返回左侧是否比右侧饱和度更高
+        return saturation_diff > 0
+    
+    @staticmethod
+    def calculate_brightness_diff(image):
+        """使用亮度差异作为胜负识别的备选方案"""
+        if image is None:
+            return None
+        
+        height, width, _ = image.shape
+        
+        # 转换为灰度图
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # 定义左侧和右侧区域
+        left_region = gray[:, :width//2]
+        right_region = gray[:, width//2:]
+        
+        # 计算平均亮度
+        left_brightness = left_region.mean()
+        right_brightness = right_region.mean()
+        
+        # 计算亮度差值
+        brightness_diff = left_brightness - right_brightness
+        
+        # 使用亮度阈值
+        brightness_threshold = 10
+        if abs(brightness_diff) <= brightness_threshold:
+            logger.warning(f"亮度差值不足 (左:{left_brightness:.1f} vs 右:{right_brightness:.1f})")
+            return None
+        
+        # 返回左侧是否比右侧亮
+        return brightness_diff > 0
 
     def cut_recognize_image(self, screenshot):
         """
@@ -394,8 +469,9 @@ class AutoFetch:
 
     def battle_result(self, result_image):
         # 判断本次是否填写错误，结果不等于None（不是平局或者其他）才能继续
-        if self.calculate_average_yellow(result_image) != None:
-            if self.calculate_average_yellow(result_image):
+        result = self.calculate_average_yellow(result_image)
+        if result is not None:
+            if result:
                 self.fill_data(
                     "L", self.recognize_results, self.monster_image, result_image, self.field_recognize_result
                 )
@@ -415,6 +491,8 @@ class AutoFetch:
             # 为填写数据操作设置冷却期
             # 平局或者其他也照常休息5秒
 
+
+
     def auto_fetch_data(self):
         relative_points = [
             (0.9297, 0.8833),  # 右ALL、返回主页、加入赛事、开始游戏
@@ -426,12 +504,43 @@ class AutoFetch:
         timea = time.time()
         screenshot = self.connector.capture_screenshot()
         if screenshot is None:
-            logger.error("截图失败，无法继续操作")
-            return
+            logger.error("截图失败，尝试自动登录")
+            # 尝试自动登录
+            if self.login_manager.auto_login():
+                # 登录成功后重新获取截图
+                screenshot = self.connector.capture_screenshot()
+                if screenshot is None:
+                    logger.error("登录后仍然无法获取截图，无法继续操作")
+                    return
+            else:
+                logger.error("自动登录失败，无法继续操作")
+                return
 
         # 保存当前截图及其信息到缓冲区
         timestamp = int(time.time())
         self.image_buffer.append((timestamp, screenshot.copy(), []))
+
+        # 只有在初始状态或主菜单状态时才验证是否在争锋频道页面
+        if self.last_state == GameState.UNKNOWN or self.last_state == GameState.MAIN_MENU:
+            if not self.login_manager.is_in_competition_page(self.match_images):
+                logger.info("检测到登录下线页面，尝试重启游戏")
+                # 尝试重启游戏
+                if self.login_manager.restart_game():
+                    # 重启后尝试自动登录
+                    if not self.login_manager.auto_login():
+                        logger.error("重启后自动登录失败，无法继续")
+                        self.auto_fetch_running = False
+                        self.stop_callback()
+                        return
+                else:
+                    logger.error("重启游戏失败，尝试直接登录")
+                    # 尝试直接登录
+                    if not self.login_manager.auto_login():
+                        logger.error("自动登录失败，无法继续")
+                        self.auto_fetch_running = False
+                        self.stop_callback()
+                        return
+                return
 
         results = self.match_images(screenshot)
         results = sorted(results, key=lambda x: x[1], reverse=True)
@@ -441,28 +550,29 @@ class AutoFetch:
         # 状态判断：取匹配度最高的一个
         current_state = GameState.UNKNOWN
         best_idx = -1
-        best_idx, best_score = results[0]
-        if best_score > 0.7:
-            if best_idx == 0:
-                current_state = GameState.MAIN_MENU
-            elif best_idx == 1:
-                current_state = GameState.MODE_SELECTION_UNSELECTED
-            elif best_idx == 2:
-                current_state = GameState.MODE_SELECTION_SELECTED
-            elif best_idx in [3, 4, 5, 15]:
-                current_state = GameState.PRE_BATTLE
-            elif best_idx in [6, 7, 14]:
-                current_state = GameState.IN_BATTLE
-            elif best_idx in [8, 9, 10, 11]:
-                current_state = GameState.SETTLEMENT
-            elif best_idx in [12, 13]:
-                current_state = GameState.FINISHED
-            if self.last_state != current_state:
-                logger.info(f"匹配到状态: {self.last_state} -> {current_state}, score:{best_score:.4f}")
-                self.last_state = current_state
-        else:
-            # logger.info(f"状态机匹配置信度过低: idx:{best_idx}, score:{best_score:.4f}")
-            pass
+        if results:
+            best_idx, best_score = results[0]
+            if best_score > 0.7:
+                if best_idx == 0:
+                    current_state = GameState.MAIN_MENU
+                elif best_idx == 1:
+                    current_state = GameState.MODE_SELECTION_UNSELECTED
+                elif best_idx == 2:
+                    current_state = GameState.MODE_SELECTION_SELECTED
+                elif best_idx in [3, 4, 5, 15]:
+                    current_state = GameState.PRE_BATTLE
+                elif best_idx in [6, 7, 14]:
+                    current_state = GameState.IN_BATTLE
+                elif best_idx in [8, 9, 10, 11]:
+                    current_state = GameState.SETTLEMENT
+                elif best_idx in [12, 13]:
+                    current_state = GameState.FINISHED
+                if self.last_state != current_state:
+                    logger.info(f"匹配到状态: {self.last_state} -> {current_state}, score:{best_score:.4f}")
+                    self.last_state = current_state
+            else:
+                # logger.info(f"状态机匹配置信度过低: idx:{best_idx}, score:{best_score:.4f}")
+                pass
 
         # 状态执行
         match current_state:
@@ -534,7 +644,16 @@ class AutoFetch:
     def auto_fetch_loop(self):
         while self.auto_fetch_running:
             try:
+                # 每次循环开始时检查状态
+                if not self.auto_fetch_running:
+                    break
+                
                 self.auto_fetch_data()
+                
+                # 每次循环结束时检查状态
+                if not self.auto_fetch_running:
+                    break
+                
                 elapsed_time = time.time() - self.start_time
                 if self.training_duration != -1 and elapsed_time >= self.training_duration:
                     logger.info("已达到设定时长，结束自动获取")
@@ -594,6 +713,8 @@ class AutoFetch:
             self.log_file_handler.setFormatter(file_formatter)
             self.log_file_handler.setLevel(logging.INFO)
             logging.getLogger().addHandler(self.log_file_handler)
+            
+            # 启动自动获取数据线程
             threading.Thread(target=self.auto_fetch_loop).start()
             logger.info("自动获取数据已启动")
             self.start_callback()
