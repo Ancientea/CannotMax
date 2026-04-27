@@ -76,7 +76,7 @@ class LoginManager:
             logger.debug(f"未匹配到模板 {template_name}")
             return False, (0, 0)
     
-    def is_in_competition_page(self, match_images_func=None):
+    def is_in_competition_page(self, match_images_func=None, running_flag=None):
         """验证是否在争锋频道页面"""
         # 确保连接器已连接
         if not hasattr(self.connector, 'is_connected') or not self.connector.is_connected:
@@ -85,9 +85,19 @@ class LoginManager:
         
         # 尝试多次验证，确保页面完全加载
         for attempt in range(3):
+            # 检查是否需要停止验证
+            if running_flag is not None and not running_flag():
+                logger.info("自动获取已停止，停止页面验证")
+                return False
+            
             # 尝试获取截图，最多尝试3次
             screenshot = None
             for i in range(3):
+                # 检查是否需要停止验证
+                if running_flag is not None and not running_flag():
+                    logger.info("自动获取已停止，停止页面验证")
+                    return False
+                
                 screenshot = self.connector.capture_screenshot()
                 if screenshot is not None:
                     break
@@ -99,19 +109,7 @@ class LoginManager:
                 time.sleep(2)
                 continue
             
-            # 尝试匹配争锋频道页面模板
-            matched, _ = self.match_template(screenshot, "competition_page")
-            if matched:
-                logger.info("确认在争锋频道页面")
-                return True
-            
-            # 检查是否是登录下线页面
-            matched, _ = self.match_template(screenshot, "login_off")
-            if matched:
-                logger.info("检测到登录下线页面")
-                return False
-            
-            # 如果没有提供自定义匹配函数，则使用默认的模板匹配
+            # 优先使用自定义匹配函数，检查是否匹配到0.png或1.png（加入赛事或开始游戏）
             if match_images_func:
                 try:
                     results = match_images_func(screenshot)
@@ -124,6 +122,18 @@ class LoginManager:
                                     return True
                 except Exception as e:
                     logger.error(f"匹配图片时出错: {e}")
+            
+            # 如果未匹配到0/1，尝试匹配争锋频道页面入口模板
+            matched, _ = self.match_template(screenshot, "competition_page")
+            if matched:
+                logger.info("确认在争锋频道页面入口")
+                return True
+            
+            # 检查是否是登录下线页面
+            matched, _ = self.match_template(screenshot, "login_off")
+            if matched:
+                logger.info("检测到登录下线页面")
+                return False
             
             logger.debug(f"第{attempt+1}次验证：未在争锋频道页面")
             time.sleep(3)  # 增加等待时间，确保页面有足够的加载时间
@@ -297,77 +307,65 @@ class LoginManager:
         
         # 3. 等待登录完成
         logger.info("等待登录完成")
-        time.sleep(5)
+        time.sleep(10)  # 等待10秒
         
         # 4. 寻找争锋频道页面
         logger.info("寻找争锋频道页面")
-        for i in range(10):
-            # 尝试获取截图，最多尝试3次
-            screenshot = None
-            for j in range(3):
+        
+        # 优先检测competition_page
+        for i in range(3):
+            screenshot = self.connector.capture_screenshot()
+            if screenshot is not None:
+                matched, pos = self.match_template(screenshot, "competition_page")
+                if matched:
+                    # 计算相对坐标
+                    h, w = screenshot.shape[:2]
+                    rel_x = pos[0] / w
+                    rel_y = pos[1] / h
+                    logger.info(f"争锋频道页面位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
+                    self.connector.click((rel_x, rel_y))
+                    logger.info("点击进入争锋频道页面")
+                    time.sleep(5)  # 增加等待时间，确保页面完全加载
+                    logger.info("自动登录流程完成")
+                    return True
+            time.sleep(2)
+        
+        # 如果检测不到competition_page，检测关闭按钮
+        close_buttons = ["announcement_close", "announcement_close2", "event_claim_close"]
+        for button in close_buttons:
+            for i in range(5):  # 每个关闭按钮检测五次
                 screenshot = self.connector.capture_screenshot()
                 if screenshot is not None:
-                    break
+                    matched, pos = self.match_template(screenshot, button, threshold=0.9)
+                    if matched:
+                        # 计算相对坐标
+                        h, w = screenshot.shape[:2]
+                        rel_x = pos[0] / w
+                        rel_y = pos[1] / h
+                        logger.info(f"{button}位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
+                        self.connector.click((rel_x, rel_y))
+                        logger.info(f"关闭{button}页面")
+                        time.sleep(2)  # 增加等待时间，确保页面完全关闭
+                        break
                 time.sleep(1)
-            
-            if screenshot is None:
-                logger.warning(f"获取截图失败，跳过本次尝试")
-                time.sleep(1)
-                continue
-            
-            # 检查是否已经在争锋频道页面
-            matched, pos = self.match_template(screenshot, "competition_page")
-            if matched:
-                # 计算相对坐标
-                h, w = screenshot.shape[:2]
-                rel_x = pos[0] / w
-                rel_y = pos[1] / h
-                logger.info(f"争锋频道页面位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
-                self.connector.click((rel_x, rel_y))
-                logger.info("点击进入争锋频道页面")
-                time.sleep(5)  # 增加等待时间，确保页面完全加载
-                logger.info("自动登录流程完成")
-                return True
-            
-            # 如果不在争锋频道页面，关闭公告和活动领取页面
-            matched, pos = self.match_template(screenshot, "announcement_close", threshold=0.9)
-            if matched:
-                # 计算相对坐标
-                h, w = screenshot.shape[:2]
-                rel_x = pos[0] / w
-                rel_y = pos[1] / h
-                logger.info(f"公告关闭按钮位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
-                self.connector.click((rel_x, rel_y))
-                logger.info("关闭公告页面")
-                time.sleep(1)
-                continue
-            
-            # 尝试匹配announcement_close2
-            matched, pos = self.match_template(screenshot, "announcement_close2", threshold=0.9)
-            if matched:
-                # 计算相对坐标
-                h, w = screenshot.shape[:2]
-                rel_x = pos[0] / w
-                rel_y = pos[1] / h
-                logger.info(f"公告关闭按钮2位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
-                self.connector.click((rel_x, rel_y))
-                logger.info("关闭公告页面")
-                time.sleep(1)
-                continue
-            
-            matched, pos = self.match_template(screenshot, "event_claim_close", threshold=0.9)
-            if matched:
-                # 计算相对坐标
-                h, w = screenshot.shape[:2]
-                rel_x = pos[0] / w
-                rel_y = pos[1] / h
-                logger.info(f"活动领取关闭按钮位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
-                self.connector.click((rel_x, rel_y))
-                logger.info("关闭活动领取页面")
-                time.sleep(1)
-                continue
-            
-            time.sleep(1)
+        
+        # 检测完关闭按钮后，再次检测competition_page
+        for i in range(3):
+            screenshot = self.connector.capture_screenshot()
+            if screenshot is not None:
+                matched, pos = self.match_template(screenshot, "competition_page")
+                if matched:
+                    # 计算相对坐标
+                    h, w = screenshot.shape[:2]
+                    rel_x = pos[0] / w
+                    rel_y = pos[1] / h
+                    logger.info(f"争锋频道页面位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
+                    self.connector.click((rel_x, rel_y))
+                    logger.info("点击进入争锋频道页面")
+                    time.sleep(5)  # 增加等待时间，确保页面完全加载
+                    logger.info("自动登录流程完成")
+                    return True
+            time.sleep(2)
         
         logger.error("未找到争锋频道页面，登录流程失败")
         return False

@@ -73,6 +73,7 @@ class AutoFetch:
         self.cannot_model = CannotModel()
         self.last_state = GameState.UNKNOWN
         self.login_manager = LoginManager(connector)
+        self.unknown_start_time = None  # 新增：记录进入 UNKNOWN 状态的时间
 
         # 初始化状态匹配模板，缩小匹配尺寸提高速度
         self.MATCH_WIDTH = 1920 // 4
@@ -520,28 +521,7 @@ class AutoFetch:
         timestamp = int(time.time())
         self.image_buffer.append((timestamp, screenshot.copy(), []))
 
-        # 只有在初始状态或主菜单状态时才验证是否在争锋频道页面
-        if self.last_state == GameState.UNKNOWN or self.last_state == GameState.MAIN_MENU:
-            if not self.login_manager.is_in_competition_page(self.match_images):
-                logger.info("检测到登录下线页面，尝试重启游戏")
-                # 尝试重启游戏
-                if self.login_manager.restart_game():
-                    # 重启后尝试自动登录
-                    if not self.login_manager.auto_login():
-                        logger.error("重启后自动登录失败，无法继续")
-                        self.auto_fetch_running = False
-                        self.stop_callback()
-                        return
-                else:
-                    logger.error("重启游戏失败，尝试直接登录")
-                    # 尝试直接登录
-                    if not self.login_manager.auto_login():
-                        logger.error("自动登录失败，无法继续")
-                        self.auto_fetch_running = False
-                        self.stop_callback()
-                        return
-                return
-
+        # 先进行状态识别
         results = self.match_images(screenshot)
         results = sorted(results, key=lambda x: x[1], reverse=True)
         # logger.debug(f"处理图片总用时：{time.time()-timea:.3f}s")
@@ -573,6 +553,45 @@ class AutoFetch:
             else:
                 # logger.info(f"状态机匹配置信度过低: idx:{best_idx}, score:{best_score:.4f}")
                 pass
+
+        # 处理 UNKNOWN 状态的超时逻辑（区分过场动画和真正掉线）
+        if current_state != GameState.UNKNOWN:
+            self.unknown_start_time = None  # 状态正常，重置计时器
+        else:
+            if self.unknown_start_time is None:
+                self.unknown_start_time = time.time()  # 刚进入 UNKNOWN 状态，开始计时
+                logger.info("进入 UNKNOWN 状态，开始计时")
+            
+            # 如果连续处于 UNKNOWN 状态超过 15 秒（涵盖正常的过场动画加载时间）
+            elif time.time() - self.unknown_start_time > 15.0:
+                logger.info("连续 15 秒处于未知状态，开始检测是否断线...")
+                # 检查是否是因为用户点击了停止按钮
+                if not self.auto_fetch_running:
+                    logger.info("用户停止了自动获取，不再执行登录流程")
+                    self.unknown_start_time = None  # 重置计时器
+                    return
+                if not self.login_manager.is_in_competition_page(self.match_images, lambda: self.auto_fetch_running):
+                    logger.info("检测到登录下线页面，尝试重启游戏")
+                    # 尝试重启游戏
+                    if self.login_manager.restart_game():
+                        # 重启后尝试自动登录
+                        if not self.login_manager.auto_login():
+                            logger.error("重启后自动登录失败，无法继续")
+                            self.auto_fetch_running = False
+                            self.stop_callback()
+                            self.unknown_start_time = None  # 重置计时器
+                            return
+                    else:
+                        logger.error("重启游戏失败，尝试直接登录")
+                        # 尝试直接登录
+                        if not self.login_manager.auto_login():
+                            logger.error("自动登录失败，无法继续")
+                            self.auto_fetch_running = False
+                            self.stop_callback()
+                            self.unknown_start_time = None  # 重置计时器
+                            return
+                # 检测完毕后，无论结果如何，重置计时器，避免频繁阻塞
+                self.unknown_start_time = None
 
         # 状态执行
         match current_state:
