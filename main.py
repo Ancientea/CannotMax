@@ -19,6 +19,7 @@ import loadData
 import auto_fetch
 import maa_adb_connector
 from maa_adb_connector import AdbConnectorAdapter, ConnectionTypeRegistry, InputMethodRegistry, MaaFrameworkDetector
+from dark_mode_style_fix import DarkModeStyleFix
 import similar_history_match
 import recognize
 from recognize import MONSTER_COUNT
@@ -235,6 +236,7 @@ class ArknightsApp(QMainWindow):
         self.result_label = QLabel("预测结果将显示在这里")
         self.result_label.setFont(QFont("Microsoft YaHei", 12))
         self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.result_label.setStyleSheet("color: #313131;")
         result_layout.addWidget(self.result_label)
 
         # 添加模型名称显示
@@ -242,7 +244,7 @@ class ArknightsApp(QMainWindow):
         self.model_name_label = QLabel(f"model: {model_name}")
         self.model_name_label.setFont(QFont("Microsoft YaHei", 8))
         self.model_name_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-        self.model_name_label.setStyleSheet("color: #888888;")  # 小字灰色
+        self.model_name_label.setStyleSheet("color: #666666;")
         result_layout.addWidget(self.model_name_label)
 
         # 第二行按钮result_identify_group
@@ -416,7 +418,7 @@ class ArknightsApp(QMainWindow):
         self.serial_button.clicked.connect(self.update_device_serial)
 
         self.maa_status_label = QLabel("")
-        self.maa_status_label.setStyleSheet("color: #888; font-size: 10px;")
+        self.maa_status_label.setStyleSheet("color: #666666; font-size: 10px;")
 
         conn_row1_layout.addWidget(self.serial_label)
         conn_row1_layout.addWidget(self.serial_entry)
@@ -499,6 +501,7 @@ class ArknightsApp(QMainWindow):
         self.update_prediction_signal.connect(self.update_prediction)
         self.update_statistics_signal.connect(self.update_statistics)
         self.refresh_device_list()
+        DarkModeStyleFix.apply(QApplication.instance())
 
     def toggle_input_panel(self):
         """切换输入面板的显示"""
@@ -584,7 +587,7 @@ class ArknightsApp(QMainWindow):
             self.maa_status_label.setStyleSheet("color: #00aa00; font-size: 10px;")
         else:
             self.maa_status_label.setText("使用自有ADB实现（MAA Framework不可用）")
-            self.maa_status_label.setStyleSheet("color: #aa8800; font-size: 10px;")
+            self.maa_status_label.setStyleSheet("color: #996600; font-size: 10px;")
 
     def on_connection_type_changed(self, index):
         type_id = self.connection_type_combo.currentData()
