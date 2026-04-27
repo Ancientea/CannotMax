@@ -104,17 +104,11 @@ source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/3e/38/7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/antlr4-python3-runtime-4.9.3.tar.gz", hash = "sha256:f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b" }
 
 [[package]]
-name = "askin"
-version = "0.0.2"
-source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
-sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/c2/2c/fda3a5c697a006f9bbb08fb4d9add070f56bdd372b0ee92bbba40901aaa6/askin-0.0.2.tar.gz", hash = "sha256:13de3cc748c65aeae2608679fa4f3f43ad67b0f54d0d5651f7389686891c3767" }
-
-[[package]]
 name = "cannotmax-greenvine"
 version = "1.0.7"
 source = { virtual = "." }
 dependencies = [
-    { name = "maa" },
+    { name = "maafw" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "onnxruntime" },
@@ -150,7 +144,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "maa", specifier = ">=0.0.3" },
+    { name = "maafw", specifier = ">=5.10.2" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "onnxruntime" },
@@ -678,13 +672,30 @@ wheels = [
 ]
 
 [[package]]
-name = "maa"
-version = "0.0.3"
+name = "maaagentbinary"
+version = "1.0.1"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/b9/89/6b173d2e151517a8a24c3194bc8783643f49186547ae53c8b635be19d310/MaaAgentBinary-1.0.1-py3-none-any.whl", hash = "sha256:d97bcc9f35b52add199b287932511ecfcddcb83930c6b532d1c7010b432ec8bf" },
+]
+
+[[package]]
+name = "maafw"
+version = "5.10.2"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 dependencies = [
-    { name = "askin" },
+    { name = "maaagentbinary" },
+    { name = "numpy" },
+    { name = "strenum" },
 ]
-sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/f5/1d/f41d1e4631a9cb8dc148e2a706b5e2a2bb59462667a9f50688d80dad76c9/maa-0.0.3.tar.gz", hash = "sha256:eddb29c78089fe6f393faa035d02faf3205cf7365fef7c91c3ea9d4704f475ea" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/6e/8c/126bd16d3d47775c6342cb0d7345c9cdb38d4fa4c58220ca1259d12155bf/maafw-5.10.2-py3-none-macosx_13_0_arm64.whl", hash = "sha256:6e9d313479c150b754a0b02390b2ba9b87e8ba2e38dcccb3106c3cace7a4b1b5" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/fd/41/f89e70fb864ba721ada0dc7f8a71bdbfa37beafcfec1ce4c665cdeaeccfc/maafw-5.10.2-py3-none-macosx_13_0_x86_64.whl", hash = "sha256:e0b9324def37bfc64749ecac702b61b793a97bbae9178cd7bff4852e5965a3ac" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/d1/76/3f7e487c91f431dbfd8fd9d689965f7bb5598b782762b1d51a8ed9d28a97/maafw-5.10.2-py3-none-manylinux2014_aarch64.whl", hash = "sha256:d1e7ff9ae4333c8e40da52525b16d5e9a5577bea323a6715a3dfd3877f711c3a" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/b8/30/dd0896046cb6a9aaaf06c2f6468597ee9e4dd83337f39f7e0b5584e8837b/maafw-5.10.2-py3-none-manylinux2014_x86_64.whl", hash = "sha256:5b1cdebca5566091a42a418aebcedbe965864115887e1048d128c747f612daf4" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/75/0a/5e576c5f113bb0e1fbaa3deade4dd889c06a0e6501383ebd024f8cb50020/maafw-5.10.2-py3-none-win_amd64.whl", hash = "sha256:7048feb2f95f871b9dc344ec2dc002b75c40e1646936c6ccab9b4af16f44d43e" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/e3/cb/fedeaaec5926d6c162457b7434a003b74f6b9211ccd667b880f2d298f74c/maafw-5.10.2-py3-none-win_arm64.whl", hash = "sha256:09e7c4ea5daddcab79b61d06d7ff2ea3fb526eeb2a0ddee9d0b7d22527f91a8b" },
+]
 
 [[package]]
 name = "macholib"
@@ -1924,6 +1935,15 @@ source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81" }
 wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274" },
+]
+
+[[package]]
+name = "strenum"
+version = "0.4.15"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/85/ad/430fb60d90e1d112a62ff57bdd1f286ec73a2a0331272febfddd21f330e1/StrEnum-0.4.15.tar.gz", hash = "sha256:878fb5ab705442070e4dd1929bb5e2249511c0bcf2b0eeacf3bcd80875c82eff" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/81/69/297302c5f5f59c862faa31e6cb9a4cd74721cd1e052b38e464c5b402df8b/StrEnum-0.4.15-py3-none-any.whl", hash = "sha256:a30cda4af7cc6b5bf52c8055bc4bf4b2b6b14a93b574626da33df53cf7740659" },
 ]
 
 [[package]]

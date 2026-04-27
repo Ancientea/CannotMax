@@ -30,6 +30,7 @@ CONFIG = {
         "pyproject.toml",
         "monster.csv",
         "monster_greenvine.csv",
+        "maafw",
     ]
 }
 

@@ -11,6 +11,23 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def resolve_maafw_path() -> str:
+    if os.environ.get("MAAFW_BINARY_PATH"):
+        return os.environ["MAAFW_BINARY_PATH"]
+    candidates = [
+        Path(sys.executable).parent / "maafw",
+        Path.cwd() / "maafw",
+        Path(__file__).resolve().parent / "maafw",
+    ]
+    for p in candidates:
+        if p.is_dir() and any(p.glob("MaaFramework.dll")):
+            resolved = str(p)
+            os.environ["MAAFW_BINARY_PATH"] = resolved
+            logger.info(f"自动解析maafw路径: {resolved}")
+            return resolved
+    return ""
+
+
 class MaaAvailability(Enum):
     UNKNOWN = "unknown"
     AVAILABLE = "available"
@@ -43,7 +60,7 @@ class MaaConnectionConfig:
     screencap_method: int = 1
     input_method: int = 4
     screenshot_use_raw_size: bool = True
-    config: str = ""
+    config: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -80,7 +97,7 @@ class MaaFrameworkDetector:
             logger.warning(cls._status_message)
             return cls._status
 
-        binary_path = os.environ.get("MAAFW_BINARY_PATH", "")
+        binary_path = resolve_maafw_path()
         if binary_path and not Path(binary_path).exists():
             cls._status = MaaAvailability.BINARY_MISSING
             cls._status_message = f"MAAFW_BINARY_PATH路径无效: {binary_path}"
@@ -197,7 +214,7 @@ class MaaAdbConnector:
             return
 
         try:
-            binary_path = self._config.maa_binary_path or os.environ.get("MAAFW_BINARY_PATH", "")
+            binary_path = self._config.maa_binary_path or resolve_maafw_path()
             if binary_path:
                 os.environ["MAAFW_BINARY_PATH"] = binary_path
 
@@ -212,8 +229,8 @@ class MaaAdbConnector:
             self._ctrl = AdbController(
                 self._config.adb_path,
                 target_serial,
-                screencap_method=self._config.screencap_method,
-                input_method=self._config.input_method,
+                screencap_methods=self._config.screencap_method,
+                input_methods=self._config.input_method,
                 config=self._config.config,
             )
 

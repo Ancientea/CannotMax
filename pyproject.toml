@@ -17,7 +17,7 @@ dependencies = [
     "windows-capture",
     "toml",
     "pywin32>=311",
-    "maa>=0.0.3",
+    "maafw>=5.10.2",
 ]
 
 [dependency-groups]

@@ -261,11 +261,10 @@ class PcConnector:
             self.screen_height = rect[3] - rect[1]
             
             try:
-                # 尝试初始化 MaaFramework 控制器以实现后台截图与点击
-                repo_root = Path("MaaAutoReverse").resolve()
-                if str(repo_root) not in sys.path:
-                    sys.path.insert(0, str(repo_root))
-                os.environ["MAAFW_BINARY_PATH"] = str(repo_root / "runtime" / "bin")
+                from maa_adb_connector import resolve_maafw_path
+                binary_path = resolve_maafw_path()
+                if binary_path:
+                    os.environ["MAAFW_BINARY_PATH"] = binary_path
                 
                 from maa.toolkit import Toolkit
                 from maa.controller import Win32Controller, MaaWin32ScreencapMethodEnum, MaaWin32InputMethodEnum

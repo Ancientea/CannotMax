@@ -411,19 +411,23 @@ class ArknightsApp(QMainWindow):
         self.serial_label = QLabel("模拟器序列号:")
         self.serial_entry = QComboBox()
         self.serial_entry.setEditable(True)
-        self.serial_entry.setFixedWidth(150)
+        self.serial_entry.setFixedWidth(200)
         self.serial_entry.lineEdit().setPlaceholderText("127.0.0.1:5555")
 
         self.serial_button = QPushButton("更新")
         self.serial_button.clicked.connect(self.update_device_serial)
 
-        self.maa_status_label = QLabel("")
-        self.maa_status_label.setStyleSheet("color: #666666; font-size: 10px;")
-
         conn_row1_layout.addWidget(self.serial_label)
         conn_row1_layout.addWidget(self.serial_entry)
         conn_row1_layout.addWidget(self.serial_button)
-        conn_row1_layout.addWidget(self.maa_status_label)
+
+        # MAA状态行
+        self.maa_status_label = QLabel("")
+        self.maa_status_label.setStyleSheet("color: #666666; font-size: 10px;")
+        self.maa_status_label.setWordWrap(True)
+
+        connection_layout.addWidget(conn_row1)
+        connection_layout.addWidget(self.maa_status_label)
 
         # 捕获设置行
         conn_row2 = QWidget()
