@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil
 import os
 
-def unpackage():
+def unpackage(extract_images=True):
     current_dir = Path(__file__).parent
     extract_dir = current_dir / "tmp"
     package_dir = current_dir / "package"
@@ -26,7 +26,12 @@ def unpackage():
         # 解压到临时目录以处理命名冲突
         temp_dir = extract_dir / f"_temp_{zip_path.stem}"
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(temp_dir)
+            if extract_images:
+                zip_ref.extractall(temp_dir)
+            else:
+                # 过滤掉 images 目录中的文件
+                members = [m for m in zip_ref.namelist() if not m.startswith('images/') and not '/images/' in f"/{m}"]
+                zip_ref.extractall(temp_dir, members=members)
         
         # 将内容移入 tmp 目录，并处理冲突
         for item in temp_dir.iterdir():
