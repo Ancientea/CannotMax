@@ -189,9 +189,10 @@ class AdbConnector:
         # 将二进制数据转换为numpy数组
         argb_array = np.frombuffer(data, dtype=np.uint8)[header_size:]
 
-        # 确保数据长度正确（1920x1080分辨率，4通道）
-        if len(argb_array) != 1920 * 1080 * 4:
-            raise ValueError("Invalid data length for 1920x1080 ARGB image")
+        # 确保数据长度正确（实际屏幕分辨率，4通道）
+        expected_length = self.screen_width * self.screen_height * 4
+        if len(argb_array) != expected_length:
+            raise ValueError(f"Invalid data length for {self.screen_width}x{self.screen_height} ARGB image")
 
         # 转换为正确的形状 (高度, 宽度, 通道)
         argb_array = argb_array.reshape((self.screen_height, self.screen_width, 4))
@@ -222,13 +223,13 @@ class AdbConnector:
             if image is None:
                 raise RuntimeError("OpenCV failed to decode image")
         except subprocess.CalledProcessError as e:
-            logger.exception("Screenshot capture failed (ADB error):", e)
+            logger.exception("Screenshot capture failed (ADB error): %s", e)
             return None
         except gzip.BadGzipFile as e:
-            logger.exception("Gzip decompression failed:", e)
+            logger.exception("Gzip decompression failed: %s", e)
             return None
         except Exception as e:
-            logger.exception("Image processing error:", e)
+            logger.exception("Image processing error: %s", e)
             return None
         # logger.debug(f"获取图片用时{time.time()-ta:.3f}s")
         return image
