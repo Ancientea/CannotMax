@@ -29,6 +29,9 @@ scikit-learn = ">=1.8.0,<2"
 onnxruntime = ">=1.24.2,<2"
 rapidocr = ">=3.8.0,<4"
 
+[pypi-dependencies]
+windows-capture = ">=2.0.0,<3"
+
 [feature.cuda12.system-requirements]
 cuda = "12.0"
 

@@ -3,7 +3,7 @@ name = "CannotMax-Greenvine"
 version = "1.0.7"
 description = "这是一个基于深度学习的明日方舟游戏辅助工具，用于自动识别游戏画面中的单位并预测战斗结果。"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "matplotlib",
     "numpy",
@@ -17,6 +17,7 @@ dependencies = [
     "windows-capture",
     "toml",
     "pywin32>=311",
+    "maa>=0.0.3",
 ]
 
 [dependency-groups]
