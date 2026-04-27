@@ -17,3 +17,11 @@ output/
 data_train/tmp/
 data_train/package/*.zip
 data_train/images/
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# other
+.claude/
+.codeartdoer/

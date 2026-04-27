@@ -1,0 +1,64 @@
+[workspace]
+name = "CannotMax-Greenvine"
+version = "1.0.7"
+description = "这是一个基于深度学习的明日方舟游戏辅助工具，用于自动识别游戏画面中的单位并预测战斗结果。"
+readme = "README.md"
+channels = [
+    "https://mirrors.ustc.edu.cn/anaconda/cloud/conda-forge",
+    "https://prefix.dev/conda-forge",
+    "conda-forge",
+]
+platforms = ["win-64"]
+
+[pypi-options]
+index-url = "https://mirrors.cloud.tencent.com/pypi/simple/"
+
+[tasks]
+
+[dependencies]
+python = "3.13.*"
+numpy = ">=2.4.3,<3"
+pandas = ">=3.0.2,<4"
+pywin32 = ">=311,<312"
+toml = ">=0.10.2,<0.11"
+pillow = ">=12.2.0,<13"
+matplotlib = ">=3.10.9,<4"
+opencv = ">=4.13.0,<5"
+pyqt6 = ">=6.11.0,<7"
+scikit-learn = ">=1.8.0,<2"
+onnxruntime = ">=1.24.2,<2"
+rapidocr = ">=3.8.0,<4"
+
+[feature.cuda12.system-requirements]
+cuda = "12.0"
+
+[feature.cuda12.dependencies]
+cuda-version = "12.9.*"
+pytorch = "*"
+torchvision = "*"
+
+[feature.cuda13.system-requirements]
+cuda = "13.0"
+
+[feature.cuda13.dependencies]
+cuda-version = "13.2.*"
+pytorch = "*"
+torchvision = "*"
+
+[feature.cpu.dependencies]
+pytorch = "*"
+torchvision = "*"
+
+[feature.dev.dependencies]
+onnx = "*"
+onnxscript = "*"
+pyinstaller = "*"
+
+[environments]
+default = ["cpu"]
+cpu = ["cpu"]
+cuda12 = ["cuda12"]
+cuda13 = ["cuda13"]
+dev-cpu = ["cpu", "dev"]
+dev-cuda12 = ["cuda12", "dev"]
+dev-cuda13 = ["cuda13", "dev"]
