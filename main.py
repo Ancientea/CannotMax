@@ -1,5 +1,6 @@
 import json
 import logging
+import argparse
 
 import subprocess
 import sys
@@ -88,17 +89,22 @@ class ArknightsApp(QMainWindow):
         }
     """
 
-    def __init__(self):
+    def __init__(self, adb_serial=None):
         super().__init__()
         # 捕获模式：ADB, PC, WIN
         self.current_capture_mode = "ADB"
 
         # 尝试连接模拟器
-        self.adb_connector = loadData.AdbConnector()
+        self.adb_serial = adb_serial  # 保存命令行指定的ADB序列号
+        self.adb_connector = loadData.AdbConnector(adb_serial=adb_serial)
         self.pc_connector = loadData.PcConnector()
         self.adb_connector_thread = ADBConnectorThread(self)
         self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
-        self.adb_connector_thread.start()
+        # 如果提供了ADB序列号，直接连接，否则启动连接线程
+        if adb_serial:
+            self.adb_connector.connect()
+        else:
+            self.adb_connector_thread.start()
 
         self.auto_fetch_running = False
         self.is_invest = False
@@ -134,6 +140,12 @@ class ArknightsApp(QMainWindow):
             self.input_panel.predict_button.setEnabled(False)
             self.input_panel.predict_button.setToolTip("模型未加载，无法使用此功能")
 
+        # 启动命令监控线程
+        if adb_serial:
+            import threading
+            self.command_monitor_thread = threading.Thread(target=self.monitor_commands, daemon=True)
+            self.command_monitor_thread.start()
+
     def init_ui(self):
         try:
             with open("pyproject.toml", "r", encoding="utf-8") as f:
@@ -144,9 +156,8 @@ class ArknightsApp(QMainWindow):
         model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
         self.setWindowTitle(f"铁鲨鱼_Arknights Neural Network - v{version} - model: {model_name}")
         self.setWindowIcon(QIcon("ico/icon.ico"))
-        self.setGeometry(100, 100, 500, 580)
-        self.setMinimumWidth(580)
-        self.setMaximumWidth(580)
+        self.setGeometry(100, 100,500, 580)
+        self.setMinimumWidth(100)
         self.background = QPixmap("ico/background.png")
 
         # 初始化动画对象
@@ -157,11 +168,12 @@ class ArknightsApp(QMainWindow):
         # 主布局
         main_widget = QWidget()
         main_layout = QHBoxLayout(main_widget)
-        main_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
 
         # 左侧面板
         self.input_panel = InputPanelUI()
-        self.input_panel.setFixedWidth(528)
+        self.input_panel.setMinimumWidth(300)
         self.input_panel.predict_requested.connect(self.predict)
         self.input_panel.reset_requested.connect(self.reset_entries)
         self.input_panel.input_changed.connect(self.update_input_display)
@@ -169,8 +181,12 @@ class ArknightsApp(QMainWindow):
 
         # 中央面板 - 结果和控制区
         center_panel = QWidget()
-        center_panel.setFixedWidth(550)  # 固定右侧面板宽度
+        center_panel.setMinimumWidth(300)  # 设置最小宽度
         center_layout = QVBoxLayout(center_panel)
+
+        # 添加到主布局
+        main_layout.addWidget(self.input_panel, 1)  # 1表示拉伸因子
+        main_layout.addWidget(center_panel, 1)  # 1表示拉伸因子
 
         # 顶部区域 - 输入显示
         input_display = QGroupBox()
@@ -843,6 +859,8 @@ class ArknightsApp(QMainWindow):
 
     def toggle_auto_fetch(self):
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
+            # 判断是否是多开模式（通过命令行指定了ADB设备）
+            is_multi_instance = hasattr(self, 'adb_serial') and self.adb_serial is not None
             self.auto_fetch = auto_fetch.AutoFetch(
                 self.active_connector,
                 self.game_mode,
@@ -853,6 +871,7 @@ class ArknightsApp(QMainWindow):
                 start_callback=self.start_callback,
                 stop_callback=self.stop_callback,
                 training_duration=float(self.duration_entry.text()) * 3600,  # 获取训练时长
+                is_multi_instance=is_multi_instance,  # 传递多开模式参数
             )
             self.auto_fetch.start_auto_fetch()
         else:
@@ -876,13 +895,29 @@ class ArknightsApp(QMainWindow):
         self.serial_entry.clear()
         if devices:
             self.serial_entry.addItems(devices)
-            if current_text in devices:
+            # 优先使用命令行指定的ADB序列号
+            if hasattr(self, 'adb_serial') and self.adb_serial:
+                if self.adb_serial in devices:
+                    self.serial_entry.setCurrentText(self.adb_serial)
+                    logger.info(f"使用命令行指定的ADB设备: {self.adb_serial}")
+                else:
+                    # 如果命令行指定的设备不在列表中，仍然添加它
+                    self.serial_entry.addItem(self.adb_serial)
+                    self.serial_entry.setCurrentText(self.adb_serial)
+                    logger.warning(f"命令行指定的ADB设备 {self.adb_serial} 不在设备列表中")
+            elif current_text in devices:
                 self.serial_entry.setCurrentText(current_text)
             else:
                 self.serial_entry.setCurrentIndex(0)
         else:
-            self.serial_entry.addItem("127.0.0.1:5555")
-            self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
+            # 如果没有设备，使用命令行指定的序列号或默认值
+            if hasattr(self, 'adb_serial') and self.adb_serial:
+                self.serial_entry.addItem(self.adb_serial)
+                self.serial_entry.setCurrentText(self.adb_serial)
+                logger.info(f"使用命令行指定的ADB设备: {self.adb_serial}")
+            else:
+                self.serial_entry.addItem("127.0.0.1:5555")
+                self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
 
     def update_device_serial(self):
         new_serial = self.serial_entry.currentText()
@@ -1029,9 +1064,48 @@ class ArknightsApp(QMainWindow):
             self.auto_fetch.stop_auto_fetch()
         event.accept()
 
+    def monitor_commands(self):
+        """监控命令文件，执行相应操作"""
+        import os
+        import time
+        
+        if not self.adb_serial:
+            return
+        
+        # 命令文件路径
+        command_file = f"command_{self.adb_serial.replace(':', '_')}.txt"
+        
+        while True:
+            try:
+                if os.path.exists(command_file):
+                    with open(command_file, 'r') as f:
+                        command = f.read().strip()
+                    
+                    if command == "start_auto_fetch":
+                        logger.info(f"收到启动自动获取命令")
+                        self.toggle_auto_fetch()
+                    elif command == "stop_auto_fetch":
+                        logger.info(f"收到停止自动获取命令")
+                        if hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running:
+                            self.toggle_auto_fetch()
+                    
+                    # 删除命令文件
+                    os.remove(command_file)
+                    logger.info(f"执行命令完成: {command}")
+            except Exception as e:
+                logger.error(f"监控命令时出错: {e}")
+            
+            # 每1秒检查一次
+            time.sleep(1)
+
 
 if __name__ == "__main__":
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description="明日方舟铁鲨鱼工具")
+    parser.add_argument("--adb", type=str, help="ADB设备序列号")
+    args = parser.parse_args()
+    
     app = QApplication([])
-    window = ArknightsApp()
+    window = ArknightsApp(adb_serial=args.adb)
     window.show()
     app.exec()

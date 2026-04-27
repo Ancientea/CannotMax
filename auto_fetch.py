@@ -49,10 +49,12 @@ class AutoFetch:
         start_callback: Callable[[], None],
         stop_callback: Callable[[], None],
         training_duration,
+        is_multi_instance=False,  # 新增：是否是多开模式
     ):
         self.connector = connector
         self.game_mode = game_mode  # 游戏模式（30人或自娱自乐）
         self.is_invest = is_invest  # 是否投资
+        self.is_multi_instance = is_multi_instance  # 新增：是否是多开模式
         self.current_prediction = 0.5  # 当前预测结果，初始值为0.5
         self.recognize_results = []  # 识别结果列表
         self.field_recognize_result = {}  # 场地识别结果
@@ -562,9 +564,48 @@ class AutoFetch:
                 self.unknown_start_time = time.time()  # 刚进入 UNKNOWN 状态，开始计时
                 logger.info("进入 UNKNOWN 状态，开始计时")
             
-            # 如果连续处于 UNKNOWN 状态超过 15 秒（涵盖正常的过场动画加载时间）
-            elif time.time() - self.unknown_start_time > 15.0:
-                logger.info("连续 15 秒处于未知状态，开始检测是否断线...")
+            # 如果是多开模式，且连续处于 UNKNOWN 状态超过 3 秒，尝试点击屏幕并检查登录按钮
+            if self.is_multi_instance and time.time() - self.unknown_start_time > 3.0 and time.time() - self.unknown_start_time < 15.0:
+                # 检查是否是刚启动的情况
+                if time.time() - self.start_time < 30:  # 假设启动后30秒内属于刚启动状态
+                    logger.info("连续 3 秒处于未知状态，尝试点击屏幕并检查登录按钮...")
+                    # 点击屏幕中心
+                    self.connector.click((0.5, 0.5))
+                    logger.info("点击屏幕中心")
+                    # 等待8秒
+                    time.sleep(8)
+                    # 检查是否是登录页面
+                    screenshot = self.connector.capture_screenshot()
+                    if screenshot is not None:
+                        matched, pos = self.login_manager.match_template(screenshot, "login_button", threshold=0.7)
+                        if matched:
+                            logger.info("找到登录按钮，执行登录流程")
+                            if not self.login_manager.auto_login():
+                                logger.error("自动登录失败，尝试重启游戏")
+                                # 尝试重启游戏
+                                if self.login_manager.restart_game():
+                                    if not self.login_manager.auto_login():
+                                        logger.error("重启后自动登录失败，无法继续")
+                                        self.auto_fetch_running = False
+                                        self.stop_callback()
+                                        self.unknown_start_time = None
+                                        return
+                        else:
+                            logger.info("未找到登录按钮，尝试重启游戏")
+                            # 直接重启游戏
+                            if self.login_manager.restart_game():
+                                if not self.login_manager.auto_login():
+                                    logger.error("重启后自动登录失败，无法继续")
+                                    self.auto_fetch_running = False
+                                    self.stop_callback()
+                                    self.unknown_start_time = None
+                                    return
+                    # 重置计时器，避免重复执行
+                    self.unknown_start_time = None
+            
+            # 如果连续处于 UNKNOWN 状态超过 30 秒（涵盖正常的过场动画加载时间）
+            elif time.time() - self.unknown_start_time > 30.0:
+                logger.info("连续 30 秒处于未知状态，开始检测是否断线...")
                 # 检查是否是因为用户点击了停止按钮
                 if not self.auto_fetch_running:
                     logger.info("用户停止了自动获取，不再执行登录流程")
