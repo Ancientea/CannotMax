@@ -207,9 +207,13 @@ class AdbConnector:
         return image
 
     def decode_raw_with_gzip(self, data: bytes):
-        decompressed_data = gzip.decompress(data)
-        image = self.decode_raw(decompressed_data)
-        return image
+        try:
+            decompressed_data = gzip.decompress(data)
+            image = self.decode_raw(decompressed_data)
+            return image
+        except Exception as e:
+            logger.exception("Gzip decompression or image decoding failed: %s", e)
+            return None
 
     def capture_screenshot_raw_gzip(self):
         get_raw_gzip_cmd = (
