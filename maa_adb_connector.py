@@ -226,8 +226,9 @@ class MaaAdbConnector:
             target_serial = self.device_serial if self.device_serial else "127.0.0.1:5555"
             self.device_serial = target_serial
 
+            adb_path = str(Path(self._config.adb_path).resolve())
             self._ctrl = AdbController(
-                self._config.adb_path,
+                adb_path,
                 target_serial,
                 screencap_methods=self._config.screencap_method,
                 input_methods=self._config.input_method,
