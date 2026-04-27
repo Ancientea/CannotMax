@@ -307,16 +307,21 @@ class LoginManager:
         
         # 3. 等待登录完成
         logger.info("等待登录完成")
-        time.sleep(10)  # 等待10秒
+        time.sleep(15)  # 等待15秒
         
-        # 4. 寻找争锋频道页面
+        # 4. 点击屏幕右上角
+        logger.info("点击屏幕右上角")
+        self.connector.click((0.9, 0.1))  # 相对坐标，右上角
+        time.sleep(2)  # 等待操作完成
+        
+        # 5. 寻找争锋频道页面
         logger.info("寻找争锋频道页面")
         
         # 优先检测competition_page
         for i in range(3):
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
-                matched, pos = self.match_template(screenshot, "competition_page")
+                matched, pos = self.match_template(screenshot, "competition_page", threshold=0.7)
                 if matched:
                     # 计算相对坐标
                     h, w = screenshot.shape[:2]
@@ -331,9 +336,9 @@ class LoginManager:
             time.sleep(2)
         
         # 如果检测不到competition_page，检测关闭按钮
-        close_buttons = ["announcement_close", "announcement_close2", "event_claim_close"]
+        close_buttons = ["announcement_close", "event_claim_close"]
         for button in close_buttons:
-            for i in range(5):  # 每个关闭按钮检测五次
+            for i in range(5):  # 检测五次
                 screenshot = self.connector.capture_screenshot()
                 if screenshot is not None:
                     matched, pos = self.match_template(screenshot, button, threshold=0.9)
@@ -353,7 +358,7 @@ class LoginManager:
         for i in range(3):
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
-                matched, pos = self.match_template(screenshot, "competition_page")
+                matched, pos = self.match_template(screenshot, "competition_page", threshold=0.7)
                 if matched:
                     # 计算相对坐标
                     h, w = screenshot.shape[:2]

@@ -577,7 +577,7 @@ class AutoFetch:
                     # 检查是否是登录页面
                     screenshot = self.connector.capture_screenshot()
                     if screenshot is not None:
-                        matched, pos = self.login_manager.match_template(screenshot, "login_button", threshold=0.7)
+                        matched, pos = self.login_manager.match_template(screenshot, "login_button", threshold=0.9)
                         if matched:
                             logger.info("找到登录按钮，执行登录流程")
                             if not self.login_manager.auto_login():
