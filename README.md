@@ -65,6 +65,10 @@ uv run main.py
    uv sync --extra cu128
    ```
 
+## 开发说明
+
+- 使用AI编程助手时建议导入[MAA Framework的Skill库](https://github.com/Kutius/maaframework-skills)
+
 ## 注意事项
 
 - 选择范围时要尽可能按例子框选，且尽可能将直播画面放大再进行框选
