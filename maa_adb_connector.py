@@ -88,19 +88,19 @@ class MaaFrameworkDetector:
         if cls._checked:
             return cls._status
 
-        try:
-            from maa.toolkit import Toolkit
-        except ImportError:
-            cls._status = MaaAvailability.IMPORT_FAILED
-            cls._status_message = "MAA Framework导入失败，请安装maa.library"
-            cls._checked = True
-            logger.warning(cls._status_message)
-            return cls._status
-
         binary_path = resolve_maafw_path()
         if binary_path and not Path(binary_path).exists():
             cls._status = MaaAvailability.BINARY_MISSING
             cls._status_message = f"MAAFW_BINARY_PATH路径无效: {binary_path}"
+            cls._checked = True
+            logger.warning(cls._status_message)
+            return cls._status
+
+        try:
+            from maa.toolkit import Toolkit
+        except Exception:
+            cls._status = MaaAvailability.IMPORT_FAILED
+            cls._status_message = "MAA Framework导入失败，请安装maa.library"
             cls._checked = True
             logger.warning(cls._status_message)
             return cls._status
