@@ -120,7 +120,8 @@ class AdbConnector:
             result = subprocess.run(
                 device_cmd, shell=True, capture_output=True, text=True, timeout=5
             )
-            logger.info(f"ADB devices输出:\n{result.stdout}")
+            # 只在调试模式下输出完整设备列表
+            logger.debug(f"ADB devices输出:\n{result.stdout}")
 
             devices: list[str] = []
             for line in result.stdout.split("\n"):

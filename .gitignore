@@ -18,3 +18,4 @@ data_train/tmp/
 data_train/package/*.zip
 data_train/images/
 multi_ports.txt
+arknights.csv
