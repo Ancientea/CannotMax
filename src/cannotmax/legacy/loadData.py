@@ -10,7 +10,7 @@ import win32con
 import sys
 import os
 from pathlib import Path
-from winrt_capture import WinRTScreenCapture
+from src.cannotmax.utils import WinRTScreenCapture
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

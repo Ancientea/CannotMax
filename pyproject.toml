@@ -25,6 +25,7 @@ dev = [
     "onnx>=1.19.0",
     "onnxscript>=0.7.0",
     "pyinstaller>=6.15.0",
+    "pytest>=8.0.0",
 ]
 
 [project.optional-dependencies]
