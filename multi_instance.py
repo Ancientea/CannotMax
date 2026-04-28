@@ -7,24 +7,109 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QPlainTextEdit, QSpinBox, QComboBox, QCheckBox,
-    QMessageBox
+    QMessageBox, QSplitter, QScrollArea, QFrame, QLineEdit
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
 
 import loadData
 import auto_fetch
 import data_package
 from recognize import MONSTER_COUNT
+from login import LoginManager
+from config import FIELD_FEATURE_COUNT
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    filename='multi_instance.log',
-    filemode='a'
+
+class LogDisplay(QPlainTextEdit):
+    log_signal = pyqtSignal(str)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setReadOnly(True)
+        self._auto_scroll = True
+        self.log_signal.connect(self._on_log)
+    
+    def is_at_bottom(self):
+        scrollbar = self.verticalScrollBar()
+        return scrollbar.value() >= scrollbar.maximum() - 10
+    
+    def scrollContentsBy(self, dx, dy):
+        super().scrollContentsBy(dx, dy)
+        self._auto_scroll = self.is_at_bottom()
+    
+    def _on_log(self, text):
+        was_at_bottom = self._auto_scroll
+        self.appendPlainText(text)
+        if was_at_bottom:
+            self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+    
+    def append_log(self, text):
+        self.log_signal.emit(text)
+
+logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger("PIL").setLevel(logging.INFO)
+stream_handler = logging.StreamHandler()
+formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
+stream_handler.setFormatter(formatter)
+logging.getLogger().addHandler(stream_handler)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# 用于共享资源密集型对象，减少多开时的内存占用
+_cannot_model = None
+_recognizer = None
+_field_recognizer = None
+
+
+def get_cannot_model():
+    """获取共享的 CannotModel 实例"""
+    global _cannot_model
+    if _cannot_model is None:
+        logger.info("首次初始化 CannotModel...")
+        try:
+            from predict import CannotModel
+            logger.info("Using PyTorch model for predictions.")
+        except Exception:
+            from predict_onnx import CannotModel
+            logger.info("Using ONNX model for predictions.")
+        
+        _cannot_model = CannotModel()
+        logger.info("CannotModel 初始化完成")
+    return _cannot_model
+
+
+def get_recognizer():
+    """获取共享的 RecognizeMonster 实例"""
+    global _recognizer
+    if _recognizer is None:
+        logger.info("首次初始化 RecognizeMonster...")
+        from recognize import RecognizeMonster
+        _recognizer = RecognizeMonster(method="ADB")
+        logger.info("RecognizeMonster 初始化完成")
+    return _recognizer
+
+
+def get_field_recognizer():
+    """获取共享的 FieldRecognizer 实例"""
+    global _field_recognizer
+    if _field_recognizer is None:
+        logger.info("首次初始化 FieldRecognizer...")
+        from field_recognition import FieldRecognizer
+        _field_recognizer = FieldRecognizer()
+        logger.info("FieldRecognizer 初始化完成")
+    return _field_recognizer
+
+
+def clear_all_singleton_resources():
+    """清空所有单例缓存（用于测试或重新加载）"""
+    global _cannot_model, _recognizer, _field_recognizer
+    _cannot_model = None
+    _recognizer = None
+    _field_recognizer = None
+    logger.info("所有单例资源已清空")
+
 
 class DeviceInstance:
     def __init__(self, port):
@@ -32,15 +117,42 @@ class DeviceInstance:
         self.serial = f"127.0.0.1:{port}"
         self.connector = loadData.AdbConnector(self.serial)
         self.auto_fetch = None
+        self.login_manager = None
         self.status = "已停止"
+        self.auto_fetch_thread = None  # 保存线程引用
+        self.stop_event = threading.Event()  # 使用Event对象进行线程间通信，更可靠
 
     def start(self, game_mode, is_invest):
         try:
             logger.info(f"[{self.serial}] 开始启动实例，游戏模式: {game_mode}, 自动投资: {is_invest}")
+            self.stop_event.clear()
+            self.status = "连接中"
             self.connector.connect()
             if not self.connector.is_connected:
                 self.status = "连接失败"
                 logger.error(f"[{self.serial}] 连接失败")
+                return False
+            
+            self.login_manager = LoginManager(self.connector)
+            logger.info(f"[{self.serial}] 尝试首次启动自动登录")
+            self.status = "登录中"
+            login_success = self.login_manager.auto_login(first_start=True, stop_callback=lambda: not self.stop_event.is_set())
+            
+            # 检查是否在登录过程中用户点击了停止
+            if self.stop_event.is_set():
+                logger.info(f"[{self.serial}] 登录过程被用户停止")
+                self.status = "已停止"
+                return False
+            
+            if login_success:
+                logger.info(f"[{self.serial}] 首次启动自动登录成功")
+            else:
+                logger.warning(f"[{self.serial}] 首次启动自动登录失败，继续启动")
+            
+            # 再次检查停止标志（防止在登录成功后、创建auto_fetch前用户点击停止）
+            if self.stop_event.is_set():
+                logger.info(f"[{self.serial}] 用户在登录成功后点击了停止")
+                self.status = "已停止"
                 return False
             
             self.auto_fetch = auto_fetch.AutoFetch(
@@ -52,7 +164,10 @@ class DeviceInstance:
                 updater=lambda: None,
                 start_callback=lambda: None,
                 stop_callback=lambda: None,
-                training_duration=-1
+                training_duration=-1,
+                recognizer=get_recognizer(),
+                cannot_model=get_cannot_model(),
+                field_recognizer=get_field_recognizer() if FIELD_FEATURE_COUNT > 0 else None,
             )
             logger.info(f"[{self.serial}] 初始化 AutoFetch 成功")
             self.auto_fetch.start_auto_fetch()
@@ -65,12 +180,21 @@ class DeviceInstance:
             return False
 
     def stop(self):
-        logger.info(f"[{self.serial}] 开始停止实例")
+        logger.info(f"[{self.serial}] 强制停止实例")
+        # 设置停止事件，用于中断登录过程
+        self.stop_event.set()
+        
         if self.auto_fetch:
-            self.auto_fetch.stop_auto_fetch()
-            logger.info(f"[{self.serial}] 停止 AutoFetch 成功")
+            # 强制设置停止标志，不等待线程退出
+            self.auto_fetch.auto_fetch_running = False
+            logger.info(f"[{self.serial}] 强制停止 AutoFetch")
+        else:
+            # 如果 auto_fetch 还未创建，说明可能正在登录过程中
+            logger.info(f"[{self.serial}] auto_fetch 尚未创建，停止登录过程")
+        
+        # 状态改为已停止（stop_event 会在下次启动时自动清除）
         self.status = "已停止"
-        logger.info(f"[{self.serial}] 停止成功，状态: {self.status}")
+        logger.info(f"[{self.serial}] 强制停止成功，状态: {self.status}")
 
     def get_status_line(self):
         if not self.auto_fetch or not self.auto_fetch.auto_fetch_running:
@@ -90,7 +214,7 @@ class DeviceInstance:
                 f"填写: {af.total_fill_count:<3} | "
                 f"错误: {af.incorrect_fill_count:<3} | "
                 f"预测: {af.current_prediction:.2f} | "
-                f"时长: {int(hours)}小时{int(minutes)}分钟")
+                f"时长: {int(hours)}h {int(minutes)}m")
 
 class MultiInstanceManager(QMainWindow):
     instance = None  # 类变量，用于在回调函数中引用当前实例
@@ -99,9 +223,10 @@ class MultiInstanceManager(QMainWindow):
         super().__init__()
         MultiInstanceManager.instance = self  # 保存当前实例的引用
         self.setWindowTitle("铁鲨鱼多开自动化工具")
-        self.setGeometry(100, 100, 450, 600)  # 增加窗口高度以容纳日志显示
+        self.setGeometry(100, 100, 530, 720)
         
         self.instances = {}
+        self.starting_ports = set()  # 正在启动中的端口集合，防止重复启动
         self.init_ui()
         self.setup_logger()
         
@@ -126,21 +251,25 @@ class MultiInstanceManager(QMainWindow):
         self.invest_check = QCheckBox("自动投资")
         self.invest_check.setChecked(False)
         settings_layout.addWidget(self.invest_check)
+        settings_layout.addStretch()
         
         layout.addLayout(settings_layout)
         
-        # 端口输入
-        layout.addWidget(QLabel("ADB端口 (每行一个，例如 5555):"))
-        self.ports_input = QPlainTextEdit()
-        # 尝试读取历史端口
+        # 端口输入（横向，逗号分隔）
+        ports_layout = QHBoxLayout()
+        ports_layout.addWidget(QLabel("端口:"))
+        self.ports_input = QLineEdit()
+        self.ports_input.setPlaceholderText("16416, 16448, 16480, 16512")
         try:
             if Path("multi_ports.txt").exists():
-                self.ports_input.setPlainText(Path("multi_ports.txt").read_text())
+                raw = Path("multi_ports.txt").read_text().strip()
+                ports = self._parse_ports(raw)
+                self.ports_input.setText(", ".join(ports))
         except:
             pass
-        self.ports_input.setPlaceholderText("5555\n5557\n5559")
-        self.ports_input.setFixedHeight(100)
-        layout.addWidget(self.ports_input)
+        self.ports_input.textChanged.connect(self._on_ports_text_changed)
+        ports_layout.addWidget(self.ports_input)
+        layout.addLayout(ports_layout)
         
         # 按钮和端口选择器
         btn_layout = QHBoxLayout()
@@ -163,64 +292,118 @@ class MultiInstanceManager(QMainWindow):
         btn_layout.addWidget(self.port_combo)
         layout.addLayout(btn_layout)
         
-        # 状态显示
-        layout.addWidget(QLabel("运行状态:"))
-        self.status_display = QPlainTextEdit()
-        self.status_display.setReadOnly(True)
-        # 使用等宽字体以保证列对齐
         font = QFont("Courier New", 10)
         if sys.platform == "win32":
             font = QFont("Consolas", 10)
-        self.status_display.setFont(font)
-        layout.addWidget(self.status_display)
+        
+        # 使用 QSplitter 让状态和日志区域可以自由拖动调整大小
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        
+        # 状态显示区域（带单独控制按钮的滚动区域）
+        self.status_scroll = QScrollArea()
+        self.status_scroll.setWidgetResizable(True)
+        self.status_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.status_container = QWidget()
+        self.status_layout = QVBoxLayout(self.status_container)
+        self.status_layout.setContentsMargins(0, 0, 0, 0)
+        self.status_layout.setSpacing(2)
+        self.status_layout.addStretch()
+        self.status_scroll.setWidget(self.status_container)
+        self.status_scroll.setMinimumHeight(80)
+        splitter.addWidget(self.status_scroll)
         
         # 日志显示
-        layout.addWidget(QLabel("详细日志:"))
-        self.log_display = QPlainTextEdit()
-        self.log_display.setReadOnly(True)
+        self.log_display = LogDisplay()
         self.log_display.setFont(font)
-        layout.addWidget(self.log_display)
+        self.log_display.setMaximumBlockCount(2000)
+        splitter.addWidget(self.log_display)
+        
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 3)
+        splitter.setSizes([440, 330])
+        layout.addWidget(splitter)
+        
+        self.port_widgets = {}
+        self._formatting_ports = False
+
+    @staticmethod
+    def _parse_ports(text):
+        parts = text.replace('\n', ',').replace('，', ',').replace(';', ',').replace(' ', ',').split(',')
+        return [p.strip() for p in parts if p.strip().isdigit()]
+
+    def _on_ports_text_changed(self):
+        if self._formatting_ports:
+            return
+        text = self.ports_input.text()
+        ports = self._parse_ports(text)
+        formatted = ", ".join(ports)
+        if text != formatted and ports:
+            cursor_pos = self.ports_input.cursorPosition()
+            self._formatting_ports = True
+            self.ports_input.setText(formatted)
+            self.ports_input.setCursorPosition(min(cursor_pos, len(formatted)))
+            self._formatting_ports = False
 
     def start_all(self):
-        # 保存当前端口配置
         try:
-            Path("multi_ports.txt").write_text(self.ports_input.toPlainText())
+            Path("multi_ports.txt").write_text(self.ports_input.text())
             logger.info("保存端口配置到 multi_ports.txt")
         except Exception as e:
             logger.error(f"保存端口配置失败: {str(e)}")
             
-        ports = [p.strip() for p in self.ports_input.toPlainText().split('\n') if p.strip()]
+        ports = self._parse_ports(self.ports_input.text())
         game_mode = self.game_mode_combo.currentText()
         is_invest = self.invest_check.isChecked()
         
         logger.info(f"开始启动多开实例，端口列表: {ports}, 游戏模式: {game_mode}, 自动投资: {is_invest}")
         
-        def run_start():
-            for port in ports:
-                # 检查是否已经在运行
-                is_running = False
-                if port in self.instances:
-                    inst = self.instances[port]
-                    if inst.auto_fetch and inst.auto_fetch.auto_fetch_running:
-                        is_running = True
-                
-                if not is_running:
-                    logger.info(f"启动端口 {port} 的实例")
-                    instance = DeviceInstance(port)
+        def start_single_instance(port):
+            # 检查是否已经在运行或正在启动中
+            is_running = False
+            if port in self.instances:
+                inst = self.instances[port]
+                if inst.auto_fetch and inst.auto_fetch.auto_fetch_running:
+                    is_running = True
+            
+            # 使用启动锁防止重复启动
+            if port in self.starting_ports:
+                logger.info(f"端口 {port} 的实例正在启动中，跳过重复启动")
+                return
+            
+            if not is_running:
+                # 添加到启动中集合
+                self.starting_ports.add(port)
+                logger.info(f"启动端口 {port} 的实例")
+                instance = DeviceInstance(port)
+                # 立即添加到实例字典，以便 stop_all 可以找到它
+                self.instances[port] = instance
+                try:
                     if instance.start(game_mode, is_invest):
-                        self.instances[port] = instance
                         logger.info(f"端口 {port} 的实例启动成功")
                     else:
                         logger.error(f"端口 {port} 的实例启动失败")
-                    # 每个实例启动后延迟 2 秒，避免 ADB 冲突
-                    time.sleep(2.0)
-                else:
-                    logger.info(f"端口 {port} 的实例已经在运行，跳过启动")
+                finally:
+                    # 从启动中集合移除
+                    self.starting_ports.discard(port)
+            else:
+                logger.info(f"端口 {port} 的实例已经在运行，跳过启动")
         
-        threading.Thread(target=run_start, daemon=True).start()
+        def start_all_instances():
+            threads = []
+            for port in ports:
+                t = threading.Thread(target=start_single_instance, args=(port,), daemon=True)
+                t.start()
+                threads.append(t)
+                time.sleep(2)
+            for t in threads:
+                t.join()
+        
+        threading.Thread(target=start_all_instances, daemon=True).start()
     
     def stop_all(self):
         logger.info("开始停止所有实例")
+        # 清空启动中集合，防止正在启动的实例继续运行
+        self.starting_ports.clear()
         for instance in self.instances.values():
             instance.stop()
         self.instances.clear()
@@ -240,139 +423,211 @@ class MultiInstanceManager(QMainWindow):
             QMessageBox.critical(self, "错误", f"打包数据时发生错误: {str(e)}")
 
     def setup_logger(self):
-        # 创建自定义日志处理器，只显示包含特定端口的日志
         class QTextEditLogger(logging.Handler):
             def __init__(self, text_edit):
                 super().__init__()
                 self.text_edit = text_edit
                 self.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-                self.target_port = None  # 目标端口，只显示该端口的日志
-                self.log_history = []  # 日志历史记录
+                self.target_port = None
+                self.log_history = []
             
             def set_target_port(self, port):
                 self.target_port = port
             
             def emit(self, record):
-                msg = self.format(record)
+                try:
+                    msg = self.format(record)
+                except Exception:
+                    return
                 
-                # 保存日志消息到历史记录（无论是否过滤）
                 self.log_history.append(msg)
-                if len(self.log_history) > 1000:  # 最多保存1000条
+                if len(self.log_history) > 2000:
                     self.log_history.pop(0)
                 
-                # 如果设置了目标端口，只显示包含该端口的日志
                 if self.target_port:
-                    # 检查日志消息中是否包含目标端口
                     port_str = str(self.target_port)
-                    if f"[{port_str}]" not in msg and f"端口 {port_str}" not in msg and f"{port_str}" not in msg:
+                    if not (f"[127.0.0.1:{port_str}]" in msg or f"[{port_str}]" in msg or f"端口 {port_str}" in msg):
                         return
                 
-                # 在主线程中更新日志显示
-                import threading
-                if threading.current_thread() != threading.main_thread():
-                    if self.text_edit is None:
-                        return
-                    try:
-                        from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
-                        QMetaObject.invokeMethod(
-                            self.text_edit,
-                            "appendPlainText",
-                            Qt.ConnectionType.QueuedConnection,
-                            Q_ARG(str, msg)
-                        )
-                    except:
-                        pass  # 静默处理异常，避免警告
-                else:
-                    if self.text_edit is not None:
-                        self.text_edit.appendPlainText(msg)
+                if self.text_edit is not None:
+                    self.text_edit.append_log(msg)
         
-        # 获取根日志记录器
         root_logger = logging.getLogger()
-        # 添加自定义处理器
         self.text_edit_logger = QTextEditLogger(self.log_display)
         self.text_edit_logger.setLevel(logging.INFO)
         root_logger.addHandler(self.text_edit_logger)
-        
-        # 确保日志级别设置正确
         root_logger.setLevel(logging.INFO)
+        
+        # 确保子模块日志传播到 root logger
+        for name in ['login', 'auto_fetch', 'recognize', 'multi_instance', '__main__']:
+            child_logger = logging.getLogger(name)
+            child_logger.setLevel(logging.INFO)
+            child_logger.propagate = True
     
     def update_log_filter(self, text):
-        # 更新日志过滤器
         if text == "全部端口":
             self.text_edit_logger.set_target_port(None)
-            # 显示所有历史日志
             self.log_display.clear()
             for msg in self.text_edit_logger.log_history:
-                self.log_display.appendPlainText(msg)
+                self.log_display.append_log(msg)
         else:
             self.text_edit_logger.set_target_port(text)
-            # 只显示该端口的历史日志
             self.log_display.clear()
             for msg in self.text_edit_logger.log_history:
                 if f"[{text}]" in msg or f"端口 {text}" in msg or text in msg:
-                    self.log_display.appendPlainText(msg)
-        # 不清空日志，保留历史记录
+                    self.log_display.append_log(msg)
+    
+    @staticmethod
+    def _state_to_chinese(state):
+        from auto_fetch import GameState
+        state_map = {
+            GameState.MAIN_MENU: "主页",
+            GameState.MODE_SELECTION_UNSELECTED: "模式",
+            GameState.MODE_SELECTION_SELECTED: "开始",
+            GameState.PRE_BATTLE: "战前",
+            GameState.IN_BATTLE: "战斗",
+            GameState.SETTLEMENT: "结算",
+            GameState.FINISHED: "结束",
+            GameState.UNKNOWN: "过场",
+        }
+        return state_map.get(state, "过场动画")
+    
+    def _create_port_widget(self, port):
+        row = QHBoxLayout()
+        row.setContentsMargins(4, 2, 4, 2)
+        row.setSpacing(6)
+        
+        label = QLabel(port)
+        label.setFixedWidth(60)
+        label.setFont(QFont("Consolas", 10) if sys.platform == "win32" else QFont("Courier New", 10))
+        row.addWidget(label)
+        
+        status_label = QLabel("已停止")
+        status_label.setFixedWidth(80)
+        row.addWidget(status_label)
+        
+        detail_label = QLabel("")
+        detail_label.setFont(QFont("Consolas", 9) if sys.platform == "win32" else QFont("Courier New", 9))
+        row.addWidget(detail_label, 1)
+        
+        toggle_btn = QPushButton("启动")
+        toggle_btn.setFixedWidth(50)
+        toggle_btn.clicked.connect(lambda checked, p=port: self._toggle_port(p))
+        row.addWidget(toggle_btn)
+        
+        frame = QFrame()
+        frame.setLayout(row)
+        frame.setFrameShape(QFrame.Shape.StyledPanel)
+        
+        return frame, status_label, detail_label, toggle_btn
+    
+    def _toggle_port(self, port):
+        if port in self.instances:
+            instance = self.instances[port]
+            if instance.auto_fetch and instance.auto_fetch.auto_fetch_running:
+                instance.stop()
+                logger.info(f"端口 {port} 已单独停止")
+            else:
+                del self.instances[port]
+        else:
+            game_mode = self.game_mode_combo.currentText()
+            is_invest = self.invest_check.isChecked()
+            
+            def do_start():
+                if port in self.starting_ports:
+                    return
+                self.starting_ports.add(port)
+                instance = DeviceInstance(port)
+                self.instances[port] = instance
+                try:
+                    instance.start(game_mode, is_invest)
+                finally:
+                    self.starting_ports.discard(port)
+            
+            threading.Thread(target=do_start, daemon=True).start()
     
     def update_display(self):
-        lines = []
-        # 获取输入框中的所有端口
-        input_ports = [p.strip() for p in self.ports_input.toPlainText().split('\n') if p.strip()]
+        input_ports = self._parse_ports(self.ports_input.text())
         
-        # 更新端口选择器的选项
-        current_text = self.port_combo.currentText()
-        # 保存当前的目标端口
-        current_target_port = self.text_edit_logger.target_port
+        if not hasattr(self, '_last_input_ports'):
+            self._last_input_ports = []
         
-        self.port_combo.clear()
-        self.port_combo.addItem("全部端口")
-        for port in input_ports:
-            self.port_combo.addItem(port)
+        ports_changed = input_ports != self._last_input_ports
         
-        # 如果有输入端口，检查当前选择是否有效
-        if input_ports:
-            # 如果当前选择是一个有效的端口，保持该选择
-            if current_text in input_ports:
-                self.port_combo.setCurrentText(current_text)
-            # 否则，默认选择第一个端口
-            else:
-                self.port_combo.setCurrentIndex(1)  # 1 是第一个端口的索引（0 是"全部端口"）
-        # 否则，保持之前的选择
-        elif current_text in ["全部端口"] + input_ports:
-            self.port_combo.setCurrentText(current_text)
-        
-        # 恢复之前的目标端口
-        if current_target_port:
-            if current_target_port in input_ports:
-                self.text_edit_logger.set_target_port(current_target_port)
-                self.port_combo.setCurrentText(current_target_port)
-                # 重新应用日志过滤器
-                self.update_log_filter(current_target_port)
-            else:
-                self.text_edit_logger.set_target_port(None)
-                self.port_combo.setCurrentText("全部端口")
-                # 重新应用日志过滤器
-                self.update_log_filter("全部端口")
-        else:
-            # 如果之前没有目标端口，使用当前选择的端口
-            current_selected = self.port_combo.currentText()
-            # 重新应用日志过滤器
-            self.update_log_filter(current_selected)
+        if ports_changed:
+            current_text = self.port_combo.currentText()
+            self.port_combo.clear()
+            self.port_combo.addItem("全部端口")
+            for port in input_ports:
+                self.port_combo.addItem(port)
+            
+            if input_ports:
+                if current_text in input_ports:
+                    self.port_combo.setCurrentText(current_text)
+                else:
+                    self.port_combo.setCurrentIndex(1)
+            self._last_input_ports = input_ports.copy()
+            
+            # 重建端口控件
+            for w in self.port_widgets.values():
+                w['frame'].setParent(None)
+            self.port_widgets.clear()
+            
+            for i in range(self.status_layout.count() - 1):
+                item = self.status_layout.itemAt(i)
+                if item.widget():
+                    item.widget().setParent(None)
+            
+            for port in input_ports:
+                frame, status_label, detail_label, toggle_btn = self._create_port_widget(port)
+                idx = self.status_layout.count() - 1
+                self.status_layout.insertWidget(idx, frame)
+                self.port_widgets[port] = {
+                    'frame': frame,
+                    'status_label': status_label,
+                    'detail_label': detail_label,
+                    'toggle_btn': toggle_btn,
+                }
         
         any_running = False
         for port in input_ports:
+            if port not in self.port_widgets:
+                continue
+            
+            widgets = self.port_widgets[port]
+            
             if port in self.instances:
                 instance = self.instances[port]
-                lines.append(instance.get_status_line())
-                if instance.auto_fetch and instance.auto_fetch.auto_fetch_running:
-                    any_running = True
-            else:
-                serial = f"127.0.0.1:{port}"
-                lines.append(f"[{serial:<15}] 状态: 已停止")
-        
-        # 只有在全部停止状态下才能打包
-        self.package_btn.setEnabled(not any_running)
+                is_running = instance.auto_fetch and instance.auto_fetch.auto_fetch_running
                 
-        self.status_display.setPlainText("\n".join(lines))
+                if is_running:
+                    any_running = True
+                    af = instance.auto_fetch
+                    elapsed = time.time() - af.start_time if af.start_time else 0
+                    hours, remainder = divmod(elapsed, 3600)
+                    minutes, _ = divmod(remainder, 60)
+                    
+                    state_name = "过场动画"
+                    if hasattr(af, 'last_state') and af.last_state:
+                        state_name = self._state_to_chinese(af.last_state)
+                    
+                    widgets['status_label'].setText(f"运行中·{state_name}")
+                    widgets['detail_label'].setText(
+                        f"填写: {af.total_fill_count} | 错误: {af.incorrect_fill_count} | "
+                        f"预测: {af.current_prediction:.2f} | 时长: {int(hours)}h {int(minutes)}m"
+                    )
+                    widgets['toggle_btn'].setText("停止")
+                else:
+                    widgets['status_label'].setText(instance.status)
+                    widgets['detail_label'].setText("")
+                    is_starting = instance.status in ("连接中", "登录中")
+                    widgets['toggle_btn'].setText("停止" if is_starting else "启动")
+            else:
+                widgets['status_label'].setText("已停止")
+                widgets['detail_label'].setText("")
+                widgets['toggle_btn'].setText("启动")
+        
+        self.package_btn.setEnabled(not any_running)
 
     def closeEvent(self, event):
         self.stop_all()
