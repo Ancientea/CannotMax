@@ -16,6 +16,7 @@ import loadData
 import auto_fetch
 import data_package
 from recognize import MONSTER_COUNT
+from login import LoginManager
 
 # 配置日志
 logging.basicConfig(
@@ -26,12 +27,69 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ==================== 单例资源管理器 ====================
+# 用于共享资源密集型对象，减少多开时的内存占用
+_cannot_model = None
+_recognizer = None
+_field_recognizer = None
+
+
+def get_cannot_model():
+    """获取共享的 CannotModel 实例"""
+    global _cannot_model
+    if _cannot_model is None:
+        logger.info("首次初始化 CannotModel...")
+        try:
+            from predict import CannotModel
+            logger.info("Using PyTorch model for predictions.")
+        except Exception:
+            from predict_onnx import CannotModel
+            logger.info("Using ONNX model for predictions.")
+        
+        _cannot_model = CannotModel()
+        logger.info("CannotModel 初始化完成")
+    return _cannot_model
+
+
+def get_recognizer():
+    """获取共享的 RecognizeMonster 实例"""
+    global _recognizer
+    if _recognizer is None:
+        logger.info("首次初始化 RecognizeMonster...")
+        from recognize import RecognizeMonster
+        _recognizer = RecognizeMonster(method="ADB")
+        logger.info("RecognizeMonster 初始化完成")
+    return _recognizer
+
+
+def get_field_recognizer():
+    """获取共享的 FieldRecognizer 实例"""
+    global _field_recognizer
+    if _field_recognizer is None:
+        logger.info("首次初始化 FieldRecognizer...")
+        from field_recognition import FieldRecognizer
+        _field_recognizer = FieldRecognizer()
+        logger.info("FieldRecognizer 初始化完成")
+    return _field_recognizer
+
+
+def clear_all_singleton_resources():
+    """清空所有单例缓存（用于测试或重新加载）"""
+    global _cannot_model, _recognizer, _field_recognizer
+    _cannot_model = None
+    _recognizer = None
+    _field_recognizer = None
+    logger.info("所有单例资源已清空")
+
+# ==================== 单例资源管理器结束 ====================
+
 class DeviceInstance:
     def __init__(self, port):
         self.port = port
         self.serial = f"127.0.0.1:{port}"
         self.connector = loadData.AdbConnector(self.serial)
         self.auto_fetch = None
+        self.login_manager = None
         self.status = "已停止"
 
     def start(self, game_mode, is_invest):
@@ -42,6 +100,14 @@ class DeviceInstance:
                 self.status = "连接失败"
                 logger.error(f"[{self.serial}] 连接失败")
                 return False
+            
+            # 首次启动时尝试自动登录（点击开始自动获取数据时）
+            self.login_manager = LoginManager(self.connector)
+            logger.info(f"[{self.serial}] 尝试首次启动自动登录")
+            if self.login_manager.auto_login(first_start=True):
+                logger.info(f"[{self.serial}] 首次启动自动登录成功")
+            else:
+                logger.warning(f"[{self.serial}] 首次启动自动登录失败，继续启动")
             
             self.auto_fetch = auto_fetch.AutoFetch(
                 self.connector,
@@ -195,29 +261,30 @@ class MultiInstanceManager(QMainWindow):
         
         logger.info(f"开始启动多开实例，端口列表: {ports}, 游戏模式: {game_mode}, 自动投资: {is_invest}")
         
-        def run_start():
-            for port in ports:
-                # 检查是否已经在运行
-                is_running = False
-                if port in self.instances:
-                    inst = self.instances[port]
-                    if inst.auto_fetch and inst.auto_fetch.auto_fetch_running:
-                        is_running = True
-                
-                if not is_running:
-                    logger.info(f"启动端口 {port} 的实例")
-                    instance = DeviceInstance(port)
-                    if instance.start(game_mode, is_invest):
-                        self.instances[port] = instance
-                        logger.info(f"端口 {port} 的实例启动成功")
-                    else:
-                        logger.error(f"端口 {port} 的实例启动失败")
-                    # 每个实例启动后延迟 2 秒，避免 ADB 冲突
-                    time.sleep(2.0)
+        def start_single_instance(port):
+            # 检查是否已经在运行
+            is_running = False
+            if port in self.instances:
+                inst = self.instances[port]
+                if inst.auto_fetch and inst.auto_fetch.auto_fetch_running:
+                    is_running = True
+            
+            if not is_running:
+                logger.info(f"启动端口 {port} 的实例")
+                instance = DeviceInstance(port)
+                if instance.start(game_mode, is_invest):
+                    self.instances[port] = instance
+                    logger.info(f"端口 {port} 的实例启动成功")
                 else:
-                    logger.info(f"端口 {port} 的实例已经在运行，跳过启动")
+                    logger.error(f"端口 {port} 的实例启动失败")
+            else:
+                logger.info(f"端口 {port} 的实例已经在运行，跳过启动")
         
-        threading.Thread(target=run_start, daemon=True).start()
+        # 为每个端口创建独立线程，实现并行启动
+        for port in ports:
+            threading.Thread(target=start_single_instance, args=(port,), daemon=True).start()
+            # 稍微延迟启动每个线程，避免同时启动过多导致资源竞争
+            time.sleep(2)
     
     def stop_all(self):
         logger.info("开始停止所有实例")
@@ -262,9 +329,10 @@ class MultiInstanceManager(QMainWindow):
                 
                 # 如果设置了目标端口，只显示包含该端口的日志
                 if self.target_port:
-                    # 检查日志消息中是否包含目标端口
+                    # 检查日志消息中是否包含目标端口（精确匹配）
                     port_str = str(self.target_port)
-                    if f"[{port_str}]" not in msg and f"端口 {port_str}" not in msg and f"{port_str}" not in msg:
+                    # 精确匹配端口格式：[127.0.0.1:端口] 或 [端口] 或 端口 
+                    if not (f"[127.0.0.1:{port_str}]" in msg or f"[{port_str}]" in msg or f"端口 {port_str}" in msg):
                         return
                 
                 # 在主线程中更新日志显示
@@ -318,45 +386,29 @@ class MultiInstanceManager(QMainWindow):
         # 获取输入框中的所有端口
         input_ports = [p.strip() for p in self.ports_input.toPlainText().split('\n') if p.strip()]
         
-        # 更新端口选择器的选项
-        current_text = self.port_combo.currentText()
-        # 保存当前的目标端口
-        current_target_port = self.text_edit_logger.target_port
+        # 检查端口列表是否变化（用于优化，避免不必要的更新）
+        if not hasattr(self, '_last_input_ports'):
+            self._last_input_ports = []
         
-        self.port_combo.clear()
-        self.port_combo.addItem("全部端口")
-        for port in input_ports:
-            self.port_combo.addItem(port)
+        ports_changed = input_ports != self._last_input_ports
         
-        # 如果有输入端口，检查当前选择是否有效
-        if input_ports:
-            # 如果当前选择是一个有效的端口，保持该选择
-            if current_text in input_ports:
-                self.port_combo.setCurrentText(current_text)
-            # 否则，默认选择第一个端口
-            else:
-                self.port_combo.setCurrentIndex(1)  # 1 是第一个端口的索引（0 是"全部端口"）
-        # 否则，保持之前的选择
-        elif current_text in ["全部端口"] + input_ports:
-            self.port_combo.setCurrentText(current_text)
-        
-        # 恢复之前的目标端口
-        if current_target_port:
-            if current_target_port in input_ports:
-                self.text_edit_logger.set_target_port(current_target_port)
-                self.port_combo.setCurrentText(current_target_port)
-                # 重新应用日志过滤器
-                self.update_log_filter(current_target_port)
-            else:
-                self.text_edit_logger.set_target_port(None)
-                self.port_combo.setCurrentText("全部端口")
-                # 重新应用日志过滤器
-                self.update_log_filter("全部端口")
-        else:
-            # 如果之前没有目标端口，使用当前选择的端口
-            current_selected = self.port_combo.currentText()
-            # 重新应用日志过滤器
-            self.update_log_filter(current_selected)
+        # 更新端口选择器的选项（只在端口列表变化时更新）
+        if ports_changed:
+            current_text = self.port_combo.currentText()
+            self.port_combo.clear()
+            self.port_combo.addItem("全部端口")
+            for port in input_ports:
+                self.port_combo.addItem(port)
+            
+            # 如果有输入端口，检查当前选择是否有效
+            if input_ports:
+                # 如果当前选择是一个有效的端口，保持该选择
+                if current_text in input_ports:
+                    self.port_combo.setCurrentText(current_text)
+                # 否则，默认选择第一个端口
+                else:
+                    self.port_combo.setCurrentIndex(1)  # 1 是第一个端口的索引（0 是"全部端口"）
+            self._last_input_ports = input_ports.copy()
         
         any_running = False
         for port in input_ports:

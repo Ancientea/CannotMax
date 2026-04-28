@@ -133,14 +133,8 @@ class LoginManager:
                 logger.info("确认在争锋频道页面入口")
                 return True
             
-            # 检查是否是登录下线页面
-            matched, _ = self.match_template(screenshot, "login_off")
-            if matched:
-                logger.info("检测到登录下线页面")
-                return False
-            
             logger.debug(f"第{attempt+1}次验证：未在争锋频道页面")
-            time.sleep(3)  # 增加等待时间，确保页面有足够的加载时间
+            time.sleep(1)  # 增加等待时间，确保页面有足够的加载时间
         
         logger.warning("不在争锋频道页面")
         return False
@@ -246,7 +240,7 @@ class LoginManager:
         
         return True
 
-    def auto_login(self):
+    def auto_login(self, first_start=False):
         """自动登录功能，处理服务器维护或掉线后的重新登录"""
         logger.info("开始自动登录流程")
         
@@ -262,23 +256,69 @@ class LoginManager:
                 logger.error(f"重新连接失败: {e}")
                 return False
         
-        # 等待游戏启动完全，最多等待30秒
-        logger.info("等待游戏启动完全")
-        start_time = time.time()
-        while time.time() - start_time < 30:
+        # 首次启动时，先检测是否已经在游戏流程中
+        if first_start:
+            logger.info("首次启动，检测是否已在游戏流程中")
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
-                # 检查是否出现登录按钮
-                matched, _ = self.match_template(screenshot, "login_button", threshold=0.9)
+                # 检查是否匹配到争锋频道页面模板
+                matched, _ = self.match_template(screenshot, "competition_page", threshold=0.7)
                 if matched:
-                    logger.info("检测到登录按钮，游戏启动完成")
-                    break
-            time.sleep(1)
+                    logger.info("已在争锋频道页面，无需登录")
+                    return True
+                
+                # 检查是否匹配到0.png或1.png（加入赛事或开始游戏）
+                try:
+                    # 尝试简单匹配
+                    for template_name in ["0", "1"]:
+                        template_path = Path(f"images/process/{template_name}.png")
+                        if template_path.exists():
+                            template = cv2.imread(str(template_path))
+                            if template is not None:
+                                screenshot_gray = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+                                template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+                                res = cv2.matchTemplate(screenshot_gray, template_gray, cv2.TM_CCOEFF_NORMED)
+                                _, max_val, _, _ = cv2.minMaxLoc(res)
+                                if max_val > 0.7:
+                                    logger.info(f"已在争锋频道页面，找到模板 {template_name}.png")
+                                    return True
+                except Exception as e:
+                    logger.debug(f"检测争锋频道页面模板失败: {e}")
+                
+                # 检查是否在战斗前准备阶段（PRE_BATTLE）
+                # 匹配战斗前准备相关的模板（模板索引3,4,5,15）
+                for template_name in ["3", "4", "5", "15"]:
+                    template_path = Path(f"images/process/{template_name}.png")
+                    if template_path.exists():
+                        try:
+                            template = cv2.imread(str(template_path))
+                            if template is not None:
+                                screenshot_gray = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+                                template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+                                res = cv2.matchTemplate(screenshot_gray, template_gray, cv2.TM_CCOEFF_NORMED)
+                                _, max_val, _, _ = cv2.minMaxLoc(res)
+                                if max_val > 0.7:
+                                    logger.info(f"已在战斗前准备阶段，找到模板 {template_name}.png，无需登录")
+                                    return True
+                        except Exception as e:
+                            logger.debug(f"检测战斗前准备模板 {template_name}.png 失败: {e}")
         
-        # 1. 点击屏幕中心跳过中转页面
+        # 非首次启动时，等待游戏启动完全
+        if not first_start:
+            logger.info("等待游戏启动完全")
+            start_time = time.time()
+            while time.time() - start_time < 30:
+                screenshot = self.connector.capture_screenshot()
+                if screenshot is not None:
+                    matched, _ = self.match_template(screenshot, "login_button", threshold=0.9)
+                    if matched:
+                        logger.info("检测到登录按钮，游戏启动完成")
+                        break
+                time.sleep(1)
+        
+        # 点击屏幕中心跳过中转页面
         logger.info("点击屏幕中心跳过中转页面")
         self.connector.click((0.5, 0.5))
-        # 等待2秒，让页面响应
         time.sleep(2)
         
         # 2. 寻找并点击登录按钮
@@ -337,48 +377,47 @@ class LoginManager:
                         break
             time.sleep(1)
         
-        # 4. 点击屏幕右上角
-        logger.info("点击屏幕右上角")
-        self.connector.click((0.1, 0.1))  # 相对坐标，右上角
-        # 等待1秒，让操作完成
-        time.sleep(1)
-        
-        # 5. 寻找争锋频道页面，最多等待30秒
+        # 寻找争锋频道页面，最多等待30秒
         logger.info("寻找争锋频道页面")
         start_time = time.time()
+        click_count = 0
         while time.time() - start_time < 30:
             # 优先检测competition_page
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
                 matched, pos = self.match_template(screenshot, "competition_page", threshold=0.7)
                 if matched:
-                    # 计算相对坐标
                     h, w = screenshot.shape[:2]
                     rel_x = pos[0] / w
                     rel_y = pos[1] / h
                     logger.info(f"争锋频道页面位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
                     self.connector.click((rel_x, rel_y))
                     logger.info("点击进入争锋频道页面")
-                    # 等待2秒，确保页面完全加载
                     time.sleep(2)
                     logger.info("自动登录流程完成")
                     return True
             
-            # 如果检测不到competition_page，检测关闭按钮
+            # 未检测到争锋频道页面时，尝试点击右上角（最多点击2次）
+            if click_count < 2:
+                logger.info("未检测到争锋频道页面，点击屏幕右上角")
+                self.connector.click((0.1, 0.1))
+                time.sleep(1)
+                click_count += 1
+                continue
+            
+            # 检测关闭按钮
             close_buttons = ["announcement_close", "event_claim_close"]
             for button in close_buttons:
                 screenshot = self.connector.capture_screenshot()
                 if screenshot is not None:
                     matched, pos = self.match_template(screenshot, button, threshold=0.9)
                     if matched:
-                        # 计算相对坐标
                         h, w = screenshot.shape[:2]
                         rel_x = pos[0] / w
                         rel_y = pos[1] / h
                         logger.info(f"{button}位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
                         self.connector.click((rel_x, rel_y))
                         logger.info(f"关闭{button}页面")
-                        # 等待1秒，确保页面完全关闭
                         time.sleep(1)
                         break
             
@@ -386,3 +425,53 @@ class LoginManager:
         
         logger.error("未找到争锋频道页面，登录流程失败")
         return False
+    
+    def try_login_with_retry(self, max_wait_seconds=6, stop_callback=None):
+        """尝试登录，如果未找到登录按钮则等待重试"""
+        for i in range(max_wait_seconds):
+            # 检查是否需要停止
+            if stop_callback and not stop_callback():
+                logger.info("检测到停止信号，取消登录尝试")
+                return False
+            
+            screenshot = self.connector.capture_screenshot()
+            if screenshot is not None:
+                logger.info("获取截图成功，检查是否存在登录按钮")
+                matched, _ = self.match_template(screenshot, "login_button", threshold=0.9)
+                if matched:
+                    logger.info("找到登录按钮，执行登录流程")
+                    if self.auto_login():
+                        logger.info("登录成功")
+                        return True
+                    else:
+                        return False
+                else:
+                    logger.info(f"第 {i+1} 次检查：未找到登录按钮，继续等待")
+            time.sleep(6)
+        return False
+    
+    def restart_and_login(self, stop_callback=None):
+        """重启游戏并尝试登录"""
+        logger.info("尝试重启游戏")
+        
+        # 检查是否需要停止
+        if stop_callback and not stop_callback():
+            logger.info("检测到停止信号，取消重启")
+            return False
+        
+        if self.restart_game():
+            logger.info("游戏重启成功，尝试重新登录")
+            
+            # 检查是否需要停止
+            if stop_callback and not stop_callback():
+                logger.info("检测到停止信号，取消登录")
+                return False
+            
+            if self.auto_login():
+                return True
+            else:
+                logger.error("重启后自动登录失败，无法继续")
+                return False
+        else:
+            logger.error("重启游戏失败")
+            return False
