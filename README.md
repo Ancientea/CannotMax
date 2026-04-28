@@ -61,9 +61,13 @@
 ### 4. 模型训练
 - 建议在训练模型前收集足够的数据
 1. **启动训练**：
+   - 使用 `train.py` 脚本启动训练
    ```bash
    uv run train.py
+   
    ```
+   - 或启动可视化训练： `uv run --group dev -m gradio_ml` 或 `uv run --group dev start_gradio.py`
+  
 
 ## 开发说明
 

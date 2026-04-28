@@ -1,0 +1,70 @@
+server:
+  host: "0.0.0.0"
+  port: 7860
+  share: false
+
+tabs:
+  predict:
+    enabled: true
+  train_monitor:
+    enabled: true
+
+predict:
+  default_model_path: "models"
+  inference_timeout: 60
+  max_batch_size: 32
+
+training:
+  default:
+    learning_rate: 0.001
+    epochs: 100
+    batch_size: 32
+    optimizer: "Adam"
+  constraints:
+    learning_rate_min: 0.0
+    learning_rate_max: 1.0
+    epochs_min: 1
+    epochs_max: 10000
+    batch_size_options:
+      - 1
+      - 2
+      - 4
+      - 8
+      - 16
+      - 32
+      - 64
+      - 128
+      - 256
+      - 512
+      - 1024
+    optimizer_options:
+      - "SGD"
+      - "Adam"
+      - "AdamW"
+      - "RMSprop"
+
+metrics:
+  default_monitored:
+    - "Loss"
+    - "Accuracy"
+  smoothing:
+    enabled: true
+    default_window: 5
+    max_window: 50
+  downsampling:
+    threshold: 10000
+  refresh_interval: 1.0
+
+progress:
+  stagnation_check_interval: 30
+  stagnation_threshold: 180
+  recent_epochs_for_eta: 5
+
+log:
+  buffer_size: 10000
+  rate_threshold: 100
+  sampling_ratio: 10
+  sanitize_patterns:
+    file_path: '[A-Z]:\\\\[^\s]+'
+    api_key: '[Aa][Pp][Ii][_]?[Kk][Ee][Yy][:=]\s*\S+'
+    token: '[Tt][Oo][Kk][Ee][Nn][:=]\s*\S+'
