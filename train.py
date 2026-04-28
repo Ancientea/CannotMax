@@ -10,8 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
-from recognize import MONSTER_COUNT
-from config import FIELD_FEATURE_COUNT
+from config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 
 
 @cache

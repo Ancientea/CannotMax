@@ -1,34 +1,71 @@
+# ===========================
+# 1. Python 环境与缓存
+# ===========================
 venv/
+.venv/
 __pycache__/
+
+# ===========================
+# 2. Pixi 包管理环境
+# ===========================
+.pixi/*
+!.pixi/config.toml
+
+# ===========================
+# 3. IDE 与编辑器配置
+# ===========================
 .idea/
 .vscode/
-screenshot.png
-tmp
-log.txt
-data/images/
-data/[0-9][0-9][0-9][0-9]_[0-1][0-9]_[0-3][0-9]__[0-2][0-9]_[0-5][0-9]_[0-5][0-9]/
-images/nums/
-*.log
+
+# ===========================
+# 4. AI 辅助工具配置
+# ===========================
+.claude/
+.codex/
+.copilot/
+.codeartsdoer
+
+# ===========================
+# 5. 模型权重与构建产物
+# ===========================
+# 模型文件
 models/Local_models/*
-!arknights.csv
-build/
-output/
 *.pth
 *.onnx
 *.onnx.data
+
+# 构建与输出目录
+build/
+output/
+
+# ===========================
+# 6. 数据集与媒体资源
+# ===========================
+# 基础数据目录
+data/images/
+data/[0-9][0-9][0-9][0-9]_[0-1][0-9]_[0-3][0-9]__[0-2][0-9]_[0-5][0-9]_[0-5][0-9]/
+images/nums/
+
+# 训练相关数据
 data_train/tmp/
 data_train/package/*.zip
 data_train/images/
 
-# pixi environments
-.pixi/*
-!.pixi/config.toml
+# 单独的截图文件
+screenshot.png
 
-# other
-.claude/
-.codex/
-.copilot/
-.codeartdoer/
+# ===========================
+# 7. 日志与临时文件
+# ===========================
+# 日志
+log.txt
+*.log
+
+# 临时目录
+tmp
+
+# ===========================
+# 8. 其他杂项文件
+# ===========================
 arknights.csv
 multi_ports.txt
-/arknights.csv
