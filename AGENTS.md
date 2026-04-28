@@ -9,10 +9,12 @@ uv sync
 uv sync --extra cu128
 
 # Run main application
-uv run main.py
+uv run cannotmax
+# or
+python -m src.cannotmax
 
-# Train model
-uv run train.py
+# Run simulator (standalone)
+uv run -m src.cannotmax.simulator.sim_mc
 ```
 
 ## Critical Environment Constraints
@@ -30,17 +32,43 @@ uv run train.py
 
 ## Architecture & Entry Points
 
+### Package Structure
+```
+src/cannotmax/
+├── __init__.py          # Package root
+├── __main__.py          # Entry point for python -m src.cannotmax
+├── cli.py               # Entry point for uv run cannotmax
+├── config/              # Configuration layer
+│   ├── settings.py
+│   └── constants.py
+├── core/                # Core functionality
+│   ├── recognize.py     # Monster recognition
+│   ├── predict.py       # PyTorch inference
+│   ├── predict_onnx.py  # ONNX fallback
+│   ├── auto_fetch.py    # Auto-fetch loop
+│   └── maa_adb_connector.py
+├── gui/                 # PyQt6 GUI
+│   ├── main_window.py
+│   └── input_panel_ui.py
+├── simulator/           # Battlefield simulation
+│   ├── battle_field.py
+│   ├── main_sim.py      # PyQt6 simulator GUI
+│   └── sim_mc.py        # Tkinter multi-core simulator
+├── tools/               # Data processing utilities
+└── legacy/              # Legacy fallback (loadData.py)
+```
+
 ### Capture Modes
 1. **ADB**: MAA Framework ADB connection (`maa_adb_connector.py`) - emulators (LDPlayer, MuMu, BlueStacks)
 2. **PC**: Official Arknights PC client (`loadData.PcConnector`)
 3. **WIN**: WinRT window capture (`winrt_capture.py`) - requires `windows-capture` library
 
 ### Key Files
-- `main.py`: PyQt6 GUI, orchestrates recognition + prediction
-- `recognize.py`: Monster recognition (template matching + OCR), supports ADB/PC/WIN modes
-- `maa_adb_connector.py`: MAA Framework adapter for ADB operations
-- `winrt_capture.py`: WinRT screen capture with window picker dialog
-- `predict.py` / `predict_onnx.py`: PyTorch vs ONNX fallback for model inference
+- `src/cannotmax/gui/main_window.py`: Main application window (PyQt6)
+- `src/cannotmax/core/recognize.py`: Monster recognition (template matching + OCR)
+- `src/cannotmax/core/predict.py`: Model inference (PyTorch/ONNX fallback)
+- `src/cannotmax/simulator/sim_mc.py`: Tkinter GUI simulator
+- `src/cannotmax/simulator/main_sim.py`: PyQt6 simulator GUI
 
 ### Model Loading
 - Tries `predict.py` (PyTorch) first, falls back to `predict_onnx.py`
@@ -61,6 +89,11 @@ uv run train.py
 
 ## Testing & Development
 
+### Import Rules (Phase 9)
+- **Relative imports required**: All code inside `src/cannotmax/` must use relative imports (`from ..config`, `from .core`, etc.)
+- **No absolute imports**: Do not use `from src.cannotmax.config` inside the package
+- **Entry points only**: `__main__.py` and `cli.py` may use absolute imports
+
 ### Resolution Requirements
 - Target: 1920×1080 (16:9)
 - ROI coordinates in `recognize.py` assume this resolution
@@ -75,6 +108,7 @@ uv run train.py
 ## Git & Remote
 - Remote: `https://github.com/HDAnzz/CannotMax`
 - Branch workflow: Standard git flow
+- Current branch: `refactor` (Phase 9: Import standardization)
 
 ## Skills
 
@@ -96,12 +130,29 @@ uv run train.py
 
 1. **Don't delete `winrt_capture.py`**: Imported by `recognize.py` (line 10) and `main.py` (line 28)
 2. **Don't assume cu128 works**: Network issues common; provide CPU fallback
-3. **MAA Framework binary**: May need `MAAFW_BINARY_PATH` env var or local `maafw/` directory
+3. **MAA Framework binary**: Located in `3rdparty/maafw/` (moved from root)
 4. **OpenCV conflict**: `opencv-python` and `opencv-python-headless` are incompatible
 5. **PyQt6 threads**: `ADBConnectorThread` runs in separate `QThread` to avoid UI blocking
+6. **Relative imports**: Use `from ..config` not `from src.cannotmax.config` inside package
+7. **Direct script execution**: `sim_mc.py` and `main_sim.py` need `__package__` handling for direct execution
 
 ## Data Flow
 1. Screenshot → `recognize.py` extracts 6 monster zones + OCR
-2. Results → `main.py` updates input panel
+2. Results → `main_window.py` updates input panel
 3. Prediction → `CannotModel` (PyTorch/ONNX) with terrain features
 4. Auto-fetch: `auto_fetch.py` loops through battle → screenshot → recognition → prediction
+
+## Current Phase: Phase 9 - Import Standardization
+
+**Goal**: Convert all absolute imports (`from src.cannotmax...`) to relative imports (`from ..xxx`)
+
+**Files to fix**:
+- `core/auto_fetch.py`
+- `core/predict.py`, `core/predict_onnx.py`
+- `core/recognize.py`
+- `gui/main_window.py`
+- `gui/simular_history_match_ui.py`
+- `simulator/main_sim.py`, `simulator/sim_mc.py`, `simulator/unit.py`
+- `tools/package.py`
+
+**Status**: In progress (see commit 7b29a37)

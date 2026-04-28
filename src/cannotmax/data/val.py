@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from src.cannotmax.train import UnitAwareTransformer, ArknightsDataset
+from ..train import UnitAwareTransformer, ArknightsDataset
+
 
 def evaluate(model, data_loader, criterion, device):
     model.eval()
@@ -16,8 +17,16 @@ def evaluate(model, data_loader, criterion, device):
 
             # 其余代码保持不变...
             # 检查输入值范围
-            if torch.isnan(ls).any() or torch.isnan(lc).any() or torch.isnan(rs).any() or torch.isnan(rc).any() or \
-                    torch.isinf(ls).any() or torch.isinf(lc).any() or torch.isinf(rs).any() or torch.isinf(rc).any():
+            if (
+                torch.isnan(ls).any()
+                or torch.isnan(lc).any()
+                or torch.isnan(rs).any()
+                or torch.isnan(rc).any()
+                or torch.isinf(ls).any()
+                or torch.isinf(lc).any()
+                or torch.isinf(rs).any()
+                or torch.isinf(rc).any()
+            ):
                 print("警告: 评估时输入数据包含NaN或Inf，跳过该批次")
                 continue
 
@@ -54,14 +63,15 @@ def evaluate(model, data_loader, criterion, device):
 
     return total_loss / max(1, len(data_loader)), 100 * correct / max(1, total)
 
+
 def main():
     config = {
-        'data_file': 'arknights_clean.csv',
-        'batch_size': 256,
-        'max_feature_value': 200  # 限制特征最大值，防止极端值造成不稳定
+        "data_file": "arknights_clean.csv",
+        "batch_size": 256,
+        "max_feature_value": 200,  # 限制特征最大值，防止极端值造成不稳定
     }
     # 设置设备
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"使用设备: {device}")
 
     # 检查CUDA可用性
@@ -75,36 +85,39 @@ def main():
         torch.backends.cudnn.benchmark = False
     else:
         print("警告: 未检测到GPU，将在CPU上运行训练，这可能会很慢!")
-        
+
     dataset = ArknightsDataset(
-        config['data_file'],
-        max_value=config['max_feature_value']  # 使用最大值限制
+        config["data_file"],
+        max_value=config["max_feature_value"],  # 使用最大值限制
     )
-    
+
     # 修改这里 - 只有当数据在CPU上时才使用pin_memory
     val_loader = DataLoader(
-        dataset, 
-        batch_size=config['batch_size'],
+        dataset,
+        batch_size=config["batch_size"],
         num_workers=0,
-        pin_memory=False  # 禁用pin_memory，或者根据你的数据集情况调整
+        pin_memory=False,  # 禁用pin_memory，或者根据你的数据集情况调整
     )
-    
+
     model = UnitAwareTransformer(
         num_units=34,  # 更新为34个怪物
         embed_dim=128,
         num_heads=8,
-        num_layers=4  # 注意：train.py中config['n_layers']=4
+        num_layers=4,  # 注意：train.py中config['n_layers']=4
     ).to(device)
 
     # 加载模型权重
     try:
-        model = torch.load('models/best_model_full.pth', map_location=device, weights_only=False)
+        model = torch.load(
+            "models/best_model_full.pth", map_location=device, weights_only=False
+        )
     except TypeError:  # 如果旧版本 PyTorch 不认识 weights_only
-        model = torch.load('models/best_model_full.pth', map_location=device)
+        model = torch.load("models/best_model_full.pth", map_location=device)
     model.eval()
     criterion = nn.BCELoss()
     val_loss, val_acc = evaluate(model, val_loader, criterion, device)
     print(f"Val Loss: {val_loss:.4f} | Acc: {val_acc:.2f}%")
-    
+
+
 if __name__ == "__main__":
     main()

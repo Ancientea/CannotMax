@@ -10,11 +10,10 @@ import win32con
 import sys
 import os
 from pathlib import Path
-from src.cannotmax.utils import WinRTScreenCapture
+from ..utils import WinRTScreenCapture
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
 
 
 class AdbConnector:
@@ -29,7 +28,9 @@ class AdbConnector:
         # 初始化设备序列号
         try:
             # 如果已经有序列号，则尝试更新该序列号；否则使用默认值
-            target_serial = self.device_serial if self.device_serial else "127.0.0.1:5555"
+            target_serial = (
+                self.device_serial if self.device_serial else "127.0.0.1:5555"
+            )
             self.update_device_serial(target_serial)
             logger.info(f"最终使用设备: {self.device_serial}")
         except RuntimeError as e:
@@ -157,7 +158,9 @@ class AdbConnector:
         try:
             ta = time.time()
             # 获取二进制图像数据
-            get_png_cmd = f"{self.adb_path} -s {self.device_serial} exec-out screencap -p"
+            get_png_cmd = (
+                f"{self.adb_path} -s {self.device_serial} exec-out screencap -p"
+            )
             screenshot_data = subprocess.check_output(get_png_cmd, shell=True)
             # 将二进制数据转换为numpy数组
             img_array = np.frombuffer(screenshot_data, dtype=np.uint8)
@@ -193,7 +196,9 @@ class AdbConnector:
         # 确保数据长度正确（实际屏幕分辨率，4通道）
         expected_length = self.screen_width * self.screen_height * 4
         if len(argb_array) != expected_length:
-            raise ValueError(f"Invalid data length for {self.screen_width}x{self.screen_height} ARGB image")
+            raise ValueError(
+                f"Invalid data length for {self.screen_width}x{self.screen_height} ARGB image"
+            )
 
         # 转换为正确的形状 (高度, 宽度, 通道)
         argb_array = argb_array.reshape((self.screen_height, self.screen_width, 4))
@@ -265,30 +270,36 @@ class PcConnector:
             rect = win32gui.GetClientRect(self.hwnd)
             self.screen_width = rect[2] - rect[0]
             self.screen_height = rect[3] - rect[1]
-            
+
             try:
                 from maa_adb_connector import resolve_maafw_path
+
                 binary_path = resolve_maafw_path()
                 if binary_path:
                     os.environ["MAAFW_BINARY_PATH"] = binary_path
-                
+
                 from maa.toolkit import Toolkit
-                from maa.controller import Win32Controller, MaaWin32ScreencapMethodEnum, MaaWin32InputMethodEnum
+                from maa.controller import (
+                    Win32Controller,
+                    MaaWin32ScreencapMethodEnum,
+                    MaaWin32InputMethodEnum,
+                )
+
                 Toolkit.init_option(str(Path.cwd()))
-                
+
                 # 既然纯 SendMessage 被引擎无视，我们退一步使用 SendMessageWithCursorPos
                 # 它会在瞬间把鼠标光标移动到目标位置发送消息，再瞬间移回原位。这种方式可能不会强制将游戏窗口调回前台。
                 self.maa_ctrl = Win32Controller(
                     self.hwnd,
                     screencap_method=MaaWin32ScreencapMethodEnum.FramePool,
                     mouse_method=MaaWin32InputMethodEnum.SendMessageWithCursorPos,
-                    keyboard_method=MaaWin32InputMethodEnum.SendMessageWithCursorPos
+                    keyboard_method=MaaWin32InputMethodEnum.SendMessageWithCursorPos,
                 )
                 self.maa_ctrl.post_connection().wait()
-                
+
                 # 设置截图使用原始大小，防止因为MAA默认缩放导致外部坐标及图像切割计算出错
                 self.maa_ctrl.set_screenshot_use_raw_size(True)
-                
+
                 logger.info(f"已成功通过 MaaFramework 接管 PC 窗口 (支持后台操作)")
             except Exception as e:
                 logger.warning(f"MaaFramework 初始化失败，退回原有前台实现: {e}")
@@ -297,7 +308,9 @@ class PcConnector:
                 self.capture.start()
 
             self.is_connected = True
-            logger.info(f"成功连接到PC端窗口: {self.window_name}, 分辨率: {self.screen_width}x{self.screen_height}")
+            logger.info(
+                f"成功连接到PC端窗口: {self.window_name}, 分辨率: {self.screen_width}x{self.screen_height}"
+            )
         else:
             logger.warning(f"未找到PC端窗口: {self.window_name}")
             self.is_connected = False
@@ -305,7 +318,7 @@ class PcConnector:
     def capture_screenshot(self):
         if not self.is_connected:
             return None
-        
+
         if self.maa_ctrl:
             try:
                 self.maa_ctrl.post_screencap().wait()
@@ -322,7 +335,7 @@ class PcConnector:
     def click(self, point):
         if not self.hwnd:
             return
-        
+
         try:
             # PC端点击需要重新获取一次ClientRect以防窗口大小改变
             rect = win32gui.GetClientRect(self.hwnd)
@@ -332,7 +345,7 @@ class PcConnector:
             x, y = point
             x_coord = int(x * self.screen_width)
             y_coord = int(y * self.screen_height)
-            
+
             if self.maa_ctrl:
                 logger.info(f"MAA后台点击坐标: ({x_coord}, {y_coord})")
                 self.maa_ctrl.post_click(x_coord, y_coord).wait()
@@ -341,8 +354,10 @@ class PcConnector:
             client_left, client_top = win32gui.ClientToScreen(self.hwnd, (0, 0))
             screen_x = client_left + x_coord
             screen_y = client_top + y_coord
-            
-            logger.info(f"PC端点击坐标: 窗口内({x_coord}, {y_coord}) -> 屏幕({screen_x}, {screen_y})")
+
+            logger.info(
+                f"PC端点击坐标: 窗口内({x_coord}, {y_coord}) -> 屏幕({screen_x}, {screen_y})"
+            )
 
             # 尝试将窗口置于前台，忽略可能的错误
             try:
@@ -356,16 +371,42 @@ class PcConnector:
 
             # 使用底层 SendInput 模拟鼠标事件，支持多显示器 (VIRTUALDESK) 并且不会在权限不足时抛出异常
             import ctypes
-            
+
             PUL = ctypes.POINTER(ctypes.c_ulong)
+
             class KeyBdInput(ctypes.Structure):
-                _fields_ = [("wVk", ctypes.c_ushort), ("wScan", ctypes.c_ushort), ("dwFlags", ctypes.c_ulong), ("time", ctypes.c_ulong), ("dwExtraInfo", PUL)]
+                _fields_ = [
+                    ("wVk", ctypes.c_ushort),
+                    ("wScan", ctypes.c_ushort),
+                    ("dwFlags", ctypes.c_ulong),
+                    ("time", ctypes.c_ulong),
+                    ("dwExtraInfo", PUL),
+                ]
+
             class HardwareInput(ctypes.Structure):
-                _fields_ = [("uMsg", ctypes.c_ulong), ("wParamL", ctypes.c_short), ("wParamH", ctypes.c_ushort)]
+                _fields_ = [
+                    ("uMsg", ctypes.c_ulong),
+                    ("wParamL", ctypes.c_short),
+                    ("wParamH", ctypes.c_ushort),
+                ]
+
             class MouseInput(ctypes.Structure):
-                _fields_ = [("dx", ctypes.c_long), ("dy", ctypes.c_long), ("mouseData", ctypes.c_ulong), ("dwFlags", ctypes.c_ulong), ("time", ctypes.c_ulong), ("dwExtraInfo", PUL)]
+                _fields_ = [
+                    ("dx", ctypes.c_long),
+                    ("dy", ctypes.c_long),
+                    ("mouseData", ctypes.c_ulong),
+                    ("dwFlags", ctypes.c_ulong),
+                    ("time", ctypes.c_ulong),
+                    ("dwExtraInfo", PUL),
+                ]
+
             class Input_I(ctypes.Union):
-                _fields_ = [("ki", KeyBdInput), ("mi", MouseInput), ("hi", HardwareInput)]
+                _fields_ = [
+                    ("ki", KeyBdInput),
+                    ("mi", MouseInput),
+                    ("hi", HardwareInput),
+                ]
+
             class Input(ctypes.Structure):
                 _fields_ = [("type", ctypes.c_ulong), ("ii", Input_I)]
 
@@ -373,7 +414,7 @@ class PcConnector:
             SM_YVIRTUALSCREEN = 77
             SM_CXVIRTUALSCREEN = 78
             SM_CYVIRTUALSCREEN = 79
-            
+
             vscreen_x = ctypes.windll.user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
             vscreen_y = ctypes.windll.user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
             vscreen_w = ctypes.windll.user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
@@ -395,23 +436,44 @@ class PcConnector:
 
             extra = ctypes.c_ulong(0)
             ii_ = Input_I()
-            
+
             # 移动鼠标
-            ii_.mi = MouseInput(dx, dy, 0, MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, 0, ctypes.pointer(extra))
+            ii_.mi = MouseInput(
+                dx,
+                dy,
+                0,
+                MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+                0,
+                ctypes.pointer(extra),
+            )
             cmd = Input(ctypes.c_ulong(0), ii_)
             ctypes.windll.user32.SendInput(1, ctypes.pointer(cmd), ctypes.sizeof(cmd))
-            
+
             time.sleep(0.05)
-            
+
             # 按下左键
-            ii_.mi = MouseInput(dx, dy, 0, MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, 0, ctypes.pointer(extra))
+            ii_.mi = MouseInput(
+                dx,
+                dy,
+                0,
+                MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+                0,
+                ctypes.pointer(extra),
+            )
             cmd = Input(ctypes.c_ulong(0), ii_)
             ctypes.windll.user32.SendInput(1, ctypes.pointer(cmd), ctypes.sizeof(cmd))
-            
+
             time.sleep(0.05)
-            
+
             # 抬起左键
-            ii_.mi = MouseInput(dx, dy, 0, MOUSEEVENTF_LEFTUP | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, 0, ctypes.pointer(extra))
+            ii_.mi = MouseInput(
+                dx,
+                dy,
+                0,
+                MOUSEEVENTF_LEFTUP | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+                0,
+                ctypes.pointer(extra),
+            )
             cmd = Input(ctypes.c_ulong(0), ii_)
             ctypes.windll.user32.SendInput(1, ctypes.pointer(cmd), ctypes.sizeof(cmd))
 

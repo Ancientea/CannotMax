@@ -1,11 +1,19 @@
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QGraphicsDropShadowEffect, QFrame
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QScrollArea,
+    QGraphicsDropShadowEffect,
+    QFrame,
+)
 from PyQt6.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 import numpy as np
 import logging
 
-from src.cannotmax.data import HistoryMatch
-from src.cannotmax.config import MONSTER_COUNT, MONSTER_DATA
+from ..data import HistoryMatch
+from ..config import MONSTER_COUNT, MONSTER_DATA
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +230,7 @@ class HistoryMatchUI(QFrame):
         team_widget.setStyleSheet(
             f"""
             QWidget {{
-                background-color: {'rgba(250, 250, 50, 150)' if is_winner else 'rgba(50, 50, 50, 100)'};
+                background-color: {"rgba(250, 250, 50, 150)" if is_winner else "rgba(50, 50, 50, 100)"};
                 border-radius: 8px;
                 padding: 0px;
                 margin: 0px;
@@ -258,7 +266,9 @@ class HistoryMatchUI(QFrame):
             if count > 0:
                 # 创建干员显示
                 op_widget = QWidget()
-                op_widget.setStyleSheet("background-color: rgba(0, 0, 0, 0); padding: 0px 0;margin: 0px;")
+                op_widget.setStyleSheet(
+                    "background-color: rgba(0, 0, 0, 0); padding: 0px 0;margin: 0px;"
+                )
                 op_layout = QVBoxLayout(op_widget)
                 op_layout.setContentsMargins(0, 0, 0, 0)
                 op_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -268,10 +278,13 @@ class HistoryMatchUI(QFrame):
                 img_label.setFixedSize(60, 60)
                 img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 try:
-                    pixmap = QPixmap(f"images/{MONSTER_DATA['原始名称'][i+1]}.png")
+                    pixmap = QPixmap(f"images/{MONSTER_DATA['原始名称'][i + 1]}.png")
                     if not pixmap.isNull():
                         pixmap = pixmap.scaled(
-                            60, 60, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+                            60,
+                            60,
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation,
                         )
                         img_label.setPixmap(pixmap)
                 except:

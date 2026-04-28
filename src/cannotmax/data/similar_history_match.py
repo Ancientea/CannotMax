@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from src.cannotmax.config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+
 
 def cosine_similarity_manual(a, b):
     """手动实现余弦相似度，替代 sklearn 以减小打包体积"""
@@ -11,6 +12,7 @@ def cosine_similarity_manual(a, b):
     norm_b[norm_b == 0] = 1e-10
     dot = np.dot(a, b.T)
     return dot / (norm_a * norm_b.T)
+
 
 class HistoryMatch:
     """错题本数据集的读取和处理类"""
@@ -28,43 +30,60 @@ class HistoryMatch:
         """读取 CSV 文件，加载历史对局的左右阵容、地形及胜负标签"""
         try:
             df = pd.read_csv(self.csv_path, header=None, skiprows=1)
-            
+
             # 新数据格式: [怪物L(77), 场地L(6), 怪物R(77), 场地R(6), Result, ImgPath]
             total_features = (MONSTER_COUNT + FIELD_FEATURE_COUNT) * 2
-            
+
             if df.shape[1] >= total_features + 1:  # 至少包含特征和结果列
                 # 提取各部分特征
                 left_monster_end = MONSTER_COUNT
                 left_field_end = MONSTER_COUNT + FIELD_FEATURE_COUNT
                 right_monster_end = MONSTER_COUNT + FIELD_FEATURE_COUNT + MONSTER_COUNT
-                right_field_end = MONSTER_COUNT + FIELD_FEATURE_COUNT + MONSTER_COUNT + FIELD_FEATURE_COUNT
-                
+                right_field_end = (
+                    MONSTER_COUNT
+                    + FIELD_FEATURE_COUNT
+                    + MONSTER_COUNT
+                    + FIELD_FEATURE_COUNT
+                )
+
                 # 分别提取怪物和地形特征
                 left_monsters = df.iloc[:, 0:left_monster_end].values.astype(float)
-                left_terrain = df.iloc[:, left_monster_end:left_field_end].values.astype(float)
-                right_monsters = df.iloc[:, left_field_end:right_monster_end].values.astype(float)
-                right_terrain = df.iloc[:, right_monster_end:right_field_end].values.astype(float)
-                
+                left_terrain = df.iloc[
+                    :, left_monster_end:left_field_end
+                ].values.astype(float)
+                right_monsters = df.iloc[
+                    :, left_field_end:right_monster_end
+                ].values.astype(float)
+                right_terrain = df.iloc[
+                    :, right_monster_end:right_field_end
+                ].values.astype(float)
+
                 # 合并怪物特征（只使用怪物部分进行相似度计算）
                 self.past_left = left_monsters
                 self.past_right = right_monsters
-                
+
                 # 保存地形特征用于显示
                 self.past_left_terrain = left_terrain
                 self.past_right_terrain = right_terrain
-                
+
                 # 胜负标签
                 self.labels = df.iloc[:, total_features].values
             else:
                 # 兼容旧格式：只有怪物特征
                 self.past_left = df.iloc[:, 0:MONSTER_COUNT].values.astype(float)
-                self.past_right = df.iloc[:, MONSTER_COUNT:MONSTER_COUNT*2].values.astype(float)
-                self.labels = df.iloc[:, MONSTER_COUNT*2].values
-                
+                self.past_right = df.iloc[
+                    :, MONSTER_COUNT : MONSTER_COUNT * 2
+                ].values.astype(float)
+                self.labels = df.iloc[:, MONSTER_COUNT * 2].values
+
                 # 地形特征为空
-                self.past_left_terrain = np.zeros((len(self.past_left), FIELD_FEATURE_COUNT))
-                self.past_right_terrain = np.zeros((len(self.past_right), FIELD_FEATURE_COUNT))
-                
+                self.past_left_terrain = np.zeros(
+                    (len(self.past_left), FIELD_FEATURE_COUNT)
+                )
+                self.past_right_terrain = np.zeros(
+                    (len(self.past_right), FIELD_FEATURE_COUNT)
+                )
+
         except Exception as e:
             print(f"加载历史数据失败: {e}")
             # 加载失败时，初始化为空数组
@@ -75,10 +94,9 @@ class HistoryMatch:
             self.labels = np.array([], dtype=str)
 
         # 构造历史对局特征: 左右数量之和与差的绝对值拼接（只使用怪物特征）
-        self.feat_past = np.hstack([
-            self.past_left + self.past_right,
-            np.abs(self.past_left - self.past_right)
-        ])
+        self.feat_past = np.hstack(
+            [self.past_left + self.past_right, np.abs(self.past_left - self.past_right)]
+        )
         # 历史对局总数
         self.N_history = self.past_left.shape[0]
 
@@ -95,7 +113,9 @@ class HistoryMatch:
         need_R_idx = np.nonzero(pres_R)[0]  # 当前右侧有兵的索引
 
         # 构造当前对局特征并计算与所有历史的余弦相似度
-        feat_cur = np.hstack([cur_left + cur_right, np.abs(cur_left - cur_right)]).reshape(1, -1)
+        feat_cur = np.hstack(
+            [cur_left + cur_right, np.abs(cur_left - cur_right)]
+        ).reshape(1, -1)
         sims = cosine_similarity_manual(feat_cur, self.feat_past)[0]
 
         # 历史对局的存在布尔矩阵
@@ -104,14 +124,18 @@ class HistoryMatch:
 
         # 计算未镜像(missA, cntA)和镜像后(missB, cntB)的缺兵及数量差距
         missA = np.sum(np.logical_xor(pres_L, hist_pres_L), axis=1) + np.sum(
-            np.logical_xor(pres_R, hist_pres_R), axis=1)
+            np.logical_xor(pres_R, hist_pres_R), axis=1
+        )
         cntA = np.sum(np.abs(self.past_left - cur_left), axis=1) + np.sum(
-            np.abs(self.past_right - cur_right), axis=1)
+            np.abs(self.past_right - cur_right), axis=1
+        )
 
         missB = np.sum(np.logical_xor(pres_L, hist_pres_R), axis=1) + np.sum(
-            np.logical_xor(pres_R, hist_pres_L), axis=1)
+            np.logical_xor(pres_R, hist_pres_L), axis=1
+        )
         cntB = np.sum(np.abs(self.past_right - cur_left), axis=1) + np.sum(
-            np.abs(self.past_left - cur_right), axis=1)
+            np.abs(self.past_left - cur_right), axis=1
+        )
 
         # 根据(miss, cnt)比较，决定是否对历史数据做镜像处理
         swap = (missB < missA) | ((missB == missA) & (cntB < cntA))
@@ -140,8 +164,9 @@ class HistoryMatch:
 
         # 根据命中侧及是否完全匹配，选择对应的 qdiff_other
         qdiff_other = np.where(
-            (hit_R > 0) & (~full_R), diff_R,
-            np.where((hit_L > 0) & (~full_L), diff_L, 0)
+            (hit_R > 0) & (~full_R),
+            diff_R,
+            np.where((hit_L > 0) & (~full_L), diff_L, 0),
         )
 
         # 批量计算分类所需的布尔向量
@@ -190,7 +215,9 @@ class HistoryMatch:
             rR = np.ones(self.N_history, dtype=float)
 
         same_ratio = np.isclose(rL, rR, rtol=1e-3, atol=1e-6)
-        ratio_not_one = ~np.isclose(rL, 1.0, rtol=1e-3, atol=1e-6)  # rL==rR 时即可代表两侧都不为1
+        ratio_not_one = ~np.isclose(
+            rL, 1.0, rtol=1e-3, atol=1e-6
+        )  # rL==rR 时即可代表两侧都不为1
         proportional = uniform_L & uniform_R & same_ratio & ratio_not_one
 
         # 2类：同种类，数量均不同且成比例
@@ -214,14 +241,24 @@ class HistoryMatch:
 
         # 从前5条中计算左右胜率
         top5 = top20[:5]
-        labs = np.where(swap[top5], np.where(self.labels[top5]=="L", "R", "L"), self.labels[top5])
+        labs = np.where(
+            swap[top5], np.where(self.labels[top5] == "L", "R", "L"), self.labels[top5]
+        )
         tgtL = need_L_idx[np.argmax(cur_left[need_L_idx])] if need_L_idx.size else None
         tgtR = need_R_idx[np.argmax(cur_right[need_R_idx])] if need_R_idx.size else None
 
-        lw = np.sum([lab == ("L" if (Lh[i, tgtL] if tgtL is not None else 0) > 0 else "R")
-                     for i, lab in zip(top5, labs)])
-        rw = np.sum([lab == ("L" if (Lh[i, tgtR] if tgtR is not None else 0) > 0 else "R")
-                     for i, lab in zip(top5, labs)])
+        lw = np.sum(
+            [
+                lab == ("L" if (Lh[i, tgtL] if tgtL is not None else 0) > 0 else "R")
+                for i, lab in zip(top5, labs)
+            ]
+        )
+        rw = np.sum(
+            [
+                lab == ("L" if (Lh[i, tgtR] if tgtR is not None else 0) > 0 else "R")
+                for i, lab in zip(top5, labs)
+            ]
+        )
         self.left_rate = lw / len(top5) if top5.size else 0
         self.right_rate = rw / len(top5) if top5.size else 0
         self.sims = sims
@@ -234,19 +271,22 @@ class HistoryMatch:
         """获取指定历史对局的地形名称"""
         if idx >= len(self.past_left_terrain):
             return "无地形"
-        
+
         # 根据是否镜像选择地形特征
-        terrain_features = self.past_right_terrain[idx] if is_swapped else self.past_left_terrain[idx]
-        
+        terrain_features = (
+            self.past_right_terrain[idx] if is_swapped else self.past_left_terrain[idx]
+        )
+
         # 获取激活的地形特征索引
         active_indices = np.where(terrain_features > 0)[0]
-        
+
         if len(active_indices) == 0:
             return "无地形"
-        
+
         # 尝试从FieldRecognizer获取实际的特征列名称
         try:
             from field_recognition import FieldRecognizer
+
             field_recognizer = FieldRecognizer()
             if field_recognizer.is_ready():
                 feature_columns = field_recognizer.get_feature_columns()
@@ -297,11 +337,11 @@ class HistoryMatch:
                             # 如果无法识别，使用原名称的简化版本
                             simple_name = full_name.replace("_", "")
                         active_terrains.append(simple_name)
-                
+
                 return "+".join(active_terrains) if active_terrains else "无地形"
         except Exception:
             pass
-        
+
         # 备用硬编码映射（如果无法获取FieldRecognizer）
         # 与main.py的terrain_display_mapping保持一致
         terrain_names = {
@@ -316,14 +356,14 @@ class HistoryMatch:
             8: "顶部弩炮",
             9: "侧边弩炮",
             10: "侧边火炮",
-            11: "顶部火炮"
+            11: "顶部火炮",
         }
-        
+
         # 获取所有激活地形的名称
         active_terrains = []
         for i in active_indices:
             if i < len(terrain_names):
                 active_terrains.append(terrain_names[i])
-        
+
         # 如果有多个地形，用"+"连接
         return "+".join(active_terrains) if active_terrains else "无地形"

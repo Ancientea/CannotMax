@@ -7,6 +7,7 @@ import os
 import copy
 from enum import Enum, auto
 import tkinter as tk
+
 # from tkinter import messagebox # messagebox 已被自定义提示替代，可以注释或移除
 from PIL import Image, ImageTk
 import math
@@ -14,11 +15,12 @@ import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import random  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import sys  # Import sys for stdin
 
-from src.cannotmax.simulator import Battlefield, Unit, Monster
-from src.cannotmax.simulator.monsters import MonsterFactory, AttackState
-from src.cannotmax.simulator.utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction
-from src.cannotmax.simulator.vector2d import FastVector
-from src.cannotmax.config import MONSTER_COUNT
+from battle_field import Battlefield
+from unit import Unit
+from monsters import Monster, MonsterFactory, AttackState
+from utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction
+from vector2d import FastVector
+from ..config import MONSTER_COUNT
 
 
 class AppState(Enum):
@@ -41,7 +43,7 @@ class StateMachine:
             AppState.SETUP: [AppState.INITIAL, AppState.SETUP, AppState.SIMULATING],
             AppState.SIMULATING: [AppState.PAUSED, AppState.ENDED],
             AppState.PAUSED: [AppState.SIMULATING, AppState.SETUP],
-            AppState.ENDED: [AppState.INITIAL, AppState.SETUP]
+            AppState.ENDED: [AppState.INITIAL, AppState.SETUP],
         }
 
         if new_state in allowed_transitions[self.state]:
@@ -53,47 +55,55 @@ class StateMachine:
     def get_control_states(self):
         """返回各控件的状态字典"""
         states = {
-            'deploy': {'state': tk.NORMAL, 'text': '部署怪物'},
-            'confirm_start': {'state': tk.DISABLED},
-            'pause': {'state': tk.DISABLED, 'text': '暂停'},
-            'restore': {'state': tk.DISABLED},
-            'speed_entry': {'state': tk.NORMAL},
-            'clear': {'state': tk.NORMAL},
-            'timer': {'text': ''}
+            "deploy": {"state": tk.NORMAL, "text": "部署怪物"},
+            "confirm_start": {"state": tk.DISABLED},
+            "pause": {"state": tk.DISABLED, "text": "暂停"},
+            "restore": {"state": tk.DISABLED},
+            "speed_entry": {"state": tk.NORMAL},
+            "clear": {"state": tk.NORMAL},
+            "timer": {"text": ""},
         }
 
         if self.state == AppState.INITIAL:
             pass
 
         elif self.state == AppState.SETUP:
-            states.update({
-                'deploy': {'state': tk.NORMAL, 'text': '重新部署'},
-                'confirm_start': {'state': tk.NORMAL},
-                'timer': {'text': '未开始'}
-            })
+            states.update(
+                {
+                    "deploy": {"state": tk.NORMAL, "text": "重新部署"},
+                    "confirm_start": {"state": tk.NORMAL},
+                    "timer": {"text": "未开始"},
+                }
+            )
 
         elif self.state == AppState.SIMULATING:
-            states.update({
-                'deploy': {'state': tk.DISABLED, 'text': '重新部署'},
-                'confirm_start': {'state': tk.DISABLED},
-                'pause': {'state': tk.NORMAL, 'text': '暂停'},
-                'clear': {'state': tk.DISABLED},
-            })
+            states.update(
+                {
+                    "deploy": {"state": tk.DISABLED, "text": "重新部署"},
+                    "confirm_start": {"state": tk.DISABLED},
+                    "pause": {"state": tk.NORMAL, "text": "暂停"},
+                    "clear": {"state": tk.DISABLED},
+                }
+            )
 
         elif self.state == AppState.PAUSED:
-            states.update({
-                'restore': {'state': tk.NORMAL},
-                'pause': {'state': tk.NORMAL, 'text': '继续'},
-                'deploy': {'state': tk.NORMAL, 'text': '重新部署'}
-            })
+            states.update(
+                {
+                    "restore": {"state": tk.NORMAL},
+                    "pause": {"state": tk.NORMAL, "text": "继续"},
+                    "deploy": {"state": tk.NORMAL, "text": "重新部署"},
+                }
+            )
 
         elif self.state == AppState.ENDED:
-            states.update({
-                'deploy': {'state': tk.DISABLED, 'text': '重新部署'},
-                'restore': {'state': tk.NORMAL},
-                'pause': {'state': tk.DISABLED, 'text': '暂停'},
-                'timer': {'text': '战斗结束'}
-            })
+            states.update(
+                {
+                    "deploy": {"state": tk.DISABLED, "text": "重新部署"},
+                    "restore": {"state": tk.NORMAL},
+                    "pause": {"state": tk.DISABLED, "text": "暂停"},
+                    "timer": {"text": "战斗结束"},
+                }
+            )
         return states
 
 
@@ -157,7 +167,7 @@ class SandboxSimulator:
     def load_assets(self):
         self.icons = {}
         try:
-            with open(Path(__file__).parent / "monsters.json", encoding='utf-8') as f:
+            with open(Path(__file__).parent / "monsters.json", encoding="utf-8") as f:
                 self.monster_data = json.load(f)["monsters"]
         except FileNotFoundError:
             print("错误: monsters.json 未找到，请检查路径！")
@@ -168,17 +178,21 @@ class SandboxSimulator:
         for i in range(self.num_monsters):
             image_file_id = i + 1
             try:
-                image = Image.open(f'images/{image_file_id}.png')
+                image = Image.open(f"images/{image_file_id}.png")
                 self.icons[i] = {
                     "red": ImageTk.PhotoImage(image.resize((40, 40))),
-                    "blue": ImageTk.PhotoImage(image.resize((40, 40)).transpose(Image.FLIP_LEFT_RIGHT))
+                    "blue": ImageTk.PhotoImage(
+                        image.resize((40, 40)).transpose(Image.FLIP_LEFT_RIGHT)
+                    ),
                 }
             except Exception as e:
                 # 同样，show_message_below_button 可能还不可用
-                print(f"加载图标错误 (图标键: {i}, 文件名ID: {image_file_id}): {str(e)}")
+                print(
+                    f"加载图标错误 (图标键: {i}, 文件名ID: {image_file_id}): {str(e)}"
+                )
                 self.icons[i] = {
                     "red": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray")),
-                    "blue": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray"))
+                    "blue": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray")),
                 }
 
     def init_battlefield_for_setup(self):
@@ -190,7 +204,8 @@ class SandboxSimulator:
         right_army_config = self.battle_data.get("right", {})
 
         self.battle_field.setup_battle(
-            left_army_config, right_army_config, self.monster_data)
+            left_army_config, right_army_config, self.monster_data
+        )
         while self.battle_field.gameTime < 6.0:
             result = self.battle_field.run_one_frame()
             if result:
@@ -199,6 +214,7 @@ class SandboxSimulator:
     def _normalize_outcome(self, outcome):
         try:
             from simulator.utils import Faction
+
             if outcome == Faction.LEFT:
                 return "LEFT"
             if outcome == Faction.RIGHT:
@@ -231,36 +247,41 @@ class SandboxSimulator:
 
         self.mc_seed_var = tk.StringVar(value="")  # 可选随机种子
         tk.Label(mc_frame, text="随机种子(可空):").grid(
-            row=0, column=2, sticky="w", padx=(20, 0))
-        self.mc_seed_entry = tk.Entry(
-            mc_frame, width=12, textvariable=self.mc_seed_var)
+            row=0, column=2, sticky="w", padx=(20, 0)
+        )
+        self.mc_seed_entry = tk.Entry(mc_frame, width=12, textvariable=self.mc_seed_var)
         self.mc_seed_entry.grid(row=0, column=3, sticky="w", padx=6)
 
         self.mc_run_button = tk.Button(
-            mc_frame, text="运行蒙卡", command=self.start_monte_carlo_threads)
+            mc_frame, text="运行蒙卡", command=self.start_monte_carlo_threads
+        )
         self.mc_run_button.grid(row=0, column=4, padx=12)
 
         self.mc_stop_button = tk.Button(
-            mc_frame, text="停止", state=tk.DISABLED, command=self.stop_monte_carlo_threads)
+            mc_frame,
+            text="停止",
+            state=tk.DISABLED,
+            command=self.stop_monte_carlo_threads,
+        )
         self.mc_stop_button.grid(row=0, column=5, padx=4)
 
         # ...
         self.mc_canvas = tk.Canvas(mc_frame, height=160, bg="white")
-        self.mc_canvas.grid(row=2, column=0, columnspan=6,
-                            sticky="we", pady=(6, 2))
+        self.mc_canvas.grid(row=2, column=0, columnspan=6, sticky="we", pady=(6, 2))
         self.mc_canvas.bind(
-            "<Configure>", lambda e: self._redraw_mc_canvas())  # 动态重绘
+            "<Configure>", lambda e: self._redraw_mc_canvas()
+        )  # 动态重绘
 
         # 结果文字
         self.mc_result_text = tk.Text(mc_frame, height=6, width=70)
         self.mc_result_text.grid(
-            row=1, column=0, columnspan=5, pady=(8, 4), sticky="we")
+            row=1, column=0, columnspan=5, pady=(8, 4), sticky="we"
+        )
         self.mc_result_text.configure(state=tk.DISABLED)
 
         # 简单条形图画布（显示胜负/平局分布）
         self.mc_canvas = tk.Canvas(mc_frame, height=160, bg="white")
-        self.mc_canvas.grid(row=2, column=0, columnspan=5,
-                            sticky="we", pady=(6, 2))
+        self.mc_canvas.grid(row=2, column=0, columnspan=5, sticky="we", pady=(6, 2))
         self.canvas = None
 
     def run_single_battle(self, left_cfg, right_cfg):
@@ -282,6 +303,7 @@ class SandboxSimulator:
         else:
             try:
                 from simulator.utils import Faction
+
                 if result == Faction.LEFT:
                     outcome = "LEFT"
                 elif result == Faction.RIGHT:
@@ -328,10 +350,12 @@ class SandboxSimulator:
                 self.show_message_below_button("随机种子需为整数或留空", is_error=True)
                 return
 
-        left_cfg = copy.deepcopy(self.battle_data.get("left",  {}))
+        left_cfg = copy.deepcopy(self.battle_data.get("left", {}))
         right_cfg = copy.deepcopy(self.battle_data.get("right", {}))
         if not left_cfg or not right_cfg:
-            self.show_message_below_button("错误：左右双方任一为空，无法进行蒙卡", is_error=True)
+            self.show_message_below_button(
+                "错误：左右双方任一为空，无法进行蒙卡", is_error=True
+            )
             return
 
         # 状态初始化
@@ -358,16 +382,21 @@ class SandboxSimulator:
 
         # 关键：制造足够多的小任务（比如每个任务 10～50 次）
         # 这样就能频繁完成并推送结果，界面“按完成块”刷新
-        TARGET_TASKS = min(max(32, workers * 16), runs)   # 至少几十个分片
+        TARGET_TASKS = min(max(32, workers * 16), runs)  # 至少几十个分片
         chunk = max(1, runs // TARGET_TASKS)
 
         remain = runs
         idx = 0
         while remain > 0:
             n = min(chunk, remain)
-            fut = self.executor.submit(self._mc_task, n, left_cfg, right_cfg,
-                                       None if seed_val is None else seed_val + idx,
-                                       self.mc_stop_event)
+            fut = self.executor.submit(
+                self._mc_task,
+                n,
+                left_cfg,
+                right_cfg,
+                None if seed_val is None else seed_val + idx,
+                self.mc_stop_event,
+            )
 
             # 回调里**不要**动 UI；只把结果丢进队列
             def _on_done(f):
@@ -450,7 +479,8 @@ class SandboxSimulator:
             self.show_message_below_button("蒙卡完成", is_error=False)
         else:
             self.show_message_below_button(
-                f"已停止（完成 {done}/{target} 次）", is_error=False)
+                f"已停止（完成 {done}/{target} 次）", is_error=False
+            )
         self.mc_stop_event.clear()
 
     def _render_mc_text_and_chart(self, counts: Counter, done: int, target: int):
@@ -483,9 +513,11 @@ class SandboxSimulator:
         with self.mc_lock:
             counts = Counter(self._mc_counts)
             done = self._mc_total_done
-        items = [("左方胜", counts.get("LEFT", 0)),
-                 ("右方胜", counts.get("RIGHT", 0)),
-                 ("平局",   counts.get("DRAW", 0))]
+        items = [
+            ("左方胜", counts.get("LEFT", 0)),
+            ("右方胜", counts.get("RIGHT", 0)),
+            ("平局", counts.get("DRAW", 0)),
+        ]
         self.draw_mc_barchart(items, total=max(1, done))
 
     def draw_mc_barchart(self, items, total):
@@ -502,29 +534,29 @@ class SandboxSimulator:
         H = int(c.winfo_height()) or 160
         pad_x = 40
         pad_y = 24
-        bar_space = (W - 2*pad_x)
+        bar_space = W - 2 * pad_x
         bar_w = bar_space // max(1, len(items)) - 16
         max_cnt = max(x[1] for x in items) or 1
 
         # 坐标轴
-        c.create_line(pad_x, H - pad_y, W - pad_x//2, H - pad_y)  # x轴
-        c.create_line(pad_x, pad_y//2, pad_x, H - pad_y)          # y轴
+        c.create_line(pad_x, H - pad_y, W - pad_x // 2, H - pad_y)  # x轴
+        c.create_line(pad_x, pad_y // 2, pad_x, H - pad_y)  # y轴
 
         for i, (label, cnt) in enumerate(items):
             x0 = pad_x + i * (bar_w + 16) + 8
             x1 = x0 + bar_w
             # 高度按计数线性映射
             h_ratio = cnt / max_cnt if max_cnt > 0 else 0.0
-            bar_h = int((H - 2*pad_y) * h_ratio)
+            bar_h = int((H - 2 * pad_y) * h_ratio)
             y0 = H - pad_y - bar_h
             y1 = H - pad_y
             # 绘制条
             c.create_rectangle(x0, y0, x1, y1, fill="#6aa84f", outline="")
             # 文本：计数与百分比
-            pct = f"{(cnt/total):.1%}"
-            c.create_text((x0+x1)//2, y0-10, text=f"{cnt} ({pct})", anchor="s")
+            pct = f"{(cnt / total):.1%}"
+            c.create_text((x0 + x1) // 2, y0 - 10, text=f"{cnt} ({pct})", anchor="s")
             # 类别名
-            c.create_text((x0+x1)//2, H - pad_y + 12, text=label, anchor="n")
+            c.create_text((x0 + x1) // 2, H - pad_y + 12, text=label, anchor="n")
 
     def refresh_canvas_display(self):
         if self.monte_carlo_mode:
@@ -534,12 +566,12 @@ class SandboxSimulator:
     def show_message_below_button(self, message, is_error=False, duration=5000):
         """在按钮下方显示文字提示，并在指定时间后消失"""
         if self.message_label:
-            self.message_label.config(
-                text=message, fg="red" if is_error else "black")
+            self.message_label.config(text=message, fg="red" if is_error else "black")
             if self.message_timer_id:
                 self.master.after_cancel(self.message_timer_id)
             self.message_timer_id = self.master.after(
-                duration, self.clear_message_below_button)
+                duration, self.clear_message_below_button
+            )
 
     def clear_message_below_button(self):
         """清除提示信息"""
@@ -560,10 +592,13 @@ def main():
     root = tk.Tk()
     # root.withdraw() # 如果不需要立即隐藏主窗口，可以注释掉
 
-    initial_battle_setup = {"left": {"炮击组长": 3, "“庞贝”": 2}, "right": {"沸血骑士团精锐": 6, "炽焰源石虫": 23},
-                            "result": "left"}
+    initial_battle_setup = {
+        "left": {"炮击组长": 3, "“庞贝”": 2},
+        "right": {"沸血骑士团精锐": 6, "炽焰源石虫": 23},
+        "result": "left",
+    }
 
-    sys.stdin.reconfigure(encoding='utf-8')
+    sys.stdin.reconfigure(encoding="utf-8")
     try:
         if not sys.stdin.isatty():
             json_data = sys.stdin.read()
@@ -586,24 +621,35 @@ def main():
     if not app.monster_data:  # 检查 monsters.json 是否加载成功
         error_messages.append("错误: monsters.json 未找到或为空，请检查文件！")
 
-    if len(initial_battle_setup.get("left", {})) == 0 or len(initial_battle_setup.get("right", {})) == 0:
+    if (
+        len(initial_battle_setup.get("left", {})) == 0
+        or len(initial_battle_setup.get("right", {})) == 0
+    ):
         error_messages.append("错误：至少一方的怪物列表为空！")
 
     problematic_monsters_found = []
-    problematic_monster_names = ["矿脉守卫", "提亚卡乌好战者", "凋零萨卡兹", "狂暴宿主组长", "高能源石虫"]
+    problematic_monster_names = [
+        "矿脉守卫",
+        "提亚卡乌好战者",
+        "凋零萨卡兹",
+        "狂暴宿主组长",
+        "高能源石虫",
+    ]
 
     for team_key in ["left", "right"]:
         for monster_name in initial_battle_setup.get(team_key, {}):
             if monster_name in problematic_monster_names:
                 problematic_monsters_found.append(
-                    f"{('左方' if team_key == 'left' else '右方')}存在问题怪物: {monster_name}")
+                    f"{('左方' if team_key == 'left' else '右方')}存在问题怪物: {monster_name}"
+                )
 
     if problematic_monsters_found:
         error_messages.append("警告: " + "； ".join(problematic_monsters_found))
 
     if error_messages:
-        app.show_message_below_button(" | ".join(
-            error_messages), is_error=True, duration=10000)
+        app.show_message_below_button(
+            " | ".join(error_messages), is_error=True, duration=10000
+        )
         if "monsters.json 未找到或为空" in " | ".join(error_messages):
             print("由于 monsters.json 缺失或错误，模拟器可能无法正常工作。")
 

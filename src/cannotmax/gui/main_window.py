@@ -9,25 +9,37 @@ import numpy as np
 from pathlib import Path
 import onnxruntime  # workaround: Pre-import to avoid ImportError: DLL load failed while importing onnxruntime_pybind11_state: 动态链接库(DLL)初始化例程失败。
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout
-from PyQt6.QtWidgets import QLabel, QPushButton, QLineEdit, QCheckBox, QComboBox, QButtonGroup
+from PyQt6.QtWidgets import (
+    QLabel,
+    QPushButton,
+    QLineEdit,
+    QCheckBox,
+    QComboBox,
+    QButtonGroup,
+)
 from PyQt6.QtWidgets import QGroupBox, QMessageBox, QGraphicsDropShadowEffect, QFrame
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
 import PyQt6.QtCore as QtCore
 
-from src.cannotmax.legacy import loadData
-from src.cannotmax.core import auto_fetch
-from src.cannotmax.core import maa_adb_connector
-from src.cannotmax.core.maa_adb_connector import AdbConnectorAdapter, ConnectionTypeRegistry, InputMethodRegistry, MaaFrameworkDetector
-from src.cannotmax.gui import DarkModeStyleFix
-from src.cannotmax.data import similar_history_match
-from src.cannotmax.core import recognize
-from src.cannotmax.config import MONSTER_COUNT
-from src.cannotmax.data.specialmonster import SpecialMonsterHandler
-from src.cannotmax.tools import data_package
-from src.cannotmax.utils import winrt_capture
-from src.cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_DATA
-from src.cannotmax.gui import HistoryMatchUI, InputPanelUI
+from ..legacy import loadData
+from ..core import auto_fetch
+from ..core import maa_adb_connector
+from ..core.maa_adb_connector import (
+    AdbConnectorAdapter,
+    ConnectionTypeRegistry,
+    InputMethodRegistry,
+    MaaFrameworkDetector,
+)
+from . import DarkModeStyleFix
+from ..data import similar_history_match
+from ..core import recognize
+from ..config import MONSTER_COUNT
+from ..data.specialmonster import SpecialMonsterHandler
+from ..tools import data_package
+from ..utils import winrt_capture
+from ..config import FIELD_FEATURE_COUNT, MONSTER_DATA
+from . import HistoryMatchUI, InputPanelUI
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.getLogger("PIL").setLevel(logging.INFO)
@@ -66,6 +78,7 @@ class ADBConnectorThread(QThread):
     def run(self):
         self.app.adb_connector.connect()
         self.connect_finished.emit()
+
 
 class ArknightsApp(QMainWindow):
     # 添加自定义信号
@@ -118,10 +131,14 @@ class ArknightsApp(QMainWindow):
         self.history_match = similar_history_match.HistoryMatch()
         # Ensure feat_past and N_history are initialized
         try:
-            self.history_match.feat_past = np.hstack([self.history_match.past_left, self.history_match.past_right])
+            self.history_match.feat_past = np.hstack(
+                [self.history_match.past_left, self.history_match.past_right]
+            )
         except Exception:
             self.history_match.feat_past = None
-        self.history_match.N_history = 0 if self.history_match.labels is None else len(self.history_match.labels)
+        self.history_match.N_history = (
+            0 if self.history_match.labels is None else len(self.history_match.labels)
+        )
         logger.info("错题本加载成功")
 
         # 初始化特殊怪物语言触发处理程序
@@ -143,8 +160,14 @@ class ArknightsApp(QMainWindow):
                 version = pyproject_data["project"]["version"]
         except (FileNotFoundError, KeyError):
             version = "unknown"
-        model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
-        self.setWindowTitle(f"铁鲨鱼_Arknights Neural Network - v{version} - model: {model_name}")
+        model_name = (
+            Path(self.cannot_model.model_path).name
+            if self.cannot_model.model_path
+            else "未加载"
+        )
+        self.setWindowTitle(
+            f"铁鲨鱼_Arknights Neural Network - v{version} - model: {model_name}"
+        )
         self.setWindowIcon(QIcon("ico/icon.ico"))
         self.setGeometry(100, 100, 500, 580)
         self.setMinimumWidth(580)
@@ -239,10 +262,16 @@ class ArknightsApp(QMainWindow):
         result_layout.addWidget(self.result_label)
 
         # 添加模型名称显示
-        model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
+        model_name = (
+            Path(self.cannot_model.model_path).name
+            if self.cannot_model.model_path
+            else "未加载"
+        )
         self.model_name_label = QLabel(f"model: {model_name}")
         self.model_name_label.setFont(QFont("Microsoft YaHei", 8))
-        self.model_name_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        self.model_name_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom
+        )
         self.model_name_label.setStyleSheet("color: #666666;")
         result_layout.addWidget(self.model_name_label)
 
@@ -384,7 +413,9 @@ class ArknightsApp(QMainWindow):
         self.connection_type_combo = QComboBox()
         for ct in ConnectionTypeRegistry.get_all_types():
             self.connection_type_combo.addItem(ct.display_name, ct.type_id)
-        self.connection_type_combo.currentIndexChanged.connect(self.on_connection_type_changed)
+        self.connection_type_combo.currentIndexChanged.connect(
+            self.on_connection_type_changed
+        )
 
         self.input_method_label = QLabel("输入方式:")
         self.input_method_combo = QComboBox()
@@ -394,7 +425,9 @@ class ArknightsApp(QMainWindow):
         idx = self.input_method_combo.findData(default_method.method_id)
         if idx >= 0:
             self.input_method_combo.setCurrentIndex(idx)
-        self.input_method_combo.currentIndexChanged.connect(self.on_input_method_changed)
+        self.input_method_combo.currentIndexChanged.connect(
+            self.on_input_method_changed
+        )
 
         maa_row_layout.addWidget(self.connection_type_label)
         maa_row_layout.addWidget(self.connection_type_combo)
@@ -549,14 +582,14 @@ class ArknightsApp(QMainWindow):
         self.current_capture_mode = mode
         logger.info(f"切换捕获模式为: {mode}")
 
-        is_win_mode = (mode == "WIN")
-        is_adb_mode = (mode == "ADB")
-        is_pc_mode = (mode == "PC")
+        is_win_mode = mode == "WIN"
+        is_adb_mode = mode == "ADB"
+        is_pc_mode = mode == "PC"
 
         # 切换窗口捕获相关控件
         self.choose_window_button.setEnabled(is_win_mode)
         self.reselect_button.setEnabled(is_win_mode)
-        
+
         # 切换 ADB 相关控件
         self.serial_label.setEnabled(is_adb_mode)
         self.serial_entry.setEnabled(is_adb_mode)
@@ -577,7 +610,9 @@ class ArknightsApp(QMainWindow):
             if self.recognizer._winrt is None:
                 self.choose_capture_window()
         elif mode == "PC":
-            self.recognizer = recognize.RecognizeMonster(method="ADB") # reuse ADB reading methodology but on PC Connector
+            self.recognizer = recognize.RecognizeMonster(
+                method="ADB"
+            )  # reuse ADB reading methodology but on PC Connector
             if not self.pc_connector.is_connected:
                 self.pc_connector.connect()
                 if not self.pc_connector.is_connected:
@@ -636,11 +671,15 @@ class ArknightsApp(QMainWindow):
                     return
                 hint = ""
                 if "window_name" in sel:
-                    self.recognizer = recognize.RecognizeMonster(method="WIN", window_name=sel["window_name"], monitor_index=None)
+                    self.recognizer = recognize.RecognizeMonster(
+                        method="WIN", window_name=sel["window_name"], monitor_index=None
+                    )
                     hint = f"已切换至窗口：{sel['window_name']}"
                 else:
                     idx = max(1, sel["monitor_index"])
-                    self.recognizer = recognize.RecognizeMonster(method="WIN", window_name=None, monitor_index=idx)
+                    self.recognizer = recognize.RecognizeMonster(
+                        method="WIN", window_name=None, monitor_index=idx
+                    )
                     hint = f"已切换至整屏：显示器 {sel['monitor_index']}"
 
                 self.no_region = True
@@ -721,7 +760,10 @@ class ArknightsApp(QMainWindow):
             pixmap = QPixmap(f"images/{MONSTER_DATA['原始名称'][monster_id]}.png")
             if not pixmap.isNull():
                 pixmap = pixmap.scaled(
-                    70, 70, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+                    70,
+                    70,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
                 )
                 img_label.setPixmap(pixmap)
         except Exception as e:
@@ -761,7 +803,9 @@ class ArknightsApp(QMainWindow):
 
     def get_prediction(self):
         try:
-            left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
+            left_monsters_dict, right_monsters_dict = (
+                self.input_panel.get_monster_counts()
+            )
             left_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
             right_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
 
@@ -774,7 +818,9 @@ class ArknightsApp(QMainWindow):
                 right_counts[int(name) - 1] = int(value) if value.isdigit() else 0
 
             # 构建包含地形的完整特征向量
-            full_features = self.input_panel.build_terrain_features(left_counts, right_counts)
+            full_features = self.input_panel.build_terrain_features(
+                left_counts, right_counts
+            )
 
             prediction = self.cannot_model.get_prediction_with_terrain(full_features)
             return prediction
@@ -782,7 +828,9 @@ class ArknightsApp(QMainWindow):
             QMessageBox.critical(self, "错误", "未找到模型文件，请先训练")
         except RuntimeError as e:
             if "size mismatch" in str(e):
-                QMessageBox.critical(self, "错误", "模型结构不匹配！请删除旧模型并重新训练")
+                QMessageBox.critical(
+                    self, "错误", "模型结构不匹配！请删除旧模型并重新训练"
+                )
             else:
                 QMessageBox.critical(self, "错误", f"模型加载失败: {str(e)}")
         except ValueError:
@@ -812,10 +860,15 @@ class ArknightsApp(QMainWindow):
         left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
         # 生成结果文本
         if winner != "难说":
-            result_text = f"预测胜方: {winner}\n" f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
+            result_text = (
+                f"预测胜方: {winner}\n"
+                f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
+            )
         else:
             result_text = (
-                f"这一把{winner}\n" f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n" f"难道说？难道说？难道说？\n"
+                f"这一把{winner}\n"
+                f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
+                f"难道说？难道说？难道说？\n"
             )
             self.result_label.setStyleSheet("color: black; font: bold,24px;")
 
@@ -834,8 +887,12 @@ class ArknightsApp(QMainWindow):
         self.update_input_display()
 
         if self.history_match_ui.isVisible():
-            left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-            self.history_match_ui.render_similar_matches(left_monsters_dict, right_monsters_dict)
+            left_monsters_dict, right_monsters_dict = (
+                self.input_panel.get_monster_counts()
+            )
+            self.history_match_ui.render_similar_matches(
+                left_monsters_dict, right_monsters_dict
+            )
 
     def get_recognize(self):
         """
@@ -850,7 +907,7 @@ class ArknightsApp(QMainWindow):
                 screenshot = self.active_connector.capture_screenshot()
             if screenshot is None:
                 logger.error(f"{self.current_capture_mode} 截图失败")
-            
+
             results = self.recognizer.process_regions(screenshot)
         else:
             # WIN 模式，recognizer 内部处理 WinRT 或 PIL
@@ -887,8 +944,12 @@ class ArknightsApp(QMainWindow):
         self.update_prediction(prediction)
         # 历史对局
         if self.history_match_ui.isVisible():
-            left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-            self.history_match_ui.render_similar_matches(left_monsters_dict, right_monsters_dict)
+            left_monsters_dict, right_monsters_dict = (
+                self.input_panel.get_monster_counts()
+            )
+            self.history_match_ui.render_similar_matches(
+                left_monsters_dict, right_monsters_dict
+            )
 
     def toggle_history_panel(self):
         """切换历史对局面板的显示"""
@@ -901,8 +962,12 @@ class ArknightsApp(QMainWindow):
         self.history_match_ui.setVisible(not is_visible)
         if not is_visible:
             self.history_button.setText("隐藏历史对局")
-            left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-            self.history_match_ui.render_similar_matches(left_monsters_dict, right_monsters_dict)
+            left_monsters_dict, right_monsters_dict = (
+                self.input_panel.get_monster_counts()
+            )
+            self.history_match_ui.render_similar_matches(
+                left_monsters_dict, right_monsters_dict
+            )
             target_width += 540
         else:
             self.history_button.setText("显示历史对局")
@@ -923,7 +988,8 @@ class ArknightsApp(QMainWindow):
                 updater=self.update_statistics_callback,
                 start_callback=self.start_callback,
                 stop_callback=self.stop_callback,
-                training_duration=float(self.duration_entry.text()) * 3600,  # 获取训练时长
+                training_duration=float(self.duration_entry.text())
+                * 3600,  # 获取训练时长
                 recognizer=self.recognizer,
                 cannot_model=self.cannot_model,
             )
@@ -932,7 +998,11 @@ class ArknightsApp(QMainWindow):
             self.auto_fetch.stop_auto_fetch()
 
     def update_statistics(self):
-        elapsed_time = time.time() - self.auto_fetch.start_time if self.auto_fetch.start_time else 0
+        elapsed_time = (
+            time.time() - self.auto_fetch.start_time
+            if self.auto_fetch.start_time
+            else 0
+        )
         hours, remainder = divmod(elapsed_time, 3600)
         minutes, _ = divmod(remainder, 60)
         stats_text = (
@@ -955,7 +1025,9 @@ class ArknightsApp(QMainWindow):
                 self.serial_entry.setCurrentIndex(0)
         else:
             self.serial_entry.addItem("127.0.0.1:5555")
-            self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
+            self.serial_entry.setCurrentText(
+                current_text if current_text else "127.0.0.1:5555"
+            )
 
     def update_device_serial(self):
         new_serial = self.serial_entry.currentText()
@@ -1029,7 +1101,10 @@ class ArknightsApp(QMainWindow):
             # 启动main_sim.py子进程 (非阻塞)
             # Use sys.executable to ensure the same Python interpreter is used
             process = subprocess.Popen(
-                [sys.executable, "main_sim.py"], stdin=subprocess.PIPE, text=True, encoding="utf-8"
+                [sys.executable, "main_sim.py"],
+                stdin=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
             )
             # 通过stdin传递JSON数据并关闭stdin
             process.stdin.write(json_data)
@@ -1070,7 +1145,9 @@ class ArknightsApp(QMainWindow):
     def update_image_display(self, qimage):
         self.image_display.setPixmap(
             QPixmap.fromImage(qimage).scaled(
-                self.image_display.width(), self.image_display.height(), Qt.AspectRatioMode.KeepAspectRatio
+                self.image_display.width(),
+                self.image_display.height(),
+                Qt.AspectRatioMode.KeepAspectRatio,
             )
         )
 
@@ -1086,15 +1163,16 @@ class ArknightsApp(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"打包数据时发生错误: {str(e)}")
 
-
     def toggle_always_on_top(self):
         if self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint:
-            self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint)
+            self.setWindowFlags(
+                self.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint
+            )
             self.always_on_top_button.setText("窗口置顶")
         else:
             self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             self.always_on_top_button.setText("取消置顶")
-        self.show() # Reapply window flags
+        self.show()  # Reapply window flags
 
     def closeEvent(self, event):
         """窗口关闭时的处理"""

@@ -1,4 +1,5 @@
-from src.cannotmax.config import UNIT_CONFIG
+from ..config import UNIT_CONFIG
+
 
 class Unit:
     def __init__(self, team, unit_id, x, y):

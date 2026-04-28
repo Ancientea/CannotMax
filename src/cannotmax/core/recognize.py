@@ -5,9 +5,9 @@ import numpy as np
 from PIL import ImageGrab
 from rapidocr import RapidOCR, EngineType
 
-from src.cannotmax.config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT
-from src.cannotmax.utils import find_monster_zone
-from src.cannotmax.utils.winrt_capture import WinRTScreenCapture
+from ..config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT
+from ..utils import find_monster_zone
+from ..utils.winrt_capture import WinRTScreenCapture
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -34,6 +34,7 @@ relative_regions = [
     (0.8700, 0.05, 1.0000, 0.80),
 ]
 
+
 def get_rapidocr_engine(prefer_gpu=False):
     """
     prefer_gpu (bool): 是否优先尝试使用GPU
@@ -41,6 +42,7 @@ def get_rapidocr_engine(prefer_gpu=False):
     try:
         if prefer_gpu:
             import torch
+
             if torch.cuda.is_available():
                 return RapidOCR(
                     params={
@@ -56,11 +58,18 @@ def get_rapidocr_engine(prefer_gpu=False):
     # 如果没有GPU可用，使用CPU onnxruntime
     return RapidOCR()
 
+
 class RecognizeMonster:
-    ROI_RELATIVE = [(0.2464, 0.8410), (0.7542, 0.9510)] # 16:9下怪物区域相对坐标
-    def __init__(self, method: str = "ADB", window_name: str | None = None, monitor_index: int | None = None):
+    ROI_RELATIVE = [(0.2464, 0.8410), (0.7542, 0.9510)]  # 16:9下怪物区域相对坐标
+
+    def __init__(
+        self,
+        method: str = "ADB",
+        window_name: str | None = None,
+        monitor_index: int | None = None,
+    ):
         self.method = method
-        self.main_roi = [(0, 0), (1919, 1079)] # 主区域坐标
+        self.main_roi = [(0, 0), (1919, 1079)]  # 主区域坐标
         # 鼠标交互全局变量
         self.roi_box = []
         self.drawing = False
@@ -87,12 +96,12 @@ class RecognizeMonster:
                     self.main_roi = [(0, 0), (w - 1, h - 1)]
                 except Exception as e:
                     logger.exception("WinRT capture init failed: %s", e)
-                    self._winrt = None # 将 _winrt 设置为 None，表示初始化失败
-                    raise # 重新抛出异常，以便上层捕获
+                    self._winrt = None  # 将 _winrt 设置为 None，表示初始化失败
+                    raise  # 重新抛出异常，以便上层捕获
             else:
                 logger.info("WIN 模式未指定窗口或显示器，将使用 PIL 作为回退")
 
-    def mouse_callback(self, event, x:int, y:int, flags, param):
+    def mouse_callback(self, event, x: int, y: int, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
             self.roi_box = [(x, y)]
             self.drawing = True
@@ -122,8 +131,15 @@ class RecognizeMonster:
                 return None
 
             # 添加操作提示
-            cv2.putText(img, "Drag to select area | ENTER:confirm | ESC:retry",
-                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(
+                img,
+                "Drag to select area | ENTER:confirm | ESC:retry",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 0, 255),
+                2,
+            )
 
             # 显示窗口
             cv2.namedWindow("Select ROI", cv2.WINDOW_NORMAL)
@@ -152,7 +168,9 @@ class RecognizeMonster:
                 self.roi_box = []
                 continue
 
-    def find_best_match(target: cv2.typing.MatLike, ref_images: dict[int, cv2.typing.MatLike]):
+    def find_best_match(
+        target: cv2.typing.MatLike, ref_images: dict[int, cv2.typing.MatLike]
+    ):
         """
         模板匹配找到最佳匹配的参考图像
         :param target: 目标图像
@@ -275,13 +293,20 @@ class RecognizeMonster:
 
                 # 图像匹配
                 matched_id, confidence = find_best_match(sub_roi, self.ref_images)
-                logger.info(f"target: {idx} matched_id: {matched_id}, confidence: {confidence:.4f}")
+                logger.info(
+                    f"target: {idx} matched_id: {matched_id}, confidence: {confidence:.4f}"
+                )
                 if matched_id != 0 and confidence < matched_threshold:
                     raise ValueError(f"模板匹配置信度过低: {confidence}")
             except Exception as e:
                 logger.exception(f"区域 {idx} 匹配失败: {str(e)}")
                 results.append(
-                    {"region_id": idx, "matched_id": matched_id, "number": "N/A", "error": str(e)}
+                    {
+                        "region_id": idx,
+                        "matched_id": matched_id,
+                        "number": "N/A",
+                        "error": str(e),
+                    }
                 )
                 continue
             try:
@@ -326,10 +351,15 @@ class RecognizeMonster:
             except Exception as e:
                 logger.exception(f"区域 {idx} OCR识别失败: {str(e)}")
                 results.append(
-                    {"region_id": idx, "matched_id": matched_id, "number": "N/A", "error": str(e)}
+                    {
+                        "region_id": idx,
+                        "matched_id": matched_id,
+                        "number": "N/A",
+                        "error": str(e),
+                    }
                 )
         return results
-    
+
     def do_num_ocr(self, img: cv2.typing.MatLike):
         result = self.rapidocr_eng(img, use_det=False, use_cls=False, use_rec=True)
         logger.info(f"OCR: text: '{result.txts[0]}', score: {result.scores[0]}")
@@ -408,7 +438,9 @@ def preprocess(img: cv2.typing.MatLike):
     return closed
 
 
-def find_best_match(target: cv2.typing.MatLike, ref_images: dict[int, cv2.typing.MatLike]):
+def find_best_match(
+    target: cv2.typing.MatLike, ref_images: dict[int, cv2.typing.MatLike]
+):
     """
     模板匹配找到最佳匹配的参考图像
     :param target: 目标图像
@@ -444,14 +476,16 @@ def load_ref_images(ref_dir="images"):
     for i in range(MONSTER_COUNT + 1):
         # path = os.path.join(ref_dir, f"{i}.png")
         # if os.path.exists(path):
-            # img = cv2.imread(path, cv2.IMREAD_COLOR_BGR)
+        # img = cv2.imread(path, cv2.IMREAD_COLOR_BGR)
         if i == 0:
             img = MONSTER_IMAGES.get("empty")
         else:
             img = MONSTER_IMAGES.get(MONSTER_DATA["原始名称"][i])
 
         if img is None:
-            logger.error(f"无法加载参考图片 i={i}, 名称={MONSTER_DATA['原始名称'][i] if i > 0 else 'empty'}")
+            logger.error(
+                f"无法加载参考图片 i={i}, 名称={MONSTER_DATA['原始名称'][i] if i > 0 else 'empty'}"
+            )
             continue
 
         # 裁切模板匹配图像比例

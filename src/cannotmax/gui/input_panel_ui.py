@@ -1,14 +1,27 @@
 import json
 import re
 from collections import defaultdict
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
-from PyQt6.QtWidgets import QLineEdit, QScrollArea, QGridLayout, QSizePolicy, QGraphicsDropShadowEffect
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+)
+from PyQt6.QtWidgets import (
+    QLineEdit,
+    QScrollArea,
+    QGridLayout,
+    QSizePolicy,
+    QGraphicsDropShadowEffect,
+)
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
 from PyQt6.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 import numpy as np
 import logging
 
-from src.cannotmax.config import MONSTER_COUNT, MONSTER_DATA, FIELD_FEATURE_COUNT
+from ..config import MONSTER_COUNT, MONSTER_DATA, FIELD_FEATURE_COUNT
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +31,7 @@ class InputPanelUI(QFrame):
     predict_requested = pyqtSignal()
     reset_requested = pyqtSignal()
     input_changed = pyqtSignal()  # Signal emitted when any monster input changes
-    terrain_changed = pyqtSignal(list) # New signal for terrain changes
+    terrain_changed = pyqtSignal(list)  # New signal for terrain changes
 
     # Terrain display mapping
     terrain_display_mapping = {
@@ -33,7 +46,7 @@ class InputPanelUI(QFrame):
         "crossbow_top_crossbow": "顶部弩炮",
         "fire_side_crossbow": "侧边弩炮",
         "fire_side_fire": "侧边火炮",
-        "fire_top_fire": "顶部火炮"
+        "fire_top_fire": "顶部火炮",
     }
 
     @staticmethod
@@ -44,16 +57,16 @@ class InputPanelUI(QFrame):
         try:
             # 加载类别映射
             class_map_path = "tools/battlefield_recognize/class_to_idx.json"
-            with open(class_map_path, 'r', encoding='utf-8') as f:
+            with open(class_map_path, "r", encoding="utf-8") as f:
                 class_to_idx = json.load(f)
 
             # 使用与data_cleaning_with_field_recognize_gpu.py相同的逻辑
             grouped_elements = defaultdict(list)
             for class_name in class_to_idx.keys():
-                if class_name.endswith('_none'):
+                if class_name.endswith("_none"):
                     continue
-                condensed_name = re.sub(r'_left_', '_', class_name)
-                condensed_name = re.sub(r'_right_', '_', condensed_name)
+                condensed_name = re.sub(r"_left_", "_", class_name)
+                condensed_name = re.sub(r"_right_", "_", condensed_name)
                 grouped_elements[condensed_name].append(class_name)
 
             # 返回排序后的特征列名
@@ -67,14 +80,21 @@ class InputPanelUI(QFrame):
         super().__init__()
         self.left_monsters: dict[str, str] = {}
         self.right_monsters: dict[str, str] = {}
-        self.terrain_buttons = {} # Initialize terrain buttons
+        self.terrain_buttons = {}  # Initialize terrain buttons
         self.terrain_feature_columns = self.get_terrain_feature_columns()
         if not self.terrain_feature_columns:
             # If fetching fails, use default terrain features
             self.terrain_feature_columns = [
-                "altar_vertical", "block_parallel", "block_vertical_altar",
-                "block_vertical_block", "coil_narrow", "coil_wide",
-                "crossbow_top", "fire_side_left", "fire_side_right", "fire_top"
+                "altar_vertical",
+                "block_parallel",
+                "block_vertical_altar",
+                "block_vertical_block",
+                "coil_narrow",
+                "coil_wide",
+                "crossbow_top",
+                "fire_side_left",
+                "fire_side_right",
+                "fire_top",
             ]
 
         self.init_ui()
@@ -205,7 +225,7 @@ class InputPanelUI(QFrame):
 
         # 分两行显示按钮，每行6个，更好地利用空间
         terrain_rows = []
-        for row_idx in range(2): # Changed from 3 to 2 rows
+        for row_idx in range(2):  # Changed from 3 to 2 rows
             row_terrain = QWidget()
             row_layout = QHBoxLayout(row_terrain)
             row_layout.setSpacing(3)
@@ -244,11 +264,13 @@ class InputPanelUI(QFrame):
                 }
                 """
             )
-            btn.clicked.connect(lambda checked, k=terrain_key: self.on_terrain_multi_selected(k))
+            btn.clicked.connect(
+                lambda checked, k=terrain_key: self.on_terrain_multi_selected(k)
+            )
             self.terrain_buttons[terrain_key] = btn
 
             # 分两行显示，每行6个按钮
-            row_index = i // 6 # Changed from 4 to 6 buttons per row
+            row_index = i // 6  # Changed from 4 to 6 buttons per row
             if row_index < len(terrain_rows):
                 terrain_rows[row_index][1].addWidget(btn)
             else:
@@ -289,7 +311,9 @@ class InputPanelUI(QFrame):
                 }
             """
         )
-        self.predict_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.predict_button.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
 
         self.reset_button = QPushButton("重置")
         self.reset_button.clicked.connect(self.reset_entries)
@@ -379,7 +403,9 @@ class InputPanelUI(QFrame):
             right_entry.setFixedWidth(60)
             right_entry.setPlaceholderText("右")
             right_entry.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            right_entry.textChanged.connect(self.input_changed.emit)  # Connect to signal
+            right_entry.textChanged.connect(
+                self.input_changed.emit
+            )  # Connect to signal
             self.right_monsters[str(i)] = right_entry
 
             # 添加到容器
@@ -388,7 +414,9 @@ class InputPanelUI(QFrame):
             container_layout.addWidget(right_entry, 0, Qt.AlignmentFlag.AlignCenter)
 
             # 添加到网格布局
-            self.scroll_grid.addWidget(monster_container, row, col, Qt.AlignmentFlag.AlignCenter)
+            self.scroll_grid.addWidget(
+                monster_container, row, col, Qt.AlignmentFlag.AlignCenter
+            )
 
             # 更新行列位置
             col += 1
@@ -423,14 +451,18 @@ class InputPanelUI(QFrame):
             if monster_id in self.left_monsters:
                 self.left_monsters[monster_id].setText(str(count))
                 if count > 0:
-                    self.left_monsters[monster_id].setStyleSheet("background-color: yellow;")
+                    self.left_monsters[monster_id].setStyleSheet(
+                        "background-color: yellow;"
+                    )
                 else:
                     self.left_monsters[monster_id].setStyleSheet("")
         for monster_id, count in right_counts.items():
             if monster_id in self.right_monsters:
                 self.right_monsters[monster_id].setText(str(count))
                 if count > 0:
-                    self.right_monsters[monster_id].setStyleSheet("background-color: yellow;")
+                    self.right_monsters[monster_id].setStyleSheet(
+                        "background-color: yellow;"
+                    )
                 else:
                     self.right_monsters[monster_id].setStyleSheet("")
         self.input_changed.emit()
@@ -458,7 +490,9 @@ class InputPanelUI(QFrame):
     def build_terrain_features(self, left_counts, right_counts):
         """构建包含地形的完整特征向量（支持多选地形）"""
         # Use the actual number of terrain feature columns
-        num_field_features = len(self.terrain_feature_columns) if FIELD_FEATURE_COUNT else 0
+        num_field_features = (
+            len(self.terrain_feature_columns) if FIELD_FEATURE_COUNT else 0
+        )
 
         # Build terrain feature vector
         terrain_features = np.zeros(num_field_features)
@@ -472,7 +506,9 @@ class InputPanelUI(QFrame):
                 if terrain_idx < num_field_features:
                     terrain_features[terrain_idx] = 1
             else:
-                logger.warning(f"Terrain {terrain} not in feature columns: {self.terrain_feature_columns}")
+                logger.warning(
+                    f"Terrain {terrain} not in feature columns: {self.terrain_feature_columns}"
+                )
 
         logger.debug(f"Selected terrains: {selected_terrains}")
         logger.debug(f"Terrain feature vector: {terrain_features}")
@@ -483,11 +519,13 @@ class InputPanelUI(QFrame):
         # 1R-61R (Right monster features)
         # 62R-73R (Field features R, copied)
 
-        full_features = np.concatenate([
-            left_counts,        # 1L-61L (Left monster features)
-            terrain_features,   # 62L-73L (Field features L)
-            right_counts,       # 1R-61R (Right monster features)
-            terrain_features    # 62R-73R (Field features R, copied)
-        ])
+        full_features = np.concatenate(
+            [
+                left_counts,  # 1L-61L (Left monster features)
+                terrain_features,  # 62L-73L (Field features L)
+                right_counts,  # 1R-61R (Right monster features)
+                terrain_features,  # 62R-73R (Field features R, copied)
+            ]
+        )
 
         return full_features
