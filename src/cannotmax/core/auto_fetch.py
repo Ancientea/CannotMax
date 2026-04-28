@@ -12,12 +12,12 @@ import time
 from typing import Literal
 import cv2
 import numpy as np
-import loadData
-from recognize import intelligent_workers_debug
-from config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from src.cannotmax.legacy import loadData
+from src.cannotmax.core.recognize import intelligent_workers_debug
+from src.cannotmax.config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 from collections.abc import Callable
 from collections import deque
-from login import LoginManager
+from src.cannotmax.gui import LoginManager
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -382,7 +382,7 @@ class AutoFetch:
         """
         裁切复核图片
         """
-        from recognize import RecognizeMonster
+        from src.cannotmax.core.recognize import RecognizeMonster
         roi_rel = RecognizeMonster.ROI_RELATIVE
         x1 = int(roi_rel[0][0] * self.connector.screen_width)
         y1 = int(roi_rel[0][1] * self.connector.screen_height)

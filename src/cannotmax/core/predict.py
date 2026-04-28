@@ -7,8 +7,7 @@ import numpy as np
 import torch
 import logging
 
-from config import MONSTER_COUNT
-from config import FIELD_FEATURE_COUNT
+from src.cannotmax.config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 
 logger = logging.getLogger(__name__)
 

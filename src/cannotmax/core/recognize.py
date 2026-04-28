@@ -5,9 +5,9 @@ import numpy as np
 from PIL import ImageGrab
 from rapidocr import RapidOCR, EngineType
 
-from config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT
-import find_monster_zone
-from winrt_capture import WinRTScreenCapture
+from src.cannotmax.config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT
+from src.cannotmax.utils import find_monster_zone
+from src.cannotmax.utils.winrt_capture import WinRTScreenCapture
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
