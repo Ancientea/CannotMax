@@ -409,6 +409,68 @@ class InputPanelUI(QFrame):
     def get_monster_counts(self):
         """Returns current monster counts from input fields."""
         return self.left_monsters, self.right_monsters
+    
+    def get_position_data(self):
+        """
+        获取位置顺序的数据，用于位置感知模型
+        返回格式：
+        {
+            'left_positions': [(monster_id, count), ...],  # 3个位置
+            'right_positions': [(monster_id, count), ...],  # 3个位置
+            'left_field': np.array,  # 场地特征
+            'right_field': np.array  # 场地特征
+        }
+        """
+        from constants import POSITIONS_PER_SIDE
+        from config import FIELD_FEATURE_COUNT
+        
+        # 初始化位置数据（3个位置，每个位置默认为(0, 0)表示空）
+        left_positions = [(0, 0)] * POSITIONS_PER_SIDE
+        right_positions = [(0, 0)] * POSITIONS_PER_SIDE
+        
+        # 从输入框获取数据
+        # 注意：这里需要根据实际的UI布局来确定位置顺序
+        # 假设输入框是按照怪物ID排序的，我们需要找出哪些怪物被输入了
+        # 然后按照输入顺序（或者某种规则）分配到3个位置
+        
+        left_monsters_with_counts = []
+        right_monsters_with_counts = []
+        
+        for monster_id, entry in self.left_monsters.items():
+            value = entry.text()
+            if value.isdigit() and int(value) > 0:
+                left_monsters_with_counts.append((int(monster_id), int(value)))
+        
+        for monster_id, entry in self.right_monsters.items():
+            value = entry.text()
+            if value.isdigit() and int(value) > 0:
+                right_monsters_with_counts.append((int(monster_id), int(value)))
+        
+        # 按照怪物ID排序（或者可以按照其他规则）
+        # 这里简单地取前3个
+        for i, (monster_id, count) in enumerate(left_monsters_with_counts[:POSITIONS_PER_SIDE]):
+            left_positions[i] = (monster_id, count)
+        
+        for i, (monster_id, count) in enumerate(right_monsters_with_counts[:POSITIONS_PER_SIDE]):
+            right_positions[i] = (monster_id, count)
+        
+        # 获取场地特征
+        num_field_features = len(self.terrain_feature_columns) if FIELD_FEATURE_COUNT else 0
+        terrain_features = np.zeros(num_field_features)
+        
+        selected_terrains = self.get_selected_terrains()
+        for terrain in selected_terrains:
+            if terrain in self.terrain_feature_columns:
+                terrain_idx = self.terrain_feature_columns.index(terrain)
+                if terrain_idx < num_field_features:
+                    terrain_features[terrain_idx] = 1
+        
+        return {
+            'left_positions': left_positions,
+            'right_positions': right_positions,
+            'left_field': terrain_features,
+            'right_field': terrain_features  # 复制
+        }
 
     def set_monster_counts(self, left_counts: dict, right_counts: dict):
         """Sets monster counts in input fields (e.g., after recognition)."""

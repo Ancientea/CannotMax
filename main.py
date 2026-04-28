@@ -40,13 +40,25 @@ logger.setLevel(logging.DEBUG)
 
 
 try:
-    from predict import CannotModel
-    from train import UnitAwareTransformer
-
-    logger.info("Using PyTorch model for predictions.")
+    # 优先尝试加载位置感知模型
+    from predict_position import CannotModelPosition
+    from train_position import PositionAwareTransformer
+    
+    logger.info("尝试使用位置感知模型...")
+    try:
+        cannot_model_temp = CannotModelPosition()
+        if cannot_model_temp.is_model_loaded:
+            logger.info("Using Position-Aware model for predictions.")
+            CannotModel = CannotModelPosition
+        else:
+            raise Exception("位置模型未加载")
+    except:
+        logger.info("位置模型不可用，回退到传统模型")
+        from predict import CannotModel
+        from train import UnitAwareTransformer
+        logger.info("Using PyTorch model for predictions.")
 except:
     from predict_onnx import CannotModel
-
     logger.info("Using ONNX model for predictions.")
 
 
@@ -691,21 +703,31 @@ class ArknightsApp(QMainWindow):
     def get_prediction(self):
         try:
             left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-            left_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
-            right_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
+            
+            # 检查是否使用位置感知模型
+            use_position_model = hasattr(self.cannot_model, 'get_prediction_with_position')
+            
+            if use_position_model:
+                # 新逻辑：从输入面板获取位置顺序数据
+                position_data = self.input_panel.get_position_data()
+                prediction = self.cannot_model.get_prediction_with_position(position_data)
+            else:
+                # 旧逻辑：按ID聚合
+                left_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
+                right_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
 
-            for name, entry in left_monsters_dict.items():
-                value = entry.text()
-                left_counts[int(name) - 1] = int(value) if value.isdigit() else 0
+                for name, entry in left_monsters_dict.items():
+                    value = entry.text()
+                    left_counts[int(name) - 1] = int(value) if value.isdigit() else 0
 
-            for name, entry in right_monsters_dict.items():
-                value = entry.text()
-                right_counts[int(name) - 1] = int(value) if value.isdigit() else 0
+                for name, entry in right_monsters_dict.items():
+                    value = entry.text()
+                    right_counts[int(name) - 1] = int(value) if value.isdigit() else 0
 
-            # 构建包含地形的完整特征向量
-            full_features = self.input_panel.build_terrain_features(left_counts, right_counts)
-
-            prediction = self.cannot_model.get_prediction_with_terrain(full_features)
+                # 构建包含地形的完整特征向量
+                full_features = self.input_panel.build_terrain_features(left_counts, right_counts)
+                prediction = self.cannot_model.get_prediction_with_terrain(full_features)
+            
             return prediction
         except FileNotFoundError:
             QMessageBox.critical(self, "错误", "未找到模型文件，请先训练")

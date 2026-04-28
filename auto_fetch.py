@@ -147,7 +147,25 @@ class AutoFetch:
                 cv2.imwrite(image_path, resized_image)
                 logger.info(f"保存结果图片到 {image_path}")
         
-        # 原始怪物数据
+        # 位置顺序数据（新格式）
+        left_position_data = [(0, 0)] * 3  # [(ID, 数量), ...]
+        right_position_data = [(0, 0)] * 3
+
+        for res in recoginze_results:
+            region_id = res["region_id"]
+            if "error" not in res:
+                matched_id = res["matched_id"]
+                number = res["number"]
+                if matched_id != 0:
+                    if region_id < 3:  # 左侧位置 0, 1, 2
+                        left_position_data[region_id] = (matched_id, number)
+                    else:  # 右侧位置 3, 4, 5 -> 0, 1, 2
+                        right_position_data[region_id - 3] = (matched_id, number)
+            else:
+                logger.error(f"存在错误，本次不填写")
+                return
+        
+        # 原始怪物数据（旧格式，保持兼容）
         left_monster_data = np.zeros(MONSTER_COUNT)
         right_monster_data = np.zeros(MONSTER_COUNT)
 
@@ -214,6 +232,42 @@ class AutoFetch:
             writer = csv.writer(file)
             writer.writerow(data_row)
         logger.info(f"写入csv完成")
+        
+        # 同时保存位置顺序格式的数据
+        position_data_row = []
+        # 左侧位置数据：[ID1, 数量1, ID2, 数量2, ID3, 数量3]
+        for monster_id, count in left_position_data:
+            position_data_row.extend([monster_id, count])
+        # 右侧位置数据：[ID1, 数量1, ID2, 数量2, ID3, 数量3]
+        for monster_id, count in right_position_data:
+            position_data_row.extend([monster_id, count])
+        
+        # 添加场地特征
+        if self.field_recognizer is not None:
+            field_feature_columns = self.field_recognizer.get_feature_columns()
+            field_data_values = []
+            for col in field_feature_columns:
+                if col in field_recoginze_result:
+                    field_data_values.append(field_recoginze_result[col])
+                else:
+                    field_data_values.append(0)
+            position_data_row.extend(field_data_values)  # 左侧场地特征
+            position_data_row.extend(field_data_values)  # 右侧场地特征（复制）
+        
+        position_data_row.append(battle_result)  # Result
+        
+        # 替换NaN
+        for i, x in enumerate(position_data_row):
+            if isinstance(x, (int, float)) and np.isnan(x):
+                position_data_row[i] = -1
+        
+        if intelligent_workers_debug:
+            position_data_row.append(image_name)
+        
+        with open(self.data_folder / "arknights_position.csv", "a", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(position_data_row)
+        logger.info(f"写入位置顺序csv完成")
 
     def build_terrain_features(self, left_counts, right_counts):
         """构建包含地形的完整特征向量"""
