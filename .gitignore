@@ -29,6 +29,7 @@ data_train/images/
 .codex/
 .copilot/
 .codeartdoer/
+.agents/
 arknights.csv
 multi_ports.txt
 /arknights.csv
