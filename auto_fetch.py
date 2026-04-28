@@ -18,7 +18,6 @@ from config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 from collections.abc import Callable
 from collections import deque
 from login import LoginManager
-from multi_instance import get_cannot_model, get_recognizer, get_field_recognizer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -45,13 +44,16 @@ class AutoFetch:
         start_callback: Callable[[], None],
         stop_callback: Callable[[], None],
         training_duration,
+        recognizer=None,
+        cannot_model=None,
+        field_recognizer=None,
     ):
         self.connector = connector
         self.game_mode = game_mode  # 游戏模式（30人或自娱自乐）
         self.is_invest = is_invest  # 是否投资
         self.current_prediction = 0.5  # 当前预测结果，初始值为0.5
         self.recognize_results = []  # 识别结果列表
-        self.field_recognizer = None # 场地识别实例
+        self.field_recognizer = field_recognizer  # 场地识别实例
         self.field_recognize_result = {}  # 场地识别结果
         self.incorrect_fill_count = 0  # 填写错误次数
         self.total_fill_count = 0  # 总填写次数
@@ -67,8 +69,8 @@ class AutoFetch:
         self.training_duration = training_duration  # 训练时长
         self.data_folder = Path(f"data")  # 数据文件夹路径
         self.image_buffer = deque(maxlen=5)  # 图片缓存队列，设置队列长短来保存结算前的图片
-        self.recognizer = get_recognizer()  # 使用共享的识别器
-        self.cannot_model = get_cannot_model()  # 使用共享的模型
+        self.recognizer = recognizer  # 使用传入的识别器
+        self.cannot_model = cannot_model  # 使用传入的模型
         self.last_state = GameState.UNKNOWN
         self.login_manager = LoginManager(connector)
         self.state_start_time = time.time()  # 记录当前状态的开始时间
@@ -81,10 +83,13 @@ class AutoFetch:
         self.processed_template = []
         self._init_templates()
         
-        # 根据 FIELD_FEATURE_COUNT 决定是否初始化场地识别器（使用共享实例）
+        # 根据 FIELD_FEATURE_COUNT 决定是否启用场地识别器（使用传入的实例）
         if FIELD_FEATURE_COUNT > 0:
-            self.field_recognizer = get_field_recognizer()  # 使用共享的场地识别器
-            logger.info(f"场地识别已启用，特征数量: {FIELD_FEATURE_COUNT}")
+            if self.field_recognizer is not None:
+                logger.info(f"场地识别已启用，特征数量: {FIELD_FEATURE_COUNT}")
+            else:
+                logger.warning(f"FIELD_FEATURE_COUNT={FIELD_FEATURE_COUNT} > 0 但未传入 field_recognizer，场地识别将被禁用")
+                self.field_recognizer = None
         else:
             self.field_recognizer = None
             logger.info("场地识别已禁用，仅收集怪物数据")
@@ -480,28 +485,29 @@ class AutoFetch:
             self.monster_image=screenshot
 
     def battle_result(self, result_image):
-        # 判断本次是否填写错误，结果不等于None（不是平局或者其他）才能继续
         result = self.calculate_average_yellow(result_image)
-        if result is not None:
-            if result:
-                self.fill_data(
-                    "L", self.recognize_results, self.monster_image, result_image, self.field_recognize_result
-                )
-                if self.current_prediction > 0.5:
-                    self.incorrect_fill_count += 1  # 更新填写×次数
-                logger.info("填写数据左赢")
-            else:
-                self.fill_data(
-                    "R", self.recognize_results, self.monster_image, result_image, self.field_recognize_result
-                )
-                if self.current_prediction < 0.5:
-                    self.incorrect_fill_count += 1  # 更新填写×次数
-                logger.info("填写数据右赢")
-            self.total_fill_count += 1  # 更新总填写次数
-            self.updater()  # 更新统计信息
-            logger.info("下一轮")
-            # 为填写数据操作设置冷却期
-            # 平局或者其他也照常休息5秒
+        if result is None:
+            logger.warning("战斗结果识别失败，需要重试")
+            return False
+        
+        if result:
+            self.fill_data(
+                "L", self.recognize_results, self.monster_image, result_image, self.field_recognize_result
+            )
+            if self.current_prediction > 0.5:
+                self.incorrect_fill_count += 1
+            logger.info("填写数据左赢")
+        else:
+            self.fill_data(
+                "R", self.recognize_results, self.monster_image, result_image, self.field_recognize_result
+            )
+            if self.current_prediction < 0.5:
+                self.incorrect_fill_count += 1
+            logger.info("填写数据右赢")
+        self.total_fill_count += 1
+        self.updater()
+        logger.info("下一轮")
+        return True
 
 
     def auto_fetch_data(self):
@@ -674,8 +680,10 @@ class AutoFetch:
                 # self._log(logging.INFO, "等待战斗结束")
                 pass
             case GameState.SETTLEMENT:
-                # 结算状态，该轮次结算界面，识别结果并等待画面变化，根据画面跳转到下一轮次准备阶段或结束状态
-                self.battle_result(screenshot)
+                if not self.battle_result(screenshot):
+                    new_screenshot = self.connector.capture_screenshot()
+                    if new_screenshot is not None and not self.battle_result(new_screenshot):
+                        self._log(logging.ERROR, "战斗结果识别失败，跳过本轮")
                 if not self._sleep_with_check(5):
                     return
             case GameState.FINISHED:
