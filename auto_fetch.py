@@ -496,17 +496,17 @@ class AutoFetch:
             )
             if self.current_prediction > 0.5:
                 self.incorrect_fill_count += 1
-            logger.info("填写数据左赢")
+            self._log(logging.INFO, "填写数据左赢")
         else:
             self.fill_data(
                 "R", self.recognize_results, self.monster_image, result_image, self.field_recognize_result
             )
             if self.current_prediction < 0.5:
                 self.incorrect_fill_count += 1
-            logger.info("填写数据右赢")
+            self._log(logging.INFO, "填写数据右赢")
         self.total_fill_count += 1
         self.updater()
-        logger.info("下一轮")
+        self._log(logging.INFO, "下一轮")
         return True
 
 
@@ -588,8 +588,9 @@ class AutoFetch:
             if not (old_state == GameState.PRE_BATTLE and current_state == GameState.IN_BATTLE):
                 self._log(logging.INFO, f"游戏状态变化: {old_state.name} -> {current_state.name}, 持续时间: {elapsed:.2f} 秒")
             
-            # 如果成功进入非UNKNOWN状态，重置重启计数器
-            if current_state != GameState.UNKNOWN:
+            # 如果成功进入稳定状态且重启计数器非零，重置重启计数器
+            _stable_states = {GameState.MAIN_MENU, GameState.IN_BATTLE, GameState.SETTLEMENT, GameState.FINISHED}
+            if current_state in _stable_states and self.login_manager.restart_count > 0:
                 self.login_manager.reset_restart_count()
             
             self.state_start_time = time.time()  # 重置状态开始时间
@@ -608,10 +609,12 @@ class AutoFetch:
                 self._log(logging.WARNING, f"连续 {elapsed_time:.2f} 秒处于未知状态，超过36秒阈值，触发重启")
             
             # 使用 LoginManager 的重启登录方法
-            if not self.login_manager.restart_and_login(lambda: self.auto_fetch_running):
-                self._log(logging.ERROR, "重启登录失败，已达到最大重启次数或重启失败")
+            if not self.login_manager.can_restart():
+                self._log(logging.ERROR, f"已达到最大重启次数 {self.login_manager.max_restart_count} 次，停止运行")
                 self.auto_fetch_running = False
                 self.stop_callback()
+            elif not self.login_manager.restart_and_login(lambda: self.auto_fetch_running):
+                self._log(logging.WARNING, "本次重启登录失败，将在下次超时后重试")
             
             # 检测完毕后，无论结果如何，重置计时器，避免频繁阻塞
             self.state_start_time = time.time()
