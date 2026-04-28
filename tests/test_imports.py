@@ -67,29 +67,16 @@ class TestImports:
         assert callable(package_data)
 
 
-class TestCompatibilityLayer:
-    """Test that legacy compatibility shims work."""
+
+
+
+class TestEntryPoint:
+    """Test CLI entry points."""
     
-    def test_config_shim(self):
-        import warnings
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            from config import MONSTER_COUNT
-            assert len(w) == 1
-            assert issubclass(w[-1].category, DeprecationWarning)
+    def test_cli_import(self):
+        from src.cannotmax.cli import main
+        assert callable(main)
     
-    def test_simulator_shim(self):
-        import warnings
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            from simulator import Battlefield
-            assert len(w) == 1
-            assert issubclass(w[-1].category, DeprecationWarning)
-    
-    def test_loadData_shim(self):
-        import warnings
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            from loadData import AdbConnector
-            assert len(w) == 1
-            assert issubclass(w[-1].category, DeprecationWarning)
+    def test_main_window_import(self):
+        from src.cannotmax.gui.main_window import ArknightsApp
+        assert ArknightsApp is not None

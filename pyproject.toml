@@ -70,3 +70,6 @@ explicit = true
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
+
+[project.scripts]
+cannotmax = "src.cannotmax.cli:main"
