@@ -925,6 +925,8 @@ class ArknightsApp(QMainWindow):
                 start_callback=self.start_callback,
                 stop_callback=self.stop_callback,
                 training_duration=float(self.duration_entry.text()) * 3600,  # 获取训练时长
+                recognizer=self.recognizer,
+                cannot_model=self.cannot_model,
             )
             self.auto_fetch.start_auto_fetch()
         else:
