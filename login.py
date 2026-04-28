@@ -547,30 +547,18 @@ class LoginManager:
             return False
     
     def auto_login_with_restart(self, stop_callback=None):
-        """自动登录，失败时自动重启重试（最多 max_restart_count 次）"""
-        for attempt in range(self.max_restart_count):
-            # 检查是否需要停止
-            if stop_callback and not stop_callback():
-                logger.info("检测到停止信号，取消登录")
-                return False
-            
-            logger.info(f"尝试登录 (第 {attempt + 1}/{self.max_restart_count} 次)")
-            
-            if self.auto_login(stop_callback=stop_callback):
-                self.reset_restart_count()
-                return True
-            
-            # 登录失败，尝试重启
-            if attempt < self.max_restart_count - 1:
-                logger.warning(f"登录失败，尝试重启游戏")
-                if not self.restart_game():
-                    logger.error("重启游戏失败")
-                    continue
-                # auto_login 会在 restart_and_login 中调用
-                # 这里重启后直接调用 auto_login
-                if self.auto_login(first_start=False, stop_callback=stop_callback):
-                    self.reset_restart_count()
-                    return True
+        """自动登录，失败时自动重启重试"""
+        # 首先尝试直接登录（首次启动）
+        if self.auto_login(stop_callback=stop_callback):
+            self.reset_restart_count()
+            return True
+        
+        # 登录失败，尝试重启登录
+        for _ in range(self.max_restart_count - 1):
+            if not self.restart_and_login(stop_callback):
+                logger.warning("重启登录失败，继续尝试")
+                continue
+            return True
         
         logger.error(f"已尝试 {self.max_restart_count} 次，登录失败")
         return False

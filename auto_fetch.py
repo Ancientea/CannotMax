@@ -18,10 +18,7 @@ from config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 from collections.abc import Callable
 from collections import deque
 from login import LoginManager
-try:
-    from multi_instance import get_cannot_model, get_recognizer, get_field_recognizer
-except ImportError:
-    from singleton_resources import get_cannot_model, get_recognizer, get_field_recognizer
+from multi_instance import get_cannot_model, get_recognizer, get_field_recognizer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
