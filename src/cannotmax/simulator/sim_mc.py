@@ -10,16 +10,15 @@ import tkinter as tk
 # from tkinter import messagebox # messagebox 已被自定义提示替代，可以注释或移除
 from PIL import Image, ImageTk
 import math
-from simulator.battle_field import Battlefield  # 确保 Battlefield 已导入
-from simulator.monsters import MonsterFactory  # 确保 MonsterFactory 已导入
-from simulator.utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction  # 根据你的实际路径调整
-from simulator.vector2d import FastVector  # 确保 FastVector 已导入
-from unit import Unit  # 确保 Unit 已导入
 import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import random  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import sys  # Import sys for stdin
-from simulator.monsters import AttackState, Monster, MonsterFactory
-from recognize import MONSTER_COUNT
+
+from src.cannotmax.simulator import BattleField, Unit, Monster
+from src.cannotmax.simulator.monsters import MonsterFactory, AttackState
+from src.cannotmax.simulator.utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction
+from src.cannotmax.simulator.vector2d import FastVector
+from src.cannotmax.config import MONSTER_COUNT
 
 
 class AppState(Enum):

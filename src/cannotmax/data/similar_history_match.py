@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
-from config import MONSTER_COUNT
-from config import FIELD_FEATURE_COUNT
+from src.cannotmax.config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 
 def cosine_similarity_manual(a, b):
     """手动实现余弦相似度，替代 sklearn 以减小打包体积"""

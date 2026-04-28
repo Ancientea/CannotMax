@@ -15,19 +15,19 @@ from PyQt6.QtCore import Qt, pyqtSignal, QThread, QPropertyAnimation, QEasingCur
 from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
 import PyQt6.QtCore as QtCore
 
-import loadData
-import auto_fetch
-import maa_adb_connector
-from maa_adb_connector import AdbConnectorAdapter, ConnectionTypeRegistry, InputMethodRegistry, MaaFrameworkDetector
-from dark_mode_style_fix import DarkModeStyleFix
-import similar_history_match
-import recognize
-from recognize import MONSTER_COUNT
-from specialmonster import SpecialMonsterHandler
-import data_package
-import winrt_capture
-from config import FIELD_FEATURE_COUNT, MONSTER_DATA
-from simular_history_match_ui import HistoryMatchUI
+from src.cannotmax.legacy import loadData
+from src.cannotmax.core import auto_fetch
+from src.cannotmax.core import maa_adb_connector
+from src.cannotmax.core.maa_adb_connector import AdbConnectorAdapter, ConnectionTypeRegistry, InputMethodRegistry, MaaFrameworkDetector
+from src.cannotmax.gui import DarkModeStyleFix
+from src.cannotmax.data import similar_history_match
+from src.cannotmax.core import recognize
+from src.cannotmax.config import MONSTER_COUNT
+from src.cannotmax.data.specialmonster import SpecialMonsterHandler
+from src.cannotmax.tools import data_package
+from src.cannotmax.utils import winrt_capture
+from src.cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_DATA
+from src.cannotmax.gui import HistoryMatchUI
 from input_panel_ui import InputPanelUI
 
 logging.getLogger().setLevel(logging.DEBUG)

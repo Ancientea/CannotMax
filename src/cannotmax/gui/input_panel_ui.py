@@ -8,7 +8,7 @@ from PyQt6.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 import numpy as np
 import logging
 
-from config import MONSTER_COUNT, MONSTER_DATA, FIELD_FEATURE_COUNT
+from src.cannotmax.config import MONSTER_COUNT, MONSTER_DATA, FIELD_FEATURE_COUNT
 
 logger = logging.getLogger(__name__)
 

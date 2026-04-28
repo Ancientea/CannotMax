@@ -4,8 +4,8 @@ from PyQt6.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 import numpy as np
 import logging
 
-from similar_history_match import HistoryMatch
-from config import MONSTER_COUNT, MONSTER_DATA
+from src.cannotmax.data import HistoryMatch
+from src.cannotmax.config import MONSTER_COUNT, MONSTER_DATA
 
 logger = logging.getLogger(__name__)
 
