@@ -10,7 +10,6 @@ from .utils import *
 from .vector2d import FastVector
 from .zone import EffectZone
 from .main_sim import StateMachine, SandboxSimulator
-from .sim_mc import SandboxSimulator as SimMcSandboxSimulator
 
 __all__ = [
     "Battlefield",
@@ -22,5 +21,4 @@ __all__ = [
     "EffectZone",
     "StateMachine",
     "SandboxSimulator",
-    "SimMcSandboxSimulator",
 ]
