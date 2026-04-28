@@ -15,11 +15,11 @@ import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import random  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import sys  # Import sys for stdin
 
-from battle_field import Battlefield
-from unit import Unit
-from monsters import Monster, MonsterFactory, AttackState
-from utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction
-from vector2d import FastVector
+from .battle_field import Battlefield
+from .unit import Unit
+from .monsters import Monster, MonsterFactory, AttackState
+from .utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction
+from .vector2d import FastVector
 from ..config import MONSTER_COUNT
 
 
