@@ -27,8 +27,7 @@ from src.cannotmax.data.specialmonster import SpecialMonsterHandler
 from src.cannotmax.tools import data_package
 from src.cannotmax.utils import winrt_capture
 from src.cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_DATA
-from src.cannotmax.gui import HistoryMatchUI
-from input_panel_ui import InputPanelUI
+from src.cannotmax.gui import HistoryMatchUI, InputPanelUI
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.getLogger("PIL").setLevel(logging.INFO)
@@ -43,12 +42,12 @@ logger.setLevel(logging.DEBUG)
 
 
 try:
-    from predict import CannotModel
-    from train import UnitAwareTransformer
+    from src.cannotmax.core import CannotModel
+    from src.cannotmax.train import UnitAwareTransformer
 
     logger.info("Using PyTorch model for predictions.")
 except:
-    from predict_onnx import CannotModel
+    from src.cannotmax.core.predict_onnx import CannotModel
 
     logger.info("Using ONNX model for predictions.")
 
