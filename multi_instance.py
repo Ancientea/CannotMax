@@ -92,11 +92,13 @@ class DeviceInstance:
         self.login_manager = None
         self.status = "已停止"
         self.auto_fetch_thread = None  # 保存线程引用
-        self.stop_flag = False  # 停止标志，用于在登录过程中检测停止信号
+        self.stop_event = threading.Event()  # 使用Event对象进行线程间通信，更可靠
 
     def start(self, game_mode, is_invest):
         try:
             logger.info(f"[{self.serial}] 开始启动实例，游戏模式: {game_mode}, 自动投资: {is_invest}")
+            # 清除之前的停止事件，确保本次启动可以正常运行
+            self.stop_event.clear()
             self.connector.connect()
             if not self.connector.is_connected:
                 self.status = "连接失败"
@@ -107,15 +109,24 @@ class DeviceInstance:
             self.login_manager = LoginManager(self.connector)
             logger.info(f"[{self.serial}] 尝试首次启动自动登录")
             # 传递停止回调，使登录过程可被中断
-            if self.login_manager.auto_login(first_start=True, stop_callback=lambda: not self.stop_flag):
+            login_success = self.login_manager.auto_login(first_start=True, stop_callback=lambda: not self.stop_event.is_set())
+            
+            # 检查是否在登录过程中用户点击了停止
+            if self.stop_event.is_set():
+                logger.info(f"[{self.serial}] 登录过程被用户停止")
+                self.status = "已停止"
+                return False
+            
+            if login_success:
                 logger.info(f"[{self.serial}] 首次启动自动登录成功")
             else:
-                # 检查是否是用户主动停止
-                if self.stop_flag:
-                    logger.info(f"[{self.serial}] 登录过程被用户停止")
-                    self.status = "已停止"
-                    return False
                 logger.warning(f"[{self.serial}] 首次启动自动登录失败，继续启动")
+            
+            # 再次检查停止标志（防止在登录成功后、创建auto_fetch前用户点击停止）
+            if self.stop_event.is_set():
+                logger.info(f"[{self.serial}] 用户在登录成功后点击了停止")
+                self.status = "已停止"
+                return False
             
             self.auto_fetch = auto_fetch.AutoFetch(
                 self.connector,
@@ -139,19 +150,21 @@ class DeviceInstance:
             return False
 
     def stop(self):
-        logger.info(f"[{self.serial}] 开始停止实例")
-        # 设置停止标志，用于中断登录过程
-        self.stop_flag = True
+        logger.info(f"[{self.serial}] 强制停止实例")
+        # 设置停止事件，用于中断登录过程
+        self.stop_event.set()
         
         if self.auto_fetch:
-            self.auto_fetch.stop_auto_fetch()
-            logger.info(f"[{self.serial}] 停止 AutoFetch 成功")
+            # 强制设置停止标志，不等待线程退出
+            self.auto_fetch.auto_fetch_running = False
+            logger.info(f"[{self.serial}] 强制停止 AutoFetch")
         else:
             # 如果 auto_fetch 还未创建，说明可能正在登录过程中
-            logger.info(f"[{self.serial}] auto_fetch 尚未创建，可能正在登录中")
+            logger.info(f"[{self.serial}] auto_fetch 尚未创建，停止登录过程")
         
+        # 状态改为已停止（stop_event 会在下次启动时自动清除）
         self.status = "已停止"
-        logger.info(f"[{self.serial}] 停止成功，状态: {self.status}")
+        logger.info(f"[{self.serial}] 强制停止成功，状态: {self.status}")
 
     def get_status_line(self):
         if not self.auto_fetch or not self.auto_fetch.auto_fetch_running:
@@ -183,6 +196,7 @@ class MultiInstanceManager(QMainWindow):
         self.setGeometry(100, 100, 450, 600)  # 增加窗口高度以容纳日志显示
         
         self.instances = {}
+        self.starting_ports = set()  # 正在启动中的端口集合，防止重复启动
         self.init_ui()
         self.setup_logger()
         
@@ -277,21 +291,33 @@ class MultiInstanceManager(QMainWindow):
         logger.info(f"开始启动多开实例，端口列表: {ports}, 游戏模式: {game_mode}, 自动投资: {is_invest}")
         
         def start_single_instance(port):
-            # 检查是否已经在运行
+            # 检查是否已经在运行或正在启动中
             is_running = False
             if port in self.instances:
                 inst = self.instances[port]
                 if inst.auto_fetch and inst.auto_fetch.auto_fetch_running:
                     is_running = True
             
+            # 使用启动锁防止重复启动
+            if port in self.starting_ports:
+                logger.info(f"端口 {port} 的实例正在启动中，跳过重复启动")
+                return
+            
             if not is_running:
+                # 添加到启动中集合
+                self.starting_ports.add(port)
                 logger.info(f"启动端口 {port} 的实例")
                 instance = DeviceInstance(port)
-                if instance.start(game_mode, is_invest):
-                    self.instances[port] = instance
-                    logger.info(f"端口 {port} 的实例启动成功")
-                else:
-                    logger.error(f"端口 {port} 的实例启动失败")
+                # 立即添加到实例字典，以便 stop_all 可以找到它
+                self.instances[port] = instance
+                try:
+                    if instance.start(game_mode, is_invest):
+                        logger.info(f"端口 {port} 的实例启动成功")
+                    else:
+                        logger.error(f"端口 {port} 的实例启动失败")
+                finally:
+                    # 从启动中集合移除
+                    self.starting_ports.discard(port)
             else:
                 logger.info(f"端口 {port} 的实例已经在运行，跳过启动")
         
@@ -303,6 +329,8 @@ class MultiInstanceManager(QMainWindow):
     
     def stop_all(self):
         logger.info("开始停止所有实例")
+        # 清空启动中集合，防止正在启动的实例继续运行
+        self.starting_ports.clear()
         for instance in self.instances.values():
             instance.stop()
         self.instances.clear()

@@ -796,16 +796,11 @@ class AutoFetch:
     def stop_auto_fetch(self):
         if not self.auto_fetch_running:
             return
+        # 强制设置停止标志，不等待线程退出
         self.auto_fetch_running = False
-        self._log(logging.INFO, "停止自动获取")
+        self._log(logging.INFO, "强制停止自动获取")
         
-        # 等待线程完全退出
-        if self.auto_fetch_thread and self.auto_fetch_thread.is_alive():
-            self._log(logging.INFO, "等待线程退出...")
-            self.auto_fetch_thread.join(timeout=5)  # 最多等待5秒
-            if self.auto_fetch_thread.is_alive():
-                self._log(logging.WARNING, "线程未正常退出，可能仍在运行")
-        
+        # 不等待线程退出，让线程在下一次循环时自己检测到停止标志
         self.save_statistics_to_log()
         self.stop_callback()
         if hasattr(self, "log_file_handler"):
