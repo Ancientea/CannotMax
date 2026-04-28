@@ -15,15 +15,26 @@ logger.setLevel(logging.DEBUG)
 class LoginManager:
     """登录管理器，处理游戏登录和页面跳转"""
     
-    def __init__(self, connector):
+    def __init__(self, connector, max_restart_count=3):
         self.connector = connector
         self.template_dir = Path("images") / "login"
         self.template_dir.mkdir(parents=True, exist_ok=True)
+        self.restart_count = 0
+        self.max_restart_count = max_restart_count
         try:
             self._load_templates()
         except Exception as e:
             logger.error(f"模板加载失败: {e}")
             self.templates = {}
+    
+    def reset_restart_count(self):
+        """重置重启计数器"""
+        self.restart_count = 0
+        logger.info("重启计数器已重置")
+    
+    def can_restart(self):
+        """检查是否可以重启"""
+        return self.restart_count < self.max_restart_count
     
     def _load_templates(self):
         """加载模板图片"""
@@ -218,15 +229,11 @@ class LoginManager:
             else:
                 # 对于ADB端，重新启动游戏
                 adb_path = getattr(self.connector, 'adb_path', 'adb')
-                # 启动游戏
                 subprocess.run(f"{adb_path} -s {self.connector.device_serial} shell am start -n com.hypergryph.arknights/com.u8.sdk.U8UnityContext")
                 logger.info("重新启动游戏成功")
         except Exception as e:
             logger.error(f"重新启动游戏失败: {e}")
             return False
-        
-        # 等待游戏启动
-        time.sleep(10)
         
         # 重新连接
         try:
@@ -340,27 +347,20 @@ class LoginManager:
                         except Exception as e:
                             logger.debug(f"检测战斗前准备模板 {template_name}.png 失败: {e}")
         
-        # 非首次启动时，等待游戏启动完全
+        # 非首次启动时，等待游戏启动
         if not first_start:
-            logger.info("等待游戏启动完全")
-            start_time = time.time()
-            while time.time() - start_time < 30:
-                if not check_stop():
-                    return False
-                screenshot = self.connector.capture_screenshot()
-                if screenshot is not None:
-                    matched, _ = self.match_template(screenshot, "login_button", threshold=0.9)
-                    if matched:
-                        logger.info("检测到登录按钮，游戏启动完成")
-                        break
-                if not sleep_with_check(1):
-                    return False
+            logger.info("重启游戏，等待游戏启动...")
+            if not sleep_with_check(15):
+                return False
         
-        # 点击屏幕中心跳过中转页面
+        # 点击屏幕中心跳过中转页面（点击3次，每次间隔2秒）
         logger.info("点击屏幕中心跳过中转页面")
-        self.connector.click((0.5, 0.5))
-        if not sleep_with_check(2):
-            return False
+        for i in range(3):
+            self.connector.click((0.5, 0.5))
+            logger.info(f"第 {i+1} 次点击屏幕中心")
+            if i < 2:
+                if not sleep_with_check(2):
+                    return False
         
         # 2. 寻找并点击登录按钮
         logger.info("寻找登录按钮")
@@ -514,13 +514,19 @@ class LoginManager:
         return False
     
     def restart_and_login(self, stop_callback=None):
-        """重启游戏并尝试登录"""
-        logger.info("尝试重启游戏")
+        """重启游戏并尝试登录（使用重启计数器）"""
+        # 检查是否可以重启
+        if not self.can_restart():
+            logger.error(f"已达到最大重启次数 {self.max_restart_count} 次，无法继续重启")
+            return False
         
         # 检查是否需要停止
         if stop_callback and not stop_callback():
             logger.info("检测到停止信号，取消重启")
             return False
+        
+        logger.info(f"尝试重启游戏 (第 {self.restart_count + 1}/{self.max_restart_count} 次)")
+        self.restart_count += 1
         
         if self.restart_game():
             logger.info("游戏重启成功，尝试重新登录")
@@ -534,8 +540,37 @@ class LoginManager:
             if self.auto_login(stop_callback=stop_callback):
                 return True
             else:
-                logger.error("重启后自动登录失败，无法继续")
+                logger.error("重启后自动登录失败")
                 return False
         else:
             logger.error("重启游戏失败")
             return False
+    
+    def auto_login_with_restart(self, stop_callback=None):
+        """自动登录，失败时自动重启重试（最多 max_restart_count 次）"""
+        for attempt in range(self.max_restart_count):
+            # 检查是否需要停止
+            if stop_callback and not stop_callback():
+                logger.info("检测到停止信号，取消登录")
+                return False
+            
+            logger.info(f"尝试登录 (第 {attempt + 1}/{self.max_restart_count} 次)")
+            
+            if self.auto_login(stop_callback=stop_callback):
+                self.reset_restart_count()
+                return True
+            
+            # 登录失败，尝试重启
+            if attempt < self.max_restart_count - 1:
+                logger.warning(f"登录失败，尝试重启游戏")
+                if not self.restart_game():
+                    logger.error("重启游戏失败")
+                    continue
+                # auto_login 会在 restart_and_login 中调用
+                # 这里重启后直接调用 auto_login
+                if self.auto_login(first_start=False, stop_callback=stop_callback):
+                    self.reset_restart_count()
+                    return True
+        
+        logger.error(f"已尝试 {self.max_restart_count} 次，登录失败")
+        return False

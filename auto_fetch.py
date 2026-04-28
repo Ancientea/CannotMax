@@ -75,8 +75,6 @@ class AutoFetch:
         self.last_state = GameState.UNKNOWN
         self.login_manager = LoginManager(connector)
         self.state_start_time = time.time()  # 记录当前状态的开始时间
-        self.restart_count = 0  # 重启计数器
-        self.max_restart_count = 3  # 最大重启次数
 
         # 初始化状态匹配模板，缩小匹配尺寸提高速度
         self.MATCH_WIDTH = 1920 // 4
@@ -522,29 +520,23 @@ class AutoFetch:
         screenshot = self.connector.capture_screenshot()
         if screenshot is None:
             self._log(logging.ERROR, "截图失败，尝试自动登录")
-            # 尝试自动登录
-            self._log(logging.INFO, "尝试自动登录")
+            
+            # 使用 LoginManager 的自动登录（带重启重试）
+            if not self.login_manager.auto_login_with_restart(lambda: self.auto_fetch_running):
+                self._log(logging.ERROR, "自动登录失败，无法继续操作")
+                return
+            
             # 检查是否已经收到停止信号
             if not self.auto_fetch_running:
-                self._log(logging.INFO, "检测到停止信号，取消自动登录")
+                self._log(logging.INFO, "检测到停止信号，取消后续操作")
                 return
-            if self.login_manager.auto_login():
-                # 检查是否已经收到停止信号
-                if not self.auto_fetch_running:
-                    self._log(logging.INFO, "检测到停止信号，取消后续操作")
-                    return
-                self._log(logging.INFO, "自动登录成功，等待页面加载...")
-                # 延长登录等待时间，确保页面完全加载
-                if not self._sleep_with_check(3):
-                    return
-                self._log(logging.INFO, "重新获取截图")
-                # 登录成功后重新获取截图
-                screenshot = self.connector.capture_screenshot()
-                if screenshot is None:
-                    self._log(logging.ERROR, "登录后仍然无法获取截图，无法继续操作")
-                    return
-            else:
-                self._log(logging.ERROR, "自动登录失败，无法继续操作")
+            self._log(logging.INFO, "自动登录成功，等待页面加载...")
+            if not self._sleep_with_check(3):
+                return
+            self._log(logging.INFO, "重新获取截图")
+            screenshot = self.connector.capture_screenshot()
+            if screenshot is None:
+                self._log(logging.ERROR, "登录后仍然无法获取截图，无法继续操作")
                 return
 
         # 保存当前截图及其信息到缓冲区
@@ -595,14 +587,13 @@ class AutoFetch:
             
             # 如果成功进入非UNKNOWN状态，重置重启计数器
             if current_state != GameState.UNKNOWN:
-                self.restart_count = 0
+                self.login_manager.reset_restart_count()
             
             self.state_start_time = time.time()  # 重置状态开始时间
         
         # UNKNOWN 状态超时检测
         # 非战斗状态：超过 36 秒触发重启（登录过程、主菜单、模式选择等）
         # 战斗流程状态：超过 200 秒触发重启（防止战斗卡死）
-        # 重启最大次数为3次
         elapsed_time = time.time() - self.state_start_time
         is_battle_state = self.last_state in [GameState.PRE_BATTLE, GameState.IN_BATTLE, GameState.SETTLEMENT, GameState.FINISHED]
         timeout_threshold = 200.0 if is_battle_state else 36.0
@@ -613,16 +604,11 @@ class AutoFetch:
             else:
                 self._log(logging.WARNING, f"连续 {elapsed_time:.2f} 秒处于未知状态，超过36秒阈值，触发重启")
             
-            # 检测是否已达到最大重启次数
-            if self.restart_count >= self.max_restart_count:
-                self._log(logging.ERROR, f"已达到最大重启次数 {self.max_restart_count} 次，停止自动重启")
+            # 使用 LoginManager 的重启登录方法
+            if not self.login_manager.restart_and_login(lambda: self.auto_fetch_running):
+                self._log(logging.ERROR, "重启登录失败，已达到最大重启次数或重启失败")
                 self.auto_fetch_running = False
                 self.stop_callback()
-            else:
-                self._log(logging.INFO, f"尝试重启游戏并登录 (第 {self.restart_count + 1}/{self.max_restart_count} 次)")
-                self.restart_count += 1
-                if not self.login_manager.restart_and_login(lambda: self.auto_fetch_running):
-                    self._log(logging.ERROR, "重启登录失败")
             
             # 检测完毕后，无论结果如何，重置计时器，避免频繁阻塞
             self.state_start_time = time.time()

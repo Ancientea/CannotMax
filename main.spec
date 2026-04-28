@@ -85,7 +85,7 @@ exe_multi = EXE(
     a_multi.scripts,
     [],
     exclude_binaries=True,
-    name='multi_instance',
+    name='多开管理器',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
