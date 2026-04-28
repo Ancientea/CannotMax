@@ -91,6 +91,8 @@ class DeviceInstance:
         self.auto_fetch = None
         self.login_manager = None
         self.status = "已停止"
+        self.auto_fetch_thread = None  # 保存线程引用
+        self.stop_flag = False  # 停止标志，用于在登录过程中检测停止信号
 
     def start(self, game_mode, is_invest):
         try:
@@ -104,9 +106,15 @@ class DeviceInstance:
             # 首次启动时尝试自动登录（点击开始自动获取数据时）
             self.login_manager = LoginManager(self.connector)
             logger.info(f"[{self.serial}] 尝试首次启动自动登录")
-            if self.login_manager.auto_login(first_start=True):
+            # 传递停止回调，使登录过程可被中断
+            if self.login_manager.auto_login(first_start=True, stop_callback=lambda: not self.stop_flag):
                 logger.info(f"[{self.serial}] 首次启动自动登录成功")
             else:
+                # 检查是否是用户主动停止
+                if self.stop_flag:
+                    logger.info(f"[{self.serial}] 登录过程被用户停止")
+                    self.status = "已停止"
+                    return False
                 logger.warning(f"[{self.serial}] 首次启动自动登录失败，继续启动")
             
             self.auto_fetch = auto_fetch.AutoFetch(
@@ -132,9 +140,16 @@ class DeviceInstance:
 
     def stop(self):
         logger.info(f"[{self.serial}] 开始停止实例")
+        # 设置停止标志，用于中断登录过程
+        self.stop_flag = True
+        
         if self.auto_fetch:
             self.auto_fetch.stop_auto_fetch()
             logger.info(f"[{self.serial}] 停止 AutoFetch 成功")
+        else:
+            # 如果 auto_fetch 还未创建，说明可能正在登录过程中
+            logger.info(f"[{self.serial}] auto_fetch 尚未创建，可能正在登录中")
+        
         self.status = "已停止"
         logger.info(f"[{self.serial}] 停止成功，状态: {self.status}")
 

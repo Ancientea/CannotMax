@@ -240,9 +240,16 @@ class LoginManager:
         
         return True
 
-    def auto_login(self, first_start=False):
+    def auto_login(self, first_start=False, stop_callback=None):
         """自动登录功能，处理服务器维护或掉线后的重新登录"""
         logger.info("开始自动登录流程")
+        
+        def check_stop():
+            """检查是否需要停止"""
+            if stop_callback and not stop_callback():
+                logger.info("检测到停止信号，中断登录流程")
+                return False
+            return True
         
         # 确保连接器已连接
         if not hasattr(self.connector, 'is_connected') or not self.connector.is_connected:
@@ -308,6 +315,8 @@ class LoginManager:
             logger.info("等待游戏启动完全")
             start_time = time.time()
             while time.time() - start_time < 30:
+                if not check_stop():
+                    return False
                 screenshot = self.connector.capture_screenshot()
                 if screenshot is not None:
                     matched, _ = self.match_template(screenshot, "login_button", threshold=0.9)
@@ -326,6 +335,8 @@ class LoginManager:
         login_button_found = False
         start_time = time.time()
         while time.time() - start_time < 20:
+            if not check_stop():
+                return False
             # 尝试获取截图
             screenshot = self.connector.capture_screenshot()
             if screenshot is None:
@@ -357,6 +368,8 @@ class LoginManager:
         logger.info("等待登录完成")
         start_time = time.time()
         while time.time() - start_time < 30:
+            if not check_stop():
+                return False
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
                 # 检查是否登录成功（出现争锋频道页面或其他游戏内页面）
@@ -382,6 +395,8 @@ class LoginManager:
         start_time = time.time()
         click_count = 0
         while time.time() - start_time < 30:
+            if not check_stop():
+                return False
             # 优先检测competition_page
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:

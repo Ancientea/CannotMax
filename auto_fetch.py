@@ -65,6 +65,7 @@ class AutoFetch:
         self.stop_callback = stop_callback
         self.monster_image = None  # 当前轮次怪物图片
         self.auto_fetch_running = False  # 自动获取数据的状态
+        self.auto_fetch_thread = None  # 线程引用
         self.start_time = time.time()  # 记录开始时间
         self.training_duration = training_duration  # 训练时长
         self.data_folder = Path(f"data")  # 数据文件夹路径
@@ -776,7 +777,8 @@ class AutoFetch:
             logger.addHandler(self.log_file_handler)
             
             # 启动自动获取数据线程
-            threading.Thread(target=self.auto_fetch_loop).start()
+            self.auto_fetch_thread = threading.Thread(target=self.auto_fetch_loop)
+            self.auto_fetch_thread.start()
             logger.info("自动获取数据已启动")
             self.start_callback()
         else:
@@ -795,8 +797,16 @@ class AutoFetch:
         if not self.auto_fetch_running:
             return
         self.auto_fetch_running = False
-        self.save_statistics_to_log()
         self._log(logging.INFO, "停止自动获取")
+        
+        # 等待线程完全退出
+        if self.auto_fetch_thread and self.auto_fetch_thread.is_alive():
+            self._log(logging.INFO, "等待线程退出...")
+            self.auto_fetch_thread.join(timeout=5)  # 最多等待5秒
+            if self.auto_fetch_thread.is_alive():
+                self._log(logging.WARNING, "线程未正常退出，可能仍在运行")
+        
+        self.save_statistics_to_log()
         self.stop_callback()
         if hasattr(self, "log_file_handler"):
             logger.removeHandler(self.log_file_handler)
