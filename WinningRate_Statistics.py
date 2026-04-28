@@ -6,7 +6,7 @@ import csv
 from collections import defaultdict
 from config import MONSTER_COUNT, FIELD_FEATURE_COUNT, MONSTER_DATA
 
-
+FIELD_FEATURE_COUNT=0
 def load_data():
     """加载数据"""
     df = pd.read_csv('arknights.csv', header=None, low_memory=False)
@@ -30,6 +30,7 @@ def get_monster_name(monster_id):
 def calculate_all_monster_win_rates(df):
     """计算所有怪物的胜率"""
     monster_stats = {}
+    total_matches = len(df)
     
     for i in range(1, MONSTER_COUNT + 1):
         try:
@@ -57,11 +58,13 @@ def calculate_all_monster_win_rates(df):
         if total_games > 0:
             monster_name = get_monster_name(i)
             win_rate = total_wins / total_games
+            participation_rate = total_games / total_matches if total_matches > 0 else 0
             monster_stats[monster_name] = {
                 '怪物ID': i,
                 '胜场': total_wins,
                 '总场数': total_games,
-                '胜率': win_rate
+                '胜率': win_rate,
+                '参战率': participation_rate
             }
     
     return pd.DataFrame(monster_stats).T.sort_values('胜率', ascending=False)
@@ -764,11 +767,16 @@ def generate_comprehensive_report():
     print("正在分析被克制关系...")
     countered = find_countered_monsters(df)
     
-    print("正在分析地形效果...")
-    terrain_effects = analyze_terrain_effects(df)
-    
-    print("正在分析装置克制效果...")
-    device_counter_effects = analyze_device_counter_effects(df)
+    if FIELD_FEATURE_COUNT > 0:
+        print("正在分析地形效果...")
+        terrain_effects = analyze_terrain_effects(df)
+        
+        print("正在分析装置克制效果...")
+        device_counter_effects = analyze_device_counter_effects(df)
+    else:
+        print("地形特征数量为0，跳过地形分析...")
+        terrain_effects = pd.DataFrame()
+        device_counter_effects = {}
     
     print("正在分析个体怪物关系...")
     monster_relations = analyze_individual_monster_relations(df)
@@ -839,7 +847,7 @@ def generate_comprehensive_report():
     </style>
 </head>
 <body>
-    <h1>明日方舟怪物战斗统计报告</h1>
+    <h1>明日方舟争锋频道绿藤城</h1>
     <div class="stats">
         <p><strong>数据概览：</strong></p>
         <ul>
@@ -852,7 +860,7 @@ def generate_comprehensive_report():
     
     # 1. 所有怪物胜率
     if not win_rates.empty:
-        html += create_html_table(win_rates, ['胜场', '总场数', '胜率'], '所有怪物胜率排行榜', monster_relations=monster_relations)
+        html += create_html_table(win_rates, ['胜场', '总场数', '胜率', '参战率'], '所有怪物胜率排行榜', monster_relations=monster_relations)
     else:
         html += "<h2>所有怪物胜率排行榜</h2><p>暂无数据</p>"
     
