@@ -1,7 +1,23 @@
-from gradio_ml.presentation.app import GradioApp
+def _check_gradio_deps() -> None:
+    missing: list[str] = []
+    try:
+        import gradio  # noqa: F401
+    except ImportError:
+        missing.append("gradio")
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        missing.append("pyyaml")
+    if missing:
+        raise ImportError(
+            f"Gradio可视化依赖未安装: {', '.join(missing)}。"
+            f"请执行: uv sync --extra gradio"
+        )
 
 
 def main():
+    _check_gradio_deps()
+
     from gradio_ml.infrastructure.config_manager import ConfigManager
     from gradio_ml.infrastructure.log_buffer import LogBuffer
     from gradio_ml.infrastructure.metric_store import MetricStore
@@ -10,6 +26,7 @@ def main():
     from gradio_ml.service.metric_service import MetricService
     from gradio_ml.service.predict_service import PredictService
     from gradio_ml.service.train_control_service import TrainControlService
+    from gradio_ml.presentation.app import GradioApp
     from gradio_ml.presentation.predict_tab import PredictTab
     from gradio_ml.presentation.train_monitor_tab import TrainMonitorTab
 

@@ -269,20 +269,24 @@ cu128 = [
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" } },
     { name = "torchvision", version = "0.26.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" } },
 ]
+gradio = [
+    { name = "gradio" },
+    { name = "gradio-client" },
+    { name = "pyyaml" },
+]
 
 [package.dev-dependencies]
 dev = [
-    { name = "gradio" },
-    { name = "gradio-client" },
     { name = "onnx" },
     { name = "onnxscript" },
     { name = "pyinstaller" },
     { name = "pytest" },
-    { name = "pyyaml" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "gradio", marker = "extra == 'gradio'", specifier = ">=4.0" },
+    { name = "gradio-client", marker = "extra == 'gradio'", specifier = ">=0.10" },
     { name = "maafw", specifier = ">=5.10.2" },
     { name = "matplotlib" },
     { name = "numpy" },
@@ -292,6 +296,7 @@ requires-dist = [
     { name = "pillow" },
     { name = "pyqt6" },
     { name = "pywin32", specifier = ">=311" },
+    { name = "pyyaml", marker = "extra == 'gradio'", specifier = ">=6.0" },
     { name = "rapidocr" },
     { name = "scikit-learn" },
     { name = "toml" },
@@ -301,17 +306,14 @@ requires-dist = [
     { name = "torchvision", marker = "extra == 'cu128'", specifier = ">=0.22.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "cannotmax-greenvine", extra = "cu128" } },
     { name = "windows-capture" },
 ]
-provides-extras = ["cpu", "cu128"]
+provides-extras = ["gradio", "cpu", "cu128"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "gradio", specifier = ">=6.13" },
-    { name = "gradio-client", specifier = ">=2.5" },
     { name = "onnx", specifier = ">=1.19.0" },
     { name = "onnxscript", specifier = ">=0.7.0" },
     { name = "pyinstaller", specifier = ">=6.15.0" },
     { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]

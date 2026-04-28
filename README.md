@@ -58,18 +58,23 @@
   - 若在同一路径下运行多个main实例收集数据，在点击数据打包前需确保所有实例均处于停止收集状态，数据打包会一次性打包该路径下所有实例收集到的数据
   - 若在不同路径下运行的main实例，实例之间互相独立，互不影响
 
-### 4. 模型训练
-- 建议在训练模型前收集足够的数据
-1. **启动训练**：
-   - 使用 `train.py` 脚本启动训练
-   ```bash
-   uv run train.py
-   
-   ```
-   - 或启动可视化训练： `uv run --group dev -m gradio_ml` 或 `uv run --group dev start_gradio.py`
+
   
 
 ## 开发说明
+
+  1. **安装环境**:
+    - 推荐使用 Python 3.10+，并通过 `uv` 管理依赖。
+    - 安装项目依赖：
+      - 生产环境： `uv sync`
+      - Gradio可视化： `uv sync --extra gradio`
+      - 开发工具： `uv sync --group dev`
+      - 组合安装： `uv sync --extra gradio --group dev`
+
+  2. **训练**：
+     - 运行 `uv run train.py` 进行模型训练
+     - 运行 `uv run --group dev -m gradio_ml` 或 `uv run --group dev start_gradio.py` 进行可视化模型训练
+      
 
 - 使用AI编程助手时建议导入[MAA Framework的Skill库](https://github.com/Kutius/maaframework-skills)
 

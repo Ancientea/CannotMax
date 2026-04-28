@@ -4,7 +4,10 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    yaml = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +131,11 @@ class ConfigManager:
     def _load(self, config_path: str | Path | None) -> None:
         raw = _DEFAULT_CONFIG.copy()
         if config_path is not None:
+            if yaml is None:
+                raise ImportError(
+                    "pyyaml未安装，无法加载YAML配置文件。"
+                    "请执行: uv sync --extra gradio"
+                )
             path = Path(config_path)
             if path.exists():
                 with open(path, encoding="utf-8") as f:
