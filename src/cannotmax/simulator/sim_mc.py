@@ -14,7 +14,7 @@ import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import random  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import sys  # Import sys for stdin
 
-from src.cannotmax.simulator import BattleField, Unit, Monster
+from src.cannotmax.simulator import Battlefield, Unit, Monster
 from src.cannotmax.simulator.monsters import MonsterFactory, AttackState
 from src.cannotmax.simulator.utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction
 from src.cannotmax.simulator.vector2d import FastVector
