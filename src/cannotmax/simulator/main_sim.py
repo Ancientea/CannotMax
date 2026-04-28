@@ -163,7 +163,7 @@ class SandboxSimulator:
     def load_assets(self):
         self.icons = {}
         try:
-            with open("simulator/monsters.json", encoding='utf-8') as f:
+            with open(Path(__file__).parent / "monsters.json", encoding='utf-8') as f:
                 self.monster_data = json.load(f)["monsters"]
         except FileNotFoundError:
             logger.error("错误: monsters.json 未找到，请检查路径！")
