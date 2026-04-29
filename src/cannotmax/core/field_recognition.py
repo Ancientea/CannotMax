@@ -81,7 +81,7 @@ class FieldRecognizer:
             logger.info(f"场地识别将使用设备: {self.field_device}")
             
             # 加载类别映射
-            model_dir = Path("tools/battlefield_recognize")
+            model_dir = Path(__file__).parent.parent / "tools" / "field_recognition_model"
             class_map_path = model_dir / "class_to_idx.json"
             pth_model_path = model_dir / "field_recognize.pth"
             

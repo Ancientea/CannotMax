@@ -10,7 +10,7 @@ import win32con
 import sys
 import os
 from pathlib import Path
-from ..utils import WinRTScreenCapture
+from ..core import WinRTScreenCapture
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -272,12 +272,6 @@ class PcConnector:
             self.screen_height = rect[3] - rect[1]
 
             try:
-                from maa_adb_connector import resolve_maafw_path
-
-                binary_path = resolve_maafw_path()
-                if binary_path:
-                    os.environ["MAAFW_BINARY_PATH"] = binary_path
-
                 from maa.toolkit import Toolkit
                 from maa.controller import (
                     Win32Controller,
