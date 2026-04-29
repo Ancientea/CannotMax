@@ -21,7 +21,7 @@ def eval_command(args):
 def convert_model_command(args):
     """Convert PyTorch model to ONNX."""
     import subprocess
-    script_path = Path(__file__).parent / "cli" / "convert_model.py"
+    script_path = Path(__file__).parent / "tools" / "convert_model.py"
     result = subprocess.run([sys.executable, str(script_path)], cwd=args.cwd if hasattr(args, 'cwd') else None)
     sys.exit(result.returncode)
 

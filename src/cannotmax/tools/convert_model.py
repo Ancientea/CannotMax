@@ -1,13 +1,12 @@
 import sys
 sys.path.append(".")
 
-import predict
-from train import UnitAwareTransformer
-import predict_onnx
 import numpy as np
-from recognize import MONSTER_COUNT
+from ..core import predict, predict_onnx
+from ..config import MONSTER_COUNT
+from ..config.paths import MODELS_DIR
 
-model_path = "models/best_model_full.pth"
+model_path = MODELS_DIR / "best_model_full.pth"
 
 def replace_suffix(s):
     idx = s.rfind('.')

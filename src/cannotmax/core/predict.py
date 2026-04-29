@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 from functools import cache
 from pathlib import Path
+from typing import List, Tuple, Optional
 
 import numpy as np
 import torch
@@ -31,7 +32,7 @@ def get_device(prefer_gpu=True):
 
 
 class CannotModel:
-    def __init__(self, model_path="models"):
+    def __init__(self, model_path: Path=Path("models")):
         self.device = get_device()
         self.is_model_loaded = False
         self.model_path = self._resolve_model_path(model_path)
@@ -42,14 +43,14 @@ class CannotModel:
             logger.error(f"模型加载失败：{e}")
             self.model = None
 
-    def _resolve_model_path(self, path):
+    def _resolve_model_path(self, path: Path) -> Optional[Path]:
         """
         Resolves the model path. If a directory is given, finds the latest model file.
         If a file is given, returns it directly.
         """
-        if Path(path).is_dir():
+        if path.is_dir():
             logger.info(f"Searching for the latest model in directory: {path}")
-            model_dir = Path(path)
+            model_dir = path
             models = [
                 f for f in model_dir.iterdir() if f.suffix == ".pth" and f.is_file()
             ]
@@ -57,7 +58,7 @@ class CannotModel:
                 logger.error(f"No model files (.pth) found in {path}")
 
             priority = {"loss": 0, "acc": 1, "full": 2}
-            valid_models = []
+            valid_models: List[Tuple[datetime, int, Path]] = []
 
             pattern = re.compile(
                 r"best_model_(acc|loss|full)_data\d+_acc\d+\.\d+_loss\d+\.\d+_(\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2})\.pth$"
@@ -83,16 +84,16 @@ class CannotModel:
                 valid_models.sort(key=lambda x: (x[0], -x[1]), reverse=True)
                 latest_model_path = valid_models[0][2]
                 logger.info(f"Found latest model: {latest_model_path}")
-                return str(latest_model_path)
+                return latest_model_path
             else:
                 logger.error(f"No models with the expected name format found in {path}")
 
-        elif Path(path).is_file():
+        elif path.is_file():
             logger.info(f"Using specified model file: {path}")
             return path
         else:
             logger.error(f"Provided model path is invalid: {path}")
-            return ""
+            return None
 
     def load_model(self):
         """初始化时加载模型"""
