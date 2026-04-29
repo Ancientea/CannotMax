@@ -81,16 +81,21 @@ class AdbConnector(BaseConnector):
 
     def _init_maa(self):
         """Initialize MAA Framework controller if available."""
+        maa_controller = None
         try:
             from maa.toolkit import Toolkit
             from maa.controller import AdbController
 
             Toolkit.init_option(str(Path.cwd()))
 
-            self._maa_controller = AdbController(
-                self._device_serial,
+            maa_controller = AdbController(
+                address=self._device_serial,
             )
-            self._maa_controller.post_connection().wait()
+            maa_controller.post_connection().wait()
+            
+            # Only set instance variable after successful initialization
+            self._maa_controller = maa_controller
+            maa_controller = None  # Prevent __del__ from running on temporary object
             self._maa_available = True
             logger.info("MAA Framework ADB initialized")
 
@@ -98,6 +103,10 @@ class AdbConnector(BaseConnector):
             logger.warning(f"MAA Framework unavailable, using legacy ADB: {e}")
             self._maa_controller = None
             self._maa_available = False
+        finally:
+            # Ensure temporary object is cleaned up if creation failed
+            if maa_controller is not None:
+                del maa_controller
 
     def _get_window_size(self) -> tuple[int, int]:
         """Get screen resolution via ADB wm size."""

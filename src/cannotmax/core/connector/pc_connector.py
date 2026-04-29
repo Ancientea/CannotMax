@@ -12,6 +12,7 @@ Usage:
 """
 import time
 import logging
+from pathlib import Path
 from typing import Optional
 import numpy as np
 import win32gui
@@ -84,6 +85,7 @@ class PcConnector(BaseConnector):
 
     def _init_maa(self):
         """Initialize MAA Win32Controller if available."""
+        maa_controller = None
         try:
             from maa.toolkit import Toolkit
             from maa.controller import (
@@ -95,15 +97,18 @@ class PcConnector(BaseConnector):
             Toolkit.init_option(str(Path.cwd()))
 
             # Use SendMessageWithCursorPos to support background operation
-            self._maa_controller = Win32Controller(
+            maa_controller = Win32Controller(
                 self._hwnd,
                 screencap_method=MaaWin32ScreencapMethodEnum.FramePool,
                 mouse_method=MaaWin32InputMethodEnum.SendMessageWithCursorPos,
                 keyboard_method=MaaWin32InputMethodEnum.SendMessageWithCursorPos,
             )
-            self._maa_controller.post_connection().wait()
-            self._maa_controller.set_screenshot_use_raw_size(True)
-
+            maa_controller.post_connection().wait()
+            maa_controller.set_screenshot_use_raw_size(True)
+            
+            # Only set instance variable after successful initialization
+            self._maa_controller = maa_controller
+            maa_controller = None  # Prevent __del__ from running on temporary object
             self._maa_available = True
             logger.info("MAA Win32Controller initialized")
 
@@ -111,6 +116,10 @@ class PcConnector(BaseConnector):
             logger.warning(f"MAA unavailable, using WinRT + SendInput: {e}")
             self._maa_controller = None
             self._maa_available = False
+        finally:
+            # Ensure temporary object is cleaned up if creation failed
+            if maa_controller is not None:
+                del maa_controller
 
     def _init_winrt(self):
         """Initialize WinRT screen capture."""

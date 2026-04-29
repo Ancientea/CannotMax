@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config.paths import DATA_DIR
 
 
 def cosine_similarity_manual(a, b):
@@ -17,7 +18,7 @@ def cosine_similarity_manual(a, b):
 class HistoryMatch:
     """错题本数据集的读取和处理类"""
 
-    def __init__(self, csv_path="arknights.csv"):
+    def __init__(self, csv_path=DATA_DIR / "arknights.csv"):
         # 初始化时加载历史对局数据
         self.csv_path = csv_path
         self.load_history_data()
