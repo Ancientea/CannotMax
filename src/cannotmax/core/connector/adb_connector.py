@@ -95,6 +95,7 @@ class AdbConnector(BaseConnector):
 
             maa_controller = AdbController(
                 address=self._device_serial,
+                adb_path=str(self._adb_path),
             )
             maa_controller.post_connection().wait()
             
