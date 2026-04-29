@@ -54,12 +54,11 @@ logger.setLevel(logging.DEBUG)
 
 
 try:
-    from src.cannotmax.core import CannotModel
-    from src.cannotmax.train import UnitAwareTransformer
+    from ..core import CannotModel
 
     logger.info("Using PyTorch model for predictions.")
-except:
-    from src.cannotmax.core.predict_onnx import CannotModel
+except ImportError:
+    from ..core.predict_onnx import CannotModel
 
     logger.info("Using ONNX model for predictions.")
 

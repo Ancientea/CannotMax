@@ -39,7 +39,7 @@ class CannotModel:
             self.load_model()  # 初始化时加载模型
             self.is_model_loaded = True
         except Exception as e:
-            logger.error(f"模型加载失败: {e}")
+            logger.error(f"模型加载失败：{e}")
             self.model = None
 
     def _resolve_model_path(self, path):
@@ -96,6 +96,11 @@ class CannotModel:
 
     def load_model(self):
         """初始化时加载模型"""
+        import sys
+        # 将 UnitAwareTransformer 导入到 __main__ 模块，解决 torch.load 反序列化问题
+        from ..train import UnitAwareTransformer
+        sys.modules["__main__"].UnitAwareTransformer = UnitAwareTransformer
+
         try:
             if not Path(self.model_path).exists():
                 raise FileNotFoundError(

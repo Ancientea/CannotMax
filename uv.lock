@@ -106,7 +106,7 @@ sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/3e/38/7859ff463
 [[package]]
 name = "cannotmax-greenvine"
 version = "1.0.8"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "maafw" },
     { name = "matplotlib" },

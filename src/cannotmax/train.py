@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
-from src.cannotmax.config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from .config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 
 
 @cache
