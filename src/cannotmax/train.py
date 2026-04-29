@@ -476,7 +476,7 @@ def stratified_random_split(dataset, test_size=0.1, seed=42):
 def main():
     # 配置参数
     config = {
-        "data_file": "arknights.csv",
+        "data_file": "data/arknights.csv",
         "batch_size": 1024,  # 512
         "test_size": 0.1,
         "embed_dim": 128,  # 512
