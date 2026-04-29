@@ -66,7 +66,7 @@ def main():
         from PyQt6.QtCore import Qt
         
         app = QApplication(_sys.argv)
-        app.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
+        app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
         from .gui.main_window import MainWindow
         window = MainWindow()
         window.show()
