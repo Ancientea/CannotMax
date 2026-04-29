@@ -8,7 +8,6 @@ import win32gui
 import win32api
 import win32con
 import sys
-import os
 from pathlib import Path
 from ..core import WinRTScreenCapture
 

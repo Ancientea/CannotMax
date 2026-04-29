@@ -1,6 +1,5 @@
 import json
 import re
-import os
 import logging
 from pathlib import Path
 from collections import defaultdict
@@ -185,8 +184,8 @@ class FieldRecognizer:
             detected_full_names = set(self._predict_scene_pytorch(temp_image_path, threshold=0.5))
             
             # 删除临时文件
-            if os.path.exists(temp_image_path):
-                os.remove(temp_image_path)
+            if Path(temp_image_path).exists():
+                Path(temp_image_path).unlink()
             
             # 处理识别结果
             field_data = {}

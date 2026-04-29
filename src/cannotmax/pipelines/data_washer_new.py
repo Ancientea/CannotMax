@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 import time
 import csv
-import os
 import sys
 import recognize
 import tqdm
@@ -287,11 +286,9 @@ def savecsv(listdata,outputfile):
 
 def find_csv_files(root_dir):
     csv_files = []
-    for root, dirs, files in os.walk(root_dir):
-        for file in files:
-            if file.lower().endswith('.csv'):
-                csv_path = os.path.join(root, file)
-                csv_files.append(csv_path)
+    root_path = Path(root_dir)
+    for csv_file in root_path.rglob('*.csv'):
+        csv_files.append(csv_file)
     return csv_files
 
 def easydata2data(easydata):

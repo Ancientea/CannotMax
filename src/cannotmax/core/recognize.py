@@ -1,7 +1,7 @@
 import logging
-import os
 import cv2
 import numpy as np
+from pathlib import Path
 from PIL import ImageGrab
 from rapidocr import RapidOCR, EngineType
 
@@ -499,8 +499,7 @@ def load_ref_images(ref_dir="images"):
 
         if intelligent_workers_debug:  # 如果处于debug模式
             # 存储模板图像用于debug
-            if not os.path.exists("images/tmp"):
-                os.makedirs("images/tmp")
+            Path("images/tmp").mkdir(parents=True, exist_ok=True)
             cv2.imwrite(f"images/tmp/xref_{i}.png", ref_resized)
 
         ref_images[i] = ref_resized

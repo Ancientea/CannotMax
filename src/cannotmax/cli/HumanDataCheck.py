@@ -2,7 +2,8 @@ from pathlib import Path
 import tkinter as tk
 from PIL import Image, ImageTk
 import csv
-import os
+
+from ..config.paths import PROJECT_ROOT, IMAGES_DIR, DATA_DIR
 
 class ArknightsApp:
     def __init__(self, root):
@@ -47,7 +48,7 @@ class ArknightsApp:
         self.jump_button.pack(side=tk.LEFT, padx=5)
 
         # 初始化数据
-        self.data = self.read_csv("data/arknights.csv")
+        self.data = self.read_csv(DATA_DIR / "arknights.csv")
         self.current_row_index = 0
 
         # 加载图片
@@ -70,10 +71,8 @@ class ArknightsApp:
     def load_all_images(self):
         """加载所有图片"""
         images = {}
-        base_dir = Path(__file__).parent.parent.parent.parent  # 项目根目录
-        monster_csv_path = base_dir / "monster_greenvine.csv"
-        images_dir = base_dir / "images"
-        
+        monster_csv_path = PROJECT_ROOT / 'monster_greenvine.csv'
+
         id_to_name = {}
         try:
             with open(monster_csv_path, "r", encoding="utf-8-sig") as f:
@@ -88,8 +87,8 @@ class ArknightsApp:
 
         for i in range(1, self.MONSTER_COUNT + 1):  # 使用动态 MONSTER_COUNT
             name = id_to_name.get(i, str(i))
-            image_path = os.path.join(images_dir, f"{name}.png")
-            if os.path.exists(image_path):
+            image_path = IMAGES_DIR / f"{name}.png"
+            if image_path.exists():
                 image = Image.open(image_path).resize((80, 80))
                 images[str(i)] = ImageTk.PhotoImage(image)
             else:
@@ -103,8 +102,8 @@ class ArknightsApp:
                         for row in reader:
                             if int(row[id_idx]) == i:
                                 alt_name = row[alt_name_idx]
-                                alt_path = os.path.join(images_dir, f"{alt_name}.png")
-                                if os.path.exists(alt_path):
+                                alt_path = IMAGES_DIR / f"{alt_name}.png"
+                                if alt_path.exists():
                                     image = Image.open(alt_path).resize((80, 80))
                                     images[str(i)] = ImageTk.PhotoImage(image)
                                     break
@@ -167,19 +166,19 @@ class ArknightsApp:
         base_dir = Path(__file__).parent.parent.parent.parent  # 项目根目录
         img_name = row[-1]
         
-        orig_path = os.path.join(base_dir, "images", img_name + ".jpg")
-        res_path = os.path.join(base_dir, "images", img_name + "_result.jpg")
+        orig_path = IMAGES_DIR / f"{img_name}.jpg"
+        res_path = IMAGES_DIR / f"{img_name}_result.jpg"
 
-        if not os.path.exists(orig_path):
-            orig_path = os.path.join(base_dir, "images", img_name + ".png")
-            if not os.path.exists(orig_path):
-                orig_path = os.path.join(base_dir, img_name + ".jpg")
-                if not os.path.exists(orig_path):
+        if not orig_path.exists():
+            orig_path = base_dir / "images" / f"{img_name}.png"
+            if not orig_path.exists():
+                orig_path = base_dir / f"{img_name}.jpg"
+                if not orig_path.exists():
                     orig_path = None
                     
-        if not os.path.exists(res_path):
-            res_path = os.path.join(base_dir, "images", img_name + "_result.png")
-            if not os.path.exists(res_path):
+        if not res_path.exists():
+            res_path = base_dir / "images" / f"{img_name}_result.png"
+            if not res_path.exists():
                 res_path = None
 
         self.bottom_frame.images = []  # 防止图片被垃圾回收
@@ -272,14 +271,14 @@ class ArknightsApp:
         if self.current_row_index < len(self.data):
             # 获取当前行最后一列的图片路径
             image_name = self.data[self.current_row_index][-1]
-            base_dir = os.path.dirname(os.path.abspath(__file__))
+            base_dir = Path(__file__).resolve().parent
             
             # 删除相关的图片文件（如果存在）
             possible_exts = [".jpg", "_result.jpg", ".png", ""]
             for ext in possible_exts:
-                p = os.path.join(base_dir, "images", image_name + ext)
-                if os.path.exists(p):
-                    os.remove(p)
+                p = base_dir / "images" / f"{image_name}{ext}"
+                if p.exists():
+                    p.unlink()
                     print(f"已删除图片文件: {p}")
 
             del self.data[self.current_row_index]  # 从内存中删除当前行

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-import os
 import json
+from pathlib import Path
 import re
 from collections import defaultdict
 from PIL import Image
@@ -185,8 +185,8 @@ def clean_data(file_path, output_path, screenshots_base_path, onnx_model_path, c
     total_pics = len(pic_names_cleaned)
     for idx, pic_name in enumerate(pic_names_cleaned):
         print(f"\r处理图片: {idx + 1}/{total_pics} ({pic_name})", end="")
-        image_path = os.path.join(screenshots_base_path, str(pic_name))
-        if not os.path.exists(image_path):
+        image_path = Path(screenshots_base_path) / str(pic_name)
+        if not image_path.exists():
             row_image_data = {col: -1 for col in image_feature_columns}
             all_rows_image_data.append(row_image_data)
             continue
@@ -272,14 +272,14 @@ if __name__ == "__main__":
     output_file = r"arknights_with_field_recognize_v2.csv"
     screenshots_base_path = r"images"
 
-    model_dir = r"battlefield_recognize"
-    onnx_model_path = os.path.join(model_dir, 'field_recognize.onnx')
-    class_map_path = os.path.join(model_dir, 'class_to_idx.json')
+    model_dir = Path("battlefield_recognize")
+    onnx_model_path = model_dir / 'field_recognize.onnx'
+    class_map_path = model_dir / 'class_to_idx.json'
 
     # 自动检查PTH文件是否存在
-    pth_model_path = onnx_model_path.replace('.onnx', '.pth')
-    if not os.path.exists(pth_model_path):
+    pth_model_path = Path(str(onnx_model_path).replace('.onnx', '.pth'))
+    if not pth_model_path.exists():
         print(f"错误: 找不到对应的PTH模型文件 '{pth_model_path}'")
-        print(f"请确保存在与ONNX同名的PTH文件: {os.path.basename(pth_model_path)}")
+        print(f"请确保存在与ONNX同名的PTH文件: {pth_model_path.name}")
     else:
         clean_data(input_file, output_file, screenshots_base_path, onnx_model_path, class_map_path)

@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import onnxruntime as ort
-import os
 import numpy as np
 import logging
 
@@ -49,7 +48,7 @@ class CannotModel:
     def load_model(self):
         """加载 ONNX 模型"""
         try:
-            if not os.path.exists(self.model_path):
+            if not Path(self.model_path).exists():
                 raise FileNotFoundError(f"未找到 ONNX 模型文件 {self.model_path}")
 
             # 配置会话选项
