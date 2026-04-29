@@ -35,7 +35,7 @@ from ..core import recognize
 from ..config import MONSTER_COUNT
 from ..analytics.specialmonster import SpecialMonsterHandler
 from ..pipelines import data_package
-from ..core import winrt_connector
+from ..core.connector import winrt_connector
 from ..config import FIELD_FEATURE_COUNT, MONSTER_DATA
 from . import HistoryMatchUI, InputPanelUI
 

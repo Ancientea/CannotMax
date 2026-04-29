@@ -20,7 +20,7 @@ from rapidocr import RapidOCR, EngineType
 
 from ..config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT
 from ..utils import find_monster_zone
-from .winrt_connector import WinRTScreenCapture
+from .connector.winrt_connector import WinRTScreenCapture
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
