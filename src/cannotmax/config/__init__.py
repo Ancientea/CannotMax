@@ -7,6 +7,10 @@ import numpy as np
 import pandas as pd
 
 from . import constants
+from .paths import (
+    PROJECT_ROOT,
+    IMAGES_DIR,
+)
 from .settings import (
     DEFAULT_RECOGNITION_ZONES,
     load_recognition_zones,
@@ -27,9 +31,9 @@ def load_images() -> dict[str, np.ndarray]:
     returns: dict - 图片字典，键为文件名 (不含扩展名)，值为 numpy.ndarray 对象
     """
     images: dict[str, np.ndarray] = {}
-    images_path = Path('images')
+    images_path = IMAGES_DIR
     
-    if not images_path.exists():
+    if not images_path.is_dir():
         logger.warning("images 目录不存在")
         return images
     
@@ -53,8 +57,8 @@ MONSTER_IMAGES: dict[str, np.ndarray] = load_images()
 
 def load_monster_data() -> pd.DataFrame:
     """加载怪物数据 CSV"""
-    csv_path = Path('monster_greenvine.csv')
-    if not csv_path.exists():
+    csv_path = PROJECT_ROOT / 'monster_greenvine.csv'
+    if not csv_path.is_file():
         logger.error("monster_greenvine.csv 不存在")
         return pd.DataFrame()
     
