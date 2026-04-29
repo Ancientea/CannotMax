@@ -35,8 +35,8 @@ from . import DarkModeStyleFix
 from ..analytics import similar_history_match
 from ..core import recognize
 from ..config import MONSTER_COUNT
-from ..data.specialmonster import SpecialMonsterHandler
-from ..tools import data_package
+from ..analytics.specialmonster import SpecialMonsterHandler
+from ..pipelines import data_package
 from ..core import winrt_connector
 from ..config import FIELD_FEATURE_COUNT, MONSTER_DATA
 from . import HistoryMatchUI, InputPanelUI

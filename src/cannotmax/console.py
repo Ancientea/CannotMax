@@ -66,8 +66,8 @@ def main():
         from PyQt6.QtCore import Qt
         
         app = QApplication(_sys.argv)  # PyQt6 默认启用 High DPI
-        from .gui.main_window import MainWindow
-        window = MainWindow()
+        from .gui.main_window import ArknightsApp
+        window = ArknightsApp()
         window.show()
         _sys.exit(app.exec())
     
