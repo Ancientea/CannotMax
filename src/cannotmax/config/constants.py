@@ -1,5 +1,5 @@
 # 全局地形特征数量常量
-FIELD_FEATURE_COUNT: int = 6
+FIELD_FEATURE_COUNT: int = 0
 
 # 单位配置（从 constants.py 迁移）
 UNIT_CONFIG = {
