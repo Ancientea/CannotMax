@@ -604,7 +604,7 @@ class ArknightsApp(QMainWindow):
         elif mode == "WIN":
             if self.recognizer.method != "WIN":
                 self.recognizer = recognize.RecognizeMonster(method="WIN")
-            if self.recognizer._winrt is None:
+            if self.recognizer._connector is None:
                 self.choose_capture_window()
         elif mode == "PC":
             self.recognizer = recognize.RecognizeMonster(
