@@ -37,7 +37,7 @@ from ..core import recognize
 from ..config import MONSTER_COUNT
 from ..data.specialmonster import SpecialMonsterHandler
 from ..tools import data_package
-from ..utils import winrt_capture
+from ..core import winrt_connector
 from ..config import FIELD_FEATURE_COUNT, MONSTER_DATA
 from . import HistoryMatchUI, InputPanelUI
 
@@ -661,7 +661,7 @@ class ArknightsApp(QMainWindow):
                 cv2.destroyAllWindows()
             except Exception:
                 pass
-            dlg = winrt_capture.WindowPickerDialog(self)
+            dlg = winrt_connector.WindowPickerDialog(self)
             if dlg.exec():
                 sel = dlg.get_selection()
                 logger.info(f"选择了截屏源: {sel}")

@@ -133,7 +133,7 @@ def compose_frame(frame, background, x, y):
 
 def composite_random_frame():
     # 读取战场背景图
-    battlefield = cv2.imread("./tools/battlefield_composite/monster_images/IM-1.png")
+    battlefield = cv2.imread(Path(__file__).parent / "monster_images/IM-1.png")
     battlefield = cv2.resize(battlefield, (1920, 1080))
     if battlefield is None:
         raise Exception("无法读取战场背景图")
@@ -156,7 +156,7 @@ def composite_random_frame():
 
     for i in range(10):
         x, y = frame_list[i]
-        frame = get_random_png_frame("./tools/battlefield_composite/monster_images/Arc_Frontliner_Leader-Move")
+        frame = get_random_png_frame(Path(__file__).parent / "monster_images/Arc_Frontliner_Leader-Move")
 
         # 缩放
         factor = (y / bg_height) * 0.4 + 0.6

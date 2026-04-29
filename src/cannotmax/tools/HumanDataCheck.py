@@ -1,3 +1,4 @@
+from pathlib import Path
 import tkinter as tk
 from PIL import Image, ImageTk
 import csv
@@ -46,7 +47,7 @@ class ArknightsApp:
         self.jump_button.pack(side=tk.LEFT, padx=5)
 
         # 初始化数据
-        self.data = self.read_csv("arknights.csv")
+        self.data = self.read_csv("data/arknights.csv")
         self.current_row_index = 0
 
         # 加载图片
@@ -69,9 +70,9 @@ class ArknightsApp:
     def load_all_images(self):
         """加载所有图片"""
         images = {}
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        monster_csv_path = os.path.join(base_dir, "monster_greenvine.csv")
-        images_dir = os.path.join(base_dir, "images")
+        base_dir = Path(__file__).parent.parent.parent.parent  # 项目根目录
+        monster_csv_path = base_dir / "monster_greenvine.csv"
+        images_dir = base_dir / "images"
         
         id_to_name = {}
         try:
@@ -163,7 +164,7 @@ class ArknightsApp:
             widget.destroy()  
 
         # 获取图片路径
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = Path(__file__).parent.parent.parent.parent  # 项目根目录
         img_name = row[-1]
         
         orig_path = os.path.join(base_dir, "images", img_name + ".jpg")

@@ -72,7 +72,7 @@ def extract_webm(webm_path: Path, output_folder: Path):
 
 
 def main():
-    webm_folder = "./tools/battlefield_composite/monster_images"
+    webm_folder = Path(__file__).parent / "monster_images"
     for webm_path in Path(webm_folder).glob("*.webm"):
         name_split = webm_path.parts[-1].split("-")
         print(name_split)
