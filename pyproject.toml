@@ -79,4 +79,4 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [project.scripts]
-cannotmax = "cannotmax.cli:main"
+cannotmax = "cannotmax.console:main"
