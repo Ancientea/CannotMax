@@ -1,571 +1,214 @@
-import time
-from functools import cache
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
+import importlib
+
+import hydra
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
-import numpy as np
-import pandas as pd
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset
+from omegaconf import DictConfig, OmegaConf
+from hydra.utils import instantiate
+
+import lightning as L
+
+from callbacks import CompatibilityCheckpoint, TrainingLogCallback
 from config import FIELD_FEATURE_COUNT, MONSTER_COUNT
-
-# 导入拆分到 models 文件夹中的模型和 Muon 优化器方法
-from models.model import UnitAwareTransformer
-from models.muon import get_muon_lion_optimizers
-
-print(f"场地特征数量: {FIELD_FEATURE_COUNT}")
-
-# 计算总特征数量 (怪物特征 + 场地特征) * 2 + Result + ImgPath
-TOTAL_FEATURE_COUNT = (MONSTER_COUNT + FIELD_FEATURE_COUNT) * 2
-
-@cache
-def get_device(prefer_gpu=True):
-    """
-    prefer_gpu (bool): 是否优先尝试使用GPU
-    """
-    if prefer_gpu:
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return torch.device("mps")  # Apple Silicon GPU
-        elif hasattr(torch, "xpu") and torch.xpu.is_available():  # Intel GPU
-            return torch.device("xpu")
-    return torch.device("cpu")
+from data_module import ArknightsDataModule
+from logger_utils import create_composite_logger
+from training_module import ArknightsLightningModule
 
 
-device = get_device()
-
-def plot_learning_curve(train_losses, val_losses, train_accs, val_accs, save_path):
-    """绘制学习曲线并保存为图片"""
-    epochs = range(1, len(train_losses) + 1)
-    
-    plt.figure(figsize=(12, 5))
-    
-    # 绘制 Loss 曲线
-    plt.subplot(1, 2, 1)
-    plt.plot(epochs, train_losses, 'b-', label='Train Loss')
-    plt.plot(epochs, val_losses, 'r-', label='Val Loss')
-    plt.title('Training and Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.grid(True)
-    
-    # 绘制 Accuracy 曲线
-    plt.subplot(1, 2, 2)
-    plt.plot(epochs, train_accs, 'b-', label='Train Acc')
-    plt.plot(epochs, val_accs, 'r-', label='Val Acc')
-    plt.title('Training and Validation Accuracy')
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy (%)')
-    plt.legend()
-    plt.grid(True)
-    
-    plt.tight_layout()
-    plt.savefig(save_path)
-    print(f"学习曲线已保存至: {save_path}")
-    plt.close()
-
-def preprocess_data(csv_file):
-    """预处理CSV文件，将异常值修正为合理范围"""
-    print(f"预处理数据文件: {csv_file}")
-
-    # 读取CSV文件
-    data = pd.read_csv(csv_file, header=None, skiprows=1)
-    print(f"原始数据形状: {data.shape}")
-
-    # 检查数据形状
-    expected_columns = TOTAL_FEATURE_COUNT + 2  # +2 for Result and ImgPath
-    if data.shape[1] != expected_columns:
-        print(f"数据列数不符！期望 {expected_columns} 列，实际 {data.shape[1]} 列")
-        print(
-            f"期望格式: {MONSTER_COUNT}(怪物L) + {FIELD_FEATURE_COUNT}(场地L) + {MONSTER_COUNT}(怪物R) + {FIELD_FEATURE_COUNT}(场地R) + 1(Result) + 1(ImgPath)")
-        raise Exception("数据格式不符")
-
-    data = data.iloc[:, 0: TOTAL_FEATURE_COUNT + 1]  # 保留特征和结果列，去掉ImgPath
-
-    # 检查特征范围
-    features = data.iloc[:, :-1]
-    labels = data.iloc[:, -1]
-
-    # 统计极端值
-    extreme_values = (np.abs(features) > 20).sum().sum()
-    if extreme_values > 0:
-        print(f"发现 {extreme_values} 个绝对值大于20的特征值")
-
-    # 检查标签
-    invalid_labels = labels.apply(lambda x: x not in ["L", "R"]).sum()
-    if invalid_labels > 0:
-        print(f"发现 {invalid_labels} 个无效标签")
-
-    # 输出特征的范围信息
-    feature_min = features.min().min()
-    feature_max = features.max().max()
-    feature_mean = features.mean().mean()
-    feature_std = features.std().mean()
-
-    print(f"特征值范围: [{feature_min}, {feature_max}]")
-    print(f"特征值平均值: {feature_mean:.4f}, 标准差: {feature_std:.4f}")
-
-    return data.shape[1]
-
-
-class ArknightsDataset(Dataset):
-    def __init__(self, csv_file, max_value=None):
-        data = pd.read_csv(csv_file, header=None, skiprows=1)
-        # 检查数据形状
-        expected_columns = TOTAL_FEATURE_COUNT + 2  # +2 for Result and ImgPath
-        if data.shape[1] != expected_columns:
-            print(f"数据列数不符！期望 {expected_columns} 列，实际 {data.shape[1]} 列")
-            raise Exception("数据格式不符")
-        data = data.iloc[:, 0: TOTAL_FEATURE_COUNT + 1]  # 保留特征和结果列，去掉ImgPath
-        features = data.iloc[:, :-1].values.astype(np.float32)
-        labels = data.iloc[:, -1].map({"L": 0, "R": 1}).values
-        labels = np.where((labels != 0) & (labels != 1), 0, labels).astype(np.float32)
-
-        # 分割双方单位和场地特征
-        # 数据格式: [怪物L(77), 场地L(6), 怪物R(77), 场地R(6)]
-        left_monster_end = MONSTER_COUNT
-        left_field_end = MONSTER_COUNT + FIELD_FEATURE_COUNT
-        right_monster_end = MONSTER_COUNT + FIELD_FEATURE_COUNT + MONSTER_COUNT
-        right_field_end = MONSTER_COUNT + FIELD_FEATURE_COUNT + MONSTER_COUNT + FIELD_FEATURE_COUNT
-
-        # 提取各部分特征
-        left_monster_features = features[:, :left_monster_end]
-        left_field_features = features[:, left_monster_end:left_field_end]
-        right_monster_features = features[:, left_field_end:right_monster_end]
-        right_field_features = features[:, right_monster_end:right_field_end]
-
-        # 合并怪物特征和场地特征（场地特征直接使用，不取绝对值和符号）
-        left_counts = np.concatenate([np.abs(left_monster_features), left_field_features], axis=1)
-        right_counts = np.concatenate([np.abs(right_monster_features), right_field_features], axis=1)
-        left_signs = np.concatenate([np.sign(left_monster_features), np.ones_like(left_field_features)], axis=1)
-        right_signs = np.concatenate([np.sign(right_monster_features), np.ones_like(right_field_features)], axis=1)
-
-        if max_value is not None:
-            left_counts = np.clip(left_counts, 0, max_value)
-            right_counts = np.clip(right_counts, 0, max_value)
-
-        # 转换为 PyTorch 张量，并一次性加载到 GPU
-        self.left_signs = torch.from_numpy(left_signs).to(device)
-        self.right_signs = torch.from_numpy(right_signs).to(device)
-        self.left_counts = torch.from_numpy(left_counts).to(device)
-        self.right_counts = torch.from_numpy(right_counts).to(device)
-        self.labels = torch.from_numpy(labels).float().to(device)
-
-    def __len__(self):
-        return len(self.labels)
-
-    def __getitem__(self, idx):
-        return (
-            self.left_signs[idx],
-            self.left_counts[idx],
-            self.right_signs[idx],
-            self.right_counts[idx],
-            self.labels[idx],
-        )
-
-
-def train_one_epoch(model, train_loader, criterion, muon_opt, lion_opt, scaler=None):
-    model.train()
-    total_loss = 0
-    correct = 0
-    total = 0
-
-    for ls, lc, rs, rc, labels in train_loader:
-        ls, lc, rs, rc, labels = [
-            x.to(device, non_blocking=True) for x in (ls, lc, rs, rc, labels)
-        ]
-
-        # 清空所有的梯度
-        muon_opt.zero_grad()
-        lion_opt.zero_grad()
-
-        # 检查输入值范围
-        if (
-                torch.isnan(ls).any()
-                or torch.isnan(lc).any()
-                or torch.isnan(rs).any()
-                or torch.isnan(rc).any()
-        ):
-            print("警告: 输入数据包含NaN，跳过该批次")
-            continue
-
-        if (
-                torch.isinf(ls).any()
-                or torch.isinf(lc).any()
-                or torch.isinf(rs).any()
-                or torch.isinf(rc).any()
-        ):
-            print("警告: 输入数据包含Inf，跳过该批次")
-            continue
-
-        # 确保labels严格在0-1之间
-        if (labels < 0).any() or (labels > 1).any():
-            print("警告: 标签值不在[0,1]范围内，进行修正")
-            labels = torch.clamp(labels, 0, 1)
-
-        try:
-            with torch.amp.autocast_mode.autocast(
-                    device_type=device.type, enabled=(scaler is not None)
-            ):
-                outputs = model(ls, lc, rs, rc).squeeze()
-                # 确保输出在合理范围内
-                if torch.isnan(outputs).any() or torch.isinf(outputs).any():
-                    print("警告: 模型输出包含NaN或Inf，跳过该批次")
-                    continue
-
-                # 确保输出严格在0-1之间
-                if (outputs < 0).any() or (outputs > 1).any():
-                    print("警告: 模型输出不在[0,1]范围内，进行修正")
-                    outputs = torch.clamp(outputs, 1e-7, 1 - 1e-7)
-
-            # 将损失函数计算移出 autocast 区域，并强制使用 float32 避免安全警告
-            loss = criterion(outputs.float(), labels.float())
-
-            # 检查loss是否有效
-            if torch.isnan(loss) or torch.isinf(loss):
-                print(f"警告: 损失值为 {loss.item()}, 跳过该批次")
-                continue
-
-            if scaler:  # 使用混合精度
-                scaler.scale(loss).backward()
-
-                # 混合优化器时需要分别 unscale 进行统一梯度裁剪
-                scaler.unscale_(muon_opt)
-                scaler.unscale_(lion_opt)
-
-                # 梯度裁剪，避免梯度爆炸
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
-                scaler.step(muon_opt)
-                scaler.step(lion_opt)
-                scaler.update()
-            else:  # 不使用混合精度
-                loss.backward()
-                # 梯度裁剪，避免梯度爆炸
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                muon_opt.step()
-                lion_opt.step()
-
-            total_loss += loss.item()
-            preds = (outputs > 0.5).float()
-            correct += (preds == labels).sum().item()
-            total += labels.size(0)
-
-        except RuntimeError as e:
-            print(f"警告: 训练过程中出错 - {str(e)}")
-            continue
-
-    return total_loss / max(1, len(train_loader)), 100 * correct / max(1, total)
-
-
-def evaluate(model, data_loader, criterion):
-    model.eval()
-    total_loss = 0
-    correct = 0
-    total = 0
-
-    with torch.no_grad():
-        for ls, lc, rs, rc, labels in data_loader:
-            ls, lc, rs, rc, labels = [
-                x.to(device, non_blocking=True) for x in (ls, lc, rs, rc, labels)
-            ]
-
-            # 检查输入值范围
-            if (
-                    torch.isnan(ls).any()
-                    or torch.isnan(lc).any()
-                    or torch.isnan(rs).any()
-                    or torch.isnan(rc).any()
-                    or torch.isinf(ls).any()
-                    or torch.isinf(lc).any()
-                    or torch.isinf(rs).any()
-                    or torch.isinf(rc).any()
-            ):
-                print("警告: 评估时输入数据包含NaN或Inf，跳过该批次")
-                continue
-
-            # 确保labels严格在0-1之间
-            if (labels < 0).any() or (labels > 1).any():
-                labels = torch.clamp(labels, 0, 1)
-
-            try:
-                with torch.amp.autocast_mode.autocast(
-                        device_type=device.type, enabled=(device.type == "cuda")
-                ):
-                    outputs = model(ls, lc, rs, rc).squeeze()
-                    # 确保输出在合理范围内
-                    if torch.isnan(outputs).any() or torch.isinf(outputs).any():
-                        print("警告: 评估时模型输出包含NaN或Inf，跳过该批次")
-                        continue
-
-                    # 确保输出严格在0-1之间
-                    if (outputs < 0).any() or (outputs > 1).any():
-                        outputs = torch.clamp(outputs, 1e-7, 1 - 1e-7)
-
-                # 将损失函数计算移出 autocast 区域，并强制使用 float32 避免安全警告
-                loss = criterion(outputs.float(), labels.float())
-
-                # 检查loss是否有效
-                if torch.isnan(loss) or torch.isinf(loss):
-                    continue
-
-                total_loss += loss.item()
-                preds = (outputs > 0.5).float()
-                correct += (preds == labels).sum().item()
-                total += labels.size(0)
-
-            except RuntimeError as e:
-                print(f"警告: 评估过程中出错 - {str(e)}")
-                continue
-
-    return total_loss / max(1, len(data_loader)), 100 * correct / max(1, total)
-
-
-def stratified_random_split(dataset, test_size=0.1, seed=42):
-    labels = dataset.labels  # 假设 labels 是一个 GPU tensor
-    if str(device) != "cpu":
-        labels = labels.cpu()  # 移动到 CPU 上进行操作
-    labels = labels.numpy()  # 转换为 numpy array
-
-    indices = np.arange(len(labels))
-    train_indices, val_indices = train_test_split(
-        indices, test_size=test_size, random_state=seed, stratify=labels
-    )
-    return (
-        torch.utils.data.Subset(dataset, train_indices),
-        torch.utils.data.Subset(dataset, val_indices),
-    )
-
-
-def main():
-    # 配置参数
-    config = {
-        "data_file": "arknights.csv",
-        "batch_size": 1024,
-        "test_size": 0.1,
-        "embed_dim": 128,  # 512
-        "n_layers": 3,  # 3也可以
-        "num_heads": 4,
-        "lr": 3e-4,  # 新优化器可以改大一点
-        "lion_lr": 3e-4 / 10,  # 论文指出 Lion 优化器需要更小的学习率，但需要更小的学习率不太可能
-        "epochs": 50,  # 一般 30 epochs 足够过拟合
-        "seed": 42,  # 随机数种子
-        "save_dir": "models",  # 存到哪里
-        "max_feature_value": 100,  # 限制特征最大值，防止极端值造成不稳定
-        "num_workers": 0 if torch.cuda.is_available() else 0,  # 根据CUDA可用性设置num_workers
-    }
-
-    # 创建保存目录
-    Path(config["save_dir"]).mkdir(parents=True, exist_ok=True)
-
-    # 设置随机种子
-    torch.manual_seed(config["seed"])
-    np.random.seed(config["seed"])
+def get_accelerator_and_device():
     if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(config["seed"])
+        return "cuda", 1
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps", 1
+    elif hasattr(torch, "xpu") and torch.xpu.is_available():
+        return "xpu", 1
+    return "cpu", 1
 
-    # 设置设备
-    print(f"使用设备: {device}")
 
-    # 初始化 GradScaler 用于混合精度训练
-    scaler = None
-    if device.type == "cuda":
-        try:
-            scaler = torch.amp.grad_scaler.GradScaler("cuda")
-        except (AttributeError, TypeError):
-            scaler = torch.amp.grad_scaler.GradScaler()  # 如果是老版本
-        print("CUDA可用，已启用混合精度训练的GradScaler。")
+def get_precision(accelerator: str) -> Literal["16-mixed", "32-true"]:
+    if accelerator == "cuda":
+        return "16-mixed"
+    return "32-true"
 
-    # 检查CUDA可用性
-    if str(device) == "cuda":
+
+def plot_learning_curve(save_dir: str, output_name: str | None = None, logger_name: str = "lightning_logs"):
+    save_path = Path(save_dir)
+
+    csv_dir = save_path / logger_name
+    csv_files = list(csv_dir.rglob("metrics.csv")) if csv_dir.exists() else []
+
+    if not csv_files:
+        latest_csv = sorted(csv_files)[-1] if csv_files else None
+    else:
+        latest_csv = sorted(csv_files)[-1]
+
+    if latest_csv is None:
+        tb_dir = save_path / "lightning_logs"
+        tb_version_dirs = sorted(tb_dir.glob("version_*")) if tb_dir.exists() else []
+        if tb_version_dirs:
+            try:
+                EventAccumulator = importlib.import_module(
+                    "tensorboard.backend.event_processing.event_accumulator"
+                ).EventAccumulator
+
+                ea = EventAccumulator(str(tb_version_dirs[-1]))
+                ea.Reload()
+
+                tags = ea.Tags().get("scalars", [])
+                metrics = {}
+                for tag in ["train_loss", "val_loss", "train_acc", "val_acc"]:
+                    if tag in tags:
+                        events = ea.Scalars(tag)
+                        metrics[tag] = [e.value for e in events]
+
+                if metrics:
+                    _plot_from_dict(metrics, save_path, output_name)
+                    return
+            except (ImportError, ModuleNotFoundError):
+                pass
+
+        print("警告: 未找到可用的训练日志数据，跳过学习曲线绘制")
+        return
+
+    pd = importlib.import_module("pandas")
+
+    df = pd.read_csv(latest_csv)
+    metrics = {}
+    for col in ["train_loss", "val_loss", "train_acc", "val_acc"]:
+        if col in df.columns:
+            metrics[col] = df[col].dropna().values.tolist()
+
+    if not metrics:
+        print("警告: CSV 中未找到训练指标，跳过学习曲线绘制")
+        return
+
+    _plot_from_dict(metrics, save_path, output_name)
+
+
+def _plot_from_dict(metrics: dict, save_path: Path, output_name: str | None = None):
+    if output_name is None:
+        current_time_str = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        output_name = f"learning_curve_{current_time_str}.png"
+
+    output_path = save_path / output_name
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    if "train_loss" in metrics and "val_loss" in metrics:
+        ax = axes[0]
+        epochs = range(1, len(metrics["train_loss"]) + 1)
+        ax.plot(epochs, metrics["train_loss"], label="Train Loss", color="blue")
+        val_epochs = range(1, len(metrics["val_loss"]) + 1)
+        ax.plot(val_epochs, metrics["val_loss"], label="Val Loss", color="red")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.set_title("Learning Curve - Loss")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+    if "train_acc" in metrics and "val_acc" in metrics:
+        ax = axes[1]
+        epochs = range(1, len(metrics["train_acc"]) + 1)
+        ax.plot(epochs, metrics["train_acc"], label="Train Acc", color="blue")
+        val_epochs = range(1, len(metrics["val_acc"]) + 1)
+        ax.plot(val_epochs, metrics["val_acc"], label="Val Acc", color="red")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Accuracy (%)")
+        ax.set_title("Learning Curve - Accuracy")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.close(fig)
+    print(f"学习曲线已保存: {output_path}")
+
+
+@hydra.main(config_path="conf", config_name="config", version_base="1.3")
+def main(cfg: DictConfig | None = None):
+    if cfg is None:
+        return
+    print(f"配置:\n{OmegaConf.to_yaml(cfg)}")
+
+    L.seed_everything(cfg.trainer.seed, workers=True)
+
+    accelerator, devices = get_accelerator_and_device()
+    precision = get_precision(accelerator)
+
+    print(f"使用设备: {accelerator}")
+    print(f"场地特征数量: {FIELD_FEATURE_COUNT}")
+
+    if accelerator == "cuda":
         print(f"CUDA设备数量: {torch.cuda.device_count()}")
         print(f"当前CUDA设备: {torch.cuda.current_device()}")
         print(f"CUDA设备名称: {torch.cuda.get_device_name(0)}")
-
-        # 设置确定性计算以增加稳定性
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = True
-    elif str(device) == "cpu":
+    elif accelerator == "cpu":
         print("警告: 未检测到GPU，将在CPU上运行训练，这可能会很慢!")
 
-    # 先预处理数据，检查是否有异常值
-    num_data = preprocess_data(config["data_file"])
+    save_dir = cfg.trainer.save_dir
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
 
-    # 加载数据集
-    dataset = ArknightsDataset(
-        config["data_file"],
-        max_value=config["max_feature_value"],  # 使用最大值限制
-    )
+    data_module = ArknightsDataModule(cfg.data, seed=cfg.trainer.seed)
 
-    # 数据集分割
-    data_length = len(dataset)
-    val_size = int(0.1 * data_length)  # 10% 验证集
-    train_size = data_length - val_size
+    lightning_module = ArknightsLightningModule(cfg.model, cfg.trainer)
 
-    # 划分
-    train_dataset, val_dataset = stratified_random_split(
-        dataset, test_size=config["test_size"], seed=config["seed"]
-    )
-
-    print(f"训练集大小: {train_size}, 验证集大小: {val_size}")
-
-    # 数据加载器
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config["batch_size"],
-        shuffle=True,
-        num_workers=config["num_workers"],
-    )
-    val_loader = DataLoader(
-        val_dataset, batch_size=config["batch_size"], num_workers=config["num_workers"]
-    )
-
-    # 初始化模型
-    # num_units 现在包括怪物数量和场地特征数量
     total_units = MONSTER_COUNT + FIELD_FEATURE_COUNT
-    model = UnitAwareTransformer(
-        num_units=total_units,
-        embed_dim=config["embed_dim"],
-        num_heads=config["num_heads"],
-        num_layers=config["n_layers"],
-    ).to(device)
-
     print(f"模型使用特征数: 怪物({MONSTER_COUNT}) + 场地({FIELD_FEATURE_COUNT}) = {total_units}")
-
     print(
-        f"模型参数数量: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+        f"模型参数数量: {sum(p.numel() for p in lightning_module.model.parameters() if p.requires_grad)}"
     )
 
-    # 损失函数和优化器 (引入 Muon 与 Lion 混合策略)
-    criterion = nn.MSELoss()
-    muon_opt, lion_opt = get_muon_lion_optimizers(
-        model, muon_lr=config["lr"], lion_lr=config["lion_lr"], weight_decay=1e-1
-    )
-    scheduler_muon = optim.lr_scheduler.CosineAnnealingLR(muon_opt, T_max=config["epochs"])
-    scheduler_lion = optim.lr_scheduler.CosineAnnealingLR(lion_opt, T_max=config["epochs"])
-
-    # 训练历史记录
-    train_losses = []
-    val_losses = []
-    train_accs = []
-    val_accs = []
-
-    # 训练设置
-    best_acc = 0
-    best_loss = float("inf")
-
-    # 训练循环
-    for epoch in range(config["epochs"]):
-        print(f"Epoch {epoch + 1}/{config['epochs']}")
-
-        # 训练
-        train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, muon_opt, lion_opt, scaler
-        )
-
-        # 验证
-        val_loss, val_acc = evaluate(model, val_loader, criterion)
-
-        # 更新学习率
-        scheduler_muon.step()
-        scheduler_lion.step()
-
-        # 记录历史
-        train_losses.append(train_loss)
-        val_losses.append(val_loss)
-        train_accs.append(train_acc)
-        val_accs.append(val_acc)
-
-        # 保存最佳模型（基于准确率）
-        if val_acc > best_acc:
-            best_acc = val_acc
-            torch.save(
-                model,
-                Path(config["save_dir"]) / "best_model_acc.pth",
-            )
-            print("保存了新的最佳准确率模型!")
-
-        # 保存最佳模型（基于损失）
-        if val_loss < best_loss:
-            best_loss = val_loss
-            torch.save(
-                model,
-                Path(config["save_dir"]) / "best_model_loss.pth",
-            )
-            print("保存了新的最佳损失模型!")
-
-        print(f"最佳准确率为: {best_acc:.2f}, 最佳损失为: {best_loss:.4f}")
-
-        torch.save(
-            model, Path(config["save_dir"]) / "best_model_full.pth"
-        )  # 最后一次计算的模型
-
-        # 保存最新模型
-        # torch.save({
-        #     'epoch': epoch,
-        #     'model_state_dict': model.state_dict(),
-        #     'optimizer_state_dict': optimizer.state_dict(),
-        #     'train_loss': train_loss,
-        #     'val_loss': val_loss,
-        #     'train_acc': train_acc,
-        #     'val_acc': val_acc,
-        #     'config': config
-        # }, os.path.join(config['save_dir'], 'latest_checkpoint.pth'))
-
-        # 打印训练信息
-        print(f"Train Loss: {train_loss:.4f} | Acc: {train_acc:.2f}%  Val Loss: {val_loss:.4f} | Acc: {val_acc:.2f}%")
-
-        # 计时
-        if epoch == 0:
-            start_time = time.time()
-            epoch_start_time = start_time
+    # 使用 Hydra instantiate 创建 logger
+    logger_cfg = cfg.get("logger", None)
+    if logger_cfg is not None:
+        if logger_cfg.get("_target_") == "logger_utils.create_composite_logger":
+            logger_instance = create_composite_logger(logger_cfg, save_dir)
         else:
-            current_time = time.time()
-            epoch_duration = current_time - epoch_start_time
-            elapsed_time = current_time - start_time
-            avg_epoch_time = elapsed_time / (epoch + 1)
-            estimated_total_time = avg_epoch_time * config["epochs"]
-            remaining_time = estimated_total_time - elapsed_time
+            logger_cfg_copy = dict(logger_cfg)
+            logger_cfg_copy["save_dir"] = save_dir
+            logger_instance = instantiate(logger_cfg_copy)
+    else:
+        logger_instance = None
 
-            print(f"Epoch Time: {epoch_duration:.2f}s, Elapsed Time: {elapsed_time / 60:.2f}min, Estimated Remaining Time: {remaining_time / 60:.2f}min, Estimated Total Time: {estimated_total_time / 60:.2f}min")
-            epoch_start_time = current_time  # Reset for next epoch
+    compat_checkpoint = CompatibilityCheckpoint(save_dir=save_dir)
+    training_log_callback = TrainingLogCallback(total_epochs=cfg.trainer.epochs)
 
-        print("-" * 40)
+    trainer = L.Trainer(
+        max_epochs=cfg.trainer.epochs,
+        accelerator=accelerator,
+        devices=devices,
+        precision=precision,
+        gradient_clip_val=0.0,
+        callbacks=[compat_checkpoint, training_log_callback],
+        default_root_dir=save_dir,
+        logger=logger_instance,
+    )
 
-    print(f"训练完成! 最佳验证准确率: {best_acc:.2f}%, 最佳验证损失: {best_loss:.4f}")
+    trainer.fit(lightning_module, datamodule=data_module)
 
-    # 训练完成后重命名模型文件
+    val_acc = trainer.callback_metrics.get("val_acc", torch.tensor(0.0))
+    val_loss = trainer.callback_metrics.get("val_loss", torch.tensor(float("inf")))
+    print(f"训练完成! 最佳验证准确率: {val_acc:.2f}%, 最佳验证损失: {val_loss:.4f}")
+
     current_time_str = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    base_filename = f"data{data_length}_acc{best_acc:.4f}_loss{best_loss:.4f}_{current_time_str}.pth"
+    base_filename = f"acc{val_acc:.4f}_loss{val_loss:.4f}_{current_time_str}.pth"
 
-    save_dir_path = Path(config["save_dir"])
+    plot_learning_curve(save_dir, output_name=f"learning_curve_{base_filename}.png")
 
-    old_acc_path = save_dir_path / "best_model_acc.pth"
-    new_acc_path = save_dir_path / f"best_model_acc_{base_filename}"
-    if old_acc_path.exists():
-        old_acc_path.rename(new_acc_path)
-        print(f"模型文件已重命名: {old_acc_path} -> {new_acc_path}")
-
-    old_loss_path = save_dir_path / "best_model_loss.pth"
-    new_loss_path = save_dir_path / f"best_model_loss_{base_filename}"
-    if old_loss_path.exists():
-        old_loss_path.rename(new_loss_path)
-        print(f"模型文件已重命名: {old_loss_path} -> {new_loss_path}")
-
-    old_full_path = save_dir_path / "best_model_full.pth"
-    new_full_path = save_dir_path / f"best_model_full_{base_filename}"
-    if old_full_path.exists():
-        old_full_path.rename(new_full_path)
-        print(f"模型文件已重命名: {old_full_path} -> {new_full_path}")
-
-    # 绘制学习曲线
-    plot_learning_curve(train_losses, val_losses, train_accs, val_accs, save_dir_path / f"learning_curve_{base_filename}.png")
+    save_dir_path = Path(save_dir)
+    for prefix in ["best_model_acc", "best_model_loss", "best_model_full"]:
+        old_path = save_dir_path / f"{prefix}.pth"
+        if old_path.exists():
+            new_path = save_dir_path / f"{prefix}_{base_filename}"
+            old_path.rename(new_path)
+            print(f"模型文件已重命名: {old_path} -> {new_path}")
 
 
 if __name__ == "__main__":
