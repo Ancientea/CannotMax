@@ -18,7 +18,13 @@ import numpy as np
 from pathlib import Path
 from rapidocr import RapidOCR, EngineType
 
-from ..config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT
+from ..config import (
+    MONSTER_DATA, 
+    MONSTER_IMAGES, 
+    MONSTER_COUNT,
+    get_relative_regions,
+    get_relative_regions_nums,
+)
 from .roi_selector import ROISelector
 from .screenshot_helper import ScreenshotHelper
 from .connector import PcConnector
@@ -28,27 +34,6 @@ logger.setLevel(logging.INFO)
 
 # 是否启用 debug 模式
 intelligent_workers_debug = True
-
-# 数字区域相对坐标
-relative_regions_nums = [
-    (0.0300, 0.7, 0.1400, 1),
-    (0.1600, 0.7, 0.2700, 1),
-    (0.2900, 0.7, 0.4000, 1),
-    (0.6100, 0.7, 0.7200, 1),
-    (0.7300, 0.7, 0.8400, 1),
-    (0.8600, 0.7, 0.9700, 1),
-]
-# 怪物头像相对坐标
-relative_regions = [
-    (0.0000, 0.05, 0.1300, 0.80),
-    (0.1200, 0.05, 0.2500, 0.80),
-    (0.2400, 0.05, 0.3700, 0.80),
-    (0.6300, 0.05, 0.7600, 0.80),
-    (0.7500, 0.05, 0.8800, 0.80),
-    (0.8700, 0.05, 1.0000, 0.80),
-]
-
-
 def get_rapidocr_engine(prefer_gpu=False):
     """Get RapidOCR engine with optional GPU support."""
     try:
@@ -183,6 +168,9 @@ class RecognizeMonster:
         self._connector: PcConnector | None = None
         self._roi_selector = ROISelector()
         self._screenshot_helper = ScreenshotHelper(method=method, connector=None)
+        # Load relative regions from config
+        self.relative_regions = get_relative_regions()
+        self.relative_regions_nums = get_relative_regions_nums()
 
         # Initialize connector for WIN mode
         if self.method == "WIN" and window_name is not None:
@@ -264,7 +252,7 @@ class RecognizeMonster:
             cv2.imwrite("images/tmp/zone.png", screenshot)
         
         # Process each of 6 regions
-        for idx, rel in enumerate(relative_regions):
+        for idx, rel in enumerate(self.relative_regions):
             try:
                 # Template matching
                 rx1 = int(rel[0] * main_width)
@@ -288,7 +276,7 @@ class RecognizeMonster:
             
             try:
                 # OCR
-                rel_num = relative_regions_nums[idx]
+                rel_num = self.relative_regions_nums[idx]
                 rx1_num = int(rel_num[0] * main_width)
                 ry1_num = int(rel_num[1] * main_height)
                 rx2_num = int(rel_num[2] * main_width)
