@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from .models import UnitAwareTransformer, ArknightsDataset
+from ..models import UnitAwareTransformer, ArknightsDataset
 
 
 def evaluate(model, data_loader, criterion, device):
