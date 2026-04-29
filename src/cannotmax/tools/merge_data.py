@@ -8,7 +8,7 @@ from pathlib import Path
 
 # 路径配置
 base_dir = Path(__file__).resolve().parent
-project_root = base_dir.parent.parent  # 项目根目录
+project_root = base_dir.parent.parent.parent  # 项目根目录
 
 # 数据目录结构
 DATA_DIR = project_root / "data"
