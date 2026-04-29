@@ -18,7 +18,7 @@ logger.setLevel(logging.DEBUG)
 
 class AdbConnector:
     def __init__(self, adb_serial=None):
-        self.adb_path = r".\platform-tools\adb.exe"
+        self.adb_path = r".\3rdparty\platform-tools\adb.exe"
         self.screen_width = 0
         self.screen_height = 0
         self.device_serial = adb_serial if adb_serial else ""

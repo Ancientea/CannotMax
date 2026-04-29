@@ -16,8 +16,9 @@ def resolve_maafw_path() -> str:
         return os.environ["MAAFW_BINARY_PATH"]
     candidates = [
         Path(sys.executable).parent / "maafw",
+        Path.cwd() / "3rdparty" / "maafw",  # Phase 9: 优先查找 3rdparty/maafw
         Path.cwd() / "maafw",
-        Path(__file__).resolve().parent / "maafw",
+        Path(__file__).resolve().parent.parent.parent / "3rdparty" / "maafw",  # 从包位置向上查找
     ]
     for p in candidates:
         if p.is_dir() and any(p.glob("MaaFramework.dll")):
@@ -55,7 +56,7 @@ class InputMethodOption:
 @dataclass(frozen=True)
 class MaaConnectionConfig:
     maa_binary_path: str = ""
-    adb_path: str = r".\platform-tools\adb.exe"
+    adb_path: str = r".\3rdparty\platform-tools\adb.exe"
     device_serial: str = ""
     screencap_method: int = 1
     input_method: int = 4
@@ -106,9 +107,13 @@ class MaaFrameworkDetector:
             return cls._status
 
         try:
+            logger.debug("尝试初始化MAA Toolkit")
             Toolkit.init_option(str(Path.cwd()))
+            logger.debug("MAA Toolkit初始化成功")
             cls._status = MaaAvailability.AVAILABLE
+            logger.debug("MAA Framework可用")
             cls._status_message = "MAA Framework可用"
+            logger.debug(cls._status_message)
         except Exception as e:
             cls._status = MaaAvailability.INIT_FAILED
             cls._status_message = f"MAA Framework初始化失败: {e}"
@@ -351,8 +356,8 @@ class MaaAdbConnector:
 
 
 class AdbConnectorAdapter:
-    def __init__(self, adb_path: str = r".\platform-tools\adb.exe"):
-        from src.cannotmax.legacy import AdbConnector
+    def __init__(self, adb_path: str = r".\3rdparty\platform-tools\adb.exe"):
+        from ..legacy import AdbConnector
         self._legacy_connector = AdbConnector()
         self._maa_connector: MaaAdbConnector | None = None
         self._use_maa: bool = False
