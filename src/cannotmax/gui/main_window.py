@@ -22,11 +22,9 @@ from PyQt6.QtCore import Qt, pyqtSignal, QThread, QPropertyAnimation, QEasingCur
 from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
 import PyQt6.QtCore as QtCore
 
-from ..legacy import loadData
 from ..core import auto_fetch
-from ..core import maa_adb_connector
+from ..core.connector import AdbConnector, PcConnector
 from ..core.maa_adb_connector import (
-    AdbConnectorAdapter,
     ConnectionTypeRegistry,
     InputMethodRegistry,
     MaaFrameworkDetector,
@@ -108,8 +106,8 @@ class ArknightsApp(QMainWindow):
         self.current_capture_mode = "ADB"
 
         # 尝试连接模拟器
-        self.adb_connector = AdbConnectorAdapter()
-        self.pc_connector = loadData.PcConnector()
+        self.adb_connector = AdbConnector()
+        self.pc_connector = PcConnector()
         self.adb_connector_thread = ADBConnectorThread(self)
         self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
         self.adb_connector_thread.start()

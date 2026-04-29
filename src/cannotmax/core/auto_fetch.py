@@ -24,7 +24,7 @@ import time
 from typing import Literal
 import cv2
 import numpy as np
-from ..legacy import loadData
+# loadData removed - use core.connector.AdbConnector/PcConnector
 from .recognize import intelligent_workers_debug
 from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 from collections.abc import Callable
