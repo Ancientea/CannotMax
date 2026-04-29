@@ -16,9 +16,8 @@ output/
 *.pth
 *.onnx
 *.onnx.data
-data_train/tmp/
-data_train/package/*.zip
-data_train/images/
+data/*
+!data/compressed/.gitkeep
 
 # pixi environments
 .pixi/*
