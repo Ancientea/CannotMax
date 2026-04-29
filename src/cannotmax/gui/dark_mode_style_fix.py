@@ -98,4 +98,27 @@ class DarkModeStyleFix:
         if app is None:
             raise ValueError("QApplication instance cannot be None")
         global_qss = DarkModeStyleFix.get_global_qss()
-        app.setStyleSheet(global_qss)
+        message_box_qss = DarkModeStyleFix.get_message_box_qss()
+        app.setStyleSheet(global_qss + message_box_qss)
+
+    @staticmethod
+    def get_message_box_qss() -> str:
+        """获取 QMessageBox 深色模式样式表。"""
+        return """
+            QMessageBox {
+                background-color: #1e1e1e;
+                color: #ffffff;
+            }
+            QMessageBox QLabel {
+                color: #ffffff;
+            }
+            QMessageBox QPushButton {
+                background-color: #3a3a3a;
+                color: #ffffff;
+                border: 1px solid #555555;
+                padding: 5px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #4a4a4a;
+            }
+        """

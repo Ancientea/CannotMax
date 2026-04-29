@@ -29,8 +29,8 @@ from ..core.connector.maa_registry import (
     InputMethodRegistry,
     MaaFrameworkDetector,
 )
-from ..core.connector.winrt_capture import WinRTScreenCapture
-from . import DarkModeStyleFix
+from ..core.connector.winrt_capture import WinRTScreenCapture, WindowPickerDialog
+from .dark_mode_style_fix import DarkModeStyleFix
 from ..analytics import similar_history_match
 from ..core import recognize
 from ..config import MONSTER_COUNT
@@ -647,7 +647,7 @@ class ArknightsApp(QMainWindow):
             QMessageBox.information(self, "提示", "输入方式已更改，请重新连接以生效")
 
     def choose_capture_window(self):
-        """弹出窗口选择器，切换 WinRT 截屏源（窗口标题或整屏）。"""
+        """弹出对话框选择窗口作为 WinRT 截屏源，用于窗口捕获模式"""
         import traceback, cv2
 
         if getattr(self, "_switching_source", False):
@@ -659,12 +659,13 @@ class ArknightsApp(QMainWindow):
                 cv2.destroyAllWindows()
             except Exception:
                 pass
-            dlg = WinRTScreenCapture.WindowPickerDialog(self)
+
+            dlg = WindowPickerDialog(self)
             if dlg.exec():
                 sel = dlg.get_selection()
-                logger.info(f"选择了截屏源: {sel}")
+                logger.info(f"选择了截屏源：{sel}")
                 if not sel:
-                    QMessageBox.information(self, "提示", "未选择任何项")
+                    QMessageBox.information(self, "提示", "未选择任何窗口")
                     return
                 hint = ""
                 if "window_name" in sel:
@@ -682,7 +683,9 @@ class ArknightsApp(QMainWindow):
                 self.no_region = True
                 QMessageBox.information(self, "成功", hint + "\n建议重新选择范围。")
         except Exception as e:
-            QMessageBox.critical(self, "异常", f"{e}\n\n{traceback.format_exc()}")
+            logger.error(f"选择窗口对话框错误：{e}")
+            logger.error(traceback.format_exc())
+            QMessageBox.critical(self, "错误", f"选择窗口失败：{e}")
         finally:
             self._switching_source = False
             self.choose_window_button.setEnabled(self.current_capture_mode == "WIN")
