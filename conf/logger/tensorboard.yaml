@@ -1,0 +1,5 @@
+_target_: lightning.pytorch.loggers.TensorBoardLogger
+name: lightning_logs
+version: null
+sub_dir: ""
+log_graph: false

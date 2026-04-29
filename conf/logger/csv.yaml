@@ -1,0 +1,4 @@
+_target_: lightning.pytorch.loggers.CSVLogger
+name: csv_logs
+version: null
+flush_logs_every_n_steps: 100

@@ -1,0 +1,6 @@
+epochs: 50
+lr: 3e-4
+lion_lr: 3e-5
+seed: 42
+save_dir: models
+weight_decay: 1e-1

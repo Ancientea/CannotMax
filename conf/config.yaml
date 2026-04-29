@@ -1,0 +1,5 @@
+defaults:
+  - model: model
+  - data: data
+  - trainer: trainer
+  - logger: tensorboard
