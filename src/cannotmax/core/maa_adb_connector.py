@@ -1,7 +1,6 @@
 import logging
 import os
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -11,22 +10,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def resolve_maafw_path() -> str:
-    if os.environ.get("MAAFW_BINARY_PATH"):
-        return os.environ["MAAFW_BINARY_PATH"]
-    candidates = [
-        Path(sys.executable).parent / "maafw",
-        Path.cwd() / "3rdparty" / "maafw",  # Phase 9: 优先查找 3rdparty/maafw
-        Path.cwd() / "maafw",
-        Path(__file__).resolve().parent.parent.parent / "3rdparty" / "maafw",  # 从包位置向上查找
-    ]
-    for p in candidates:
-        if p.is_dir() and any(p.glob("MaaFramework.dll")):
-            resolved = str(p)
-            os.environ["MAAFW_BINARY_PATH"] = resolved
-            logger.info(f"自动解析maafw路径: {resolved}")
-            return resolved
-    return ""
+
 
 
 class MaaAvailability(Enum):
@@ -34,7 +18,6 @@ class MaaAvailability(Enum):
     AVAILABLE = "available"
     IMPORT_FAILED = "import_failed"
     INIT_FAILED = "init_failed"
-    BINARY_MISSING = "binary_missing"
 
 
 @dataclass(frozen=True)
@@ -55,7 +38,6 @@ class InputMethodOption:
 
 @dataclass(frozen=True)
 class MaaConnectionConfig:
-    maa_binary_path: str = ""
     adb_path: str = r".\3rdparty\platform-tools\adb.exe"
     device_serial: str = ""
     screencap_method: int = 1
@@ -87,14 +69,6 @@ class MaaFrameworkDetector:
     @classmethod
     def detect(cls) -> MaaAvailability:
         if cls._checked:
-            return cls._status
-
-        binary_path = resolve_maafw_path()
-        if binary_path and not Path(binary_path).exists():
-            cls._status = MaaAvailability.BINARY_MISSING
-            cls._status_message = f"MAAFW_BINARY_PATH路径无效: {binary_path}"
-            cls._checked = True
-            logger.warning(cls._status_message)
             return cls._status
 
         try:
@@ -219,10 +193,6 @@ class MaaAdbConnector:
             return
 
         try:
-            binary_path = self._config.maa_binary_path or resolve_maafw_path()
-            if binary_path:
-                os.environ["MAAFW_BINARY_PATH"] = binary_path
-
             from maa.toolkit import Toolkit
             from maa.controller import AdbController
 
@@ -403,26 +373,11 @@ class AdbConnectorAdapter:
     def get_config(self) -> MaaConnectionConfig:
         return self._maa_config
 
-    def set_maa_binary_path(self, path: str):
-        self._maa_config = MaaConnectionConfig(
-            maa_binary_path=path,
-            adb_path=self._maa_config.adb_path,
-            device_serial=self._maa_config.device_serial,
-            screencap_method=self._maa_config.screencap_method,
-            input_method=self._maa_config.input_method,
-            screenshot_use_raw_size=self._maa_config.screenshot_use_raw_size,
-            config=self._maa_config.config,
-        )
-        if path:
-            os.environ["MAAFW_BINARY_PATH"] = path
-        MaaFrameworkDetector.reset()
-
     def set_connection_type(self, type_id: str):
         self._state.connection_type_id = type_id
         default_addr = ConnectionTypeRegistry.get_default_address(type_id)
         if default_addr:
             self._maa_config = MaaConnectionConfig(
-                maa_binary_path=self._maa_config.maa_binary_path,
                 adb_path=self._maa_config.adb_path,
                 device_serial=default_addr,
                 screencap_method=self._maa_config.screencap_method,
@@ -436,7 +391,6 @@ class AdbConnectorAdapter:
         enum_value = InputMethodRegistry.get_enum_value_by_id(method_id)
         self._state.input_method_id = method_id
         self._maa_config = MaaConnectionConfig(
-            maa_binary_path=self._maa_config.maa_binary_path,
             adb_path=self._maa_config.adb_path,
             device_serial=self._maa_config.device_serial,
             screencap_method=self._maa_config.screencap_method,
@@ -447,7 +401,6 @@ class AdbConnectorAdapter:
 
     def set_device_serial(self, serial: str):
         self._maa_config = MaaConnectionConfig(
-            maa_binary_path=self._maa_config.maa_binary_path,
             adb_path=self._maa_config.adb_path,
             device_serial=serial,
             screencap_method=self._maa_config.screencap_method,
