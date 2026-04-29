@@ -6,29 +6,28 @@ import shutil
 import pandas as pd
 from pathlib import Path
 
-# 获取项目根目录
+# 路径配置
 base_dir = Path(__file__).resolve().parent
-project_root = base_dir.parent
+project_root = base_dir.parent.parent  # 项目根目录
 
-# 将项目根目录添加到 sys.path 以便导入 config
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+# 数据目录结构
+DATA_DIR = project_root / "data"
+COMPRESSED_DIR = DATA_DIR / "compressed"
+TARGET_CSV_PATH = DATA_DIR / "arknights.csv"
+TARGET_IMAGES_DIR = DATA_DIR / "images"
 
-#from config import MONSTER_COUNT, FIELD_FEATURE_COUNT config会读取图片导致非常慢
 
 def load_monster_data():
     monster_data = pd.read_csv('monster_greenvine.csv', index_col="id", encoding='utf-8-sig')
     return monster_data
 
 MONSTER_DATA = load_monster_data()
-
-# 全局变量
 MONSTER_COUNT = len(MONSTER_DATA)
 FIELD_FEATURE_COUNT = 0
 
 
 def get_expected_header():
-    """根据配置生成预期表头"""
+    """生成预期表头"""
     if FIELD_FEATURE_COUNT > 0:
         header = [f"{i + 1}L" for i in range(MONSTER_COUNT)]
         header += [f"{i + 1}LF" for i in range(MONSTER_COUNT, MONSTER_COUNT + FIELD_FEATURE_COUNT)]
@@ -43,180 +42,194 @@ def get_expected_header():
 
 
 def read_csv_from_zip(zip_ref, csv_filename):
-    """从 ZIP 文件流中直接读取 CSV 数据，尝试多种编码"""
-    encodings = ['utf-8-sig', 'utf-8', 'gbk', 'gb18030', 'big5', 'latin1']
-
+    """从 ZIP 读取 CSV"""
+    encodings = ['utf-8-sig', 'utf-8', 'gbk', 'gb18030']
     for encoding in encodings:
         try:
             with zip_ref.open(csv_filename) as f:
                 text_f = io.TextIOWrapper(f, encoding=encoding, newline='')
                 reader = csv.reader(text_f)
-                try:
-                    header = next(reader)
-                except StopIteration:
-                    return None, [], encoding
+                header = next(reader)
                 data = list(reader)
                 return header, data, encoding
         except (UnicodeDecodeError, io.UnsupportedOperation):
             continue
-
-    raise ValueError(f"无法以支持的编码读取压缩包内的文件 {csv_filename}")
+    raise ValueError(f"无法读取 {csv_filename}")
 
 
 def process_archives(merge_images=True, extract_result_images=False):
-    package_dir = base_dir / "package"
-    target_images_dir = base_dir / 'images'
-    target_csv_path = base_dir / 'arknights.csv'
-
-    # 1. 目录准备 (移除旧的清空逻辑，保证增量更新)
-    if not package_dir.exists():
-        print(f"未找到压缩包目录: {package_dir}")
-        return
-
+    """处理 compressed 下的压缩包和 data 下的日期目录"""
+    
+    # 1. 目录准备
+    COMPRESSED_DIR.mkdir(parents=True, exist_ok=True)
     if merge_images:
-        # 直接确保目录存在，不删除已有内容
-        target_images_dir.mkdir(parents=True, exist_ok=True)
+        TARGET_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
     expected_header = get_expected_header()
     img_path_idx = expected_header.index("ImgPath")
 
-    # 2. 构建现有 CSV 数据的索引集合
+    # 2. 加载现有数据索引
     seen_csv_img_paths = set()
-    is_csv_initialized = False # 用于判断是否需要写入表头
+    new_csv_rows = []
 
-    if target_csv_path.exists():
-        print(f"检测到已存在的 {target_csv_path.name}，正在读取历史记录构建索引...")
+    if TARGET_CSV_PATH.exists():
+        print(f"读取现有 {TARGET_CSV_PATH.name}...")
         try:
-            with open(target_csv_path, 'r', encoding='utf-8-sig', newline='') as f:
+            with open(TARGET_CSV_PATH, 'r', encoding='utf-8-sig', newline='') as f:
                 reader = csv.reader(f)
-                try:
-                    header = next(reader)
-                    if header == expected_header:
-                        is_csv_initialized = True
-                        for row in reader:
-                            if len(row) > img_path_idx:
-                                seen_csv_img_paths.add(row[img_path_idx])
-                        print(f"-> 成功加载 {len(seen_csv_img_paths)} 条历史记录的索引。")
-                    else:
-                        print("-> 警告：已存在 CSV 的表头与配置不符，将创建新文件或覆写。")
-                        target_csv_path.unlink() # 表头不对则删除重建
-                except StopIteration:
-                    # 文件为空
-                    pass
+                header = next(reader, None)
+                if header == expected_header:
+                    for row in reader:
+                        if len(row) > img_path_idx:
+                            seen_csv_img_paths.add(row[img_path_idx])
+                    print(f"-> 已加载 {len(seen_csv_img_paths)} 条历史记录。")
         except Exception as e:
-            print(f"读取历史 CSV 失败，将重新生成: {e}")
-            target_csv_path.unlink(missing_ok=True)
+            print(f"读取失败：{e}")
 
-    # 定义可能的文件后缀，涵盖常见大小写
     possible_extensions = ['.jpg', '.png', '.jpeg', '.JPG', '.PNG', '.JPEG']
+    total_csv_added = 0
+    total_imgs_extracted = 0
+    total_sources = 0
 
-    zip_files = list(package_dir.glob("*.zip"))
-    print(f"\n找到 {len(zip_files)} 个压缩包，准备进行增量处理...")
+    # 3.1 处理 compressed/*.zip
+    zip_files = list(COMPRESSED_DIR.glob("*.zip"))
+    if zip_files:
+        print(f"\n[阶段 1] 处理 {len(zip_files)} 个压缩包...")
+        for zip_path in zip_files:
+            print(f"\n压缩包：{zip_path.name}")
+            try:
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    # 获取顶层日期目录
+                    top_dirs = sorted(set(
+                        Path(n).parts[0] for n in zf.namelist() 
+                        if Path(n).parts and Path(n).parts[0] != "__MACOSX"
+                    ))
+                    
+                    for dir_name in top_dirs:
+                        print(f"  目录：{dir_name}")
+                        total_sources += 1
+                        
+                        # 处理 CSV
+                        csv_in_zip = f"{dir_name}/arknights.csv"
+                        if csv_in_zip in zf.namelist():
+                            try:
+                                with zf.open(csv_in_zip) as f:
+                                    text = io.TextIOWrapper(f, encoding='utf-8-sig', newline='')
+                                    reader = csv.reader(text)
+                                    header = next(reader, None)
+                                    if header == expected_header:
+                                        added = 0
+                                        for row in reader:
+                                            if len(row) > img_path_idx:
+                                                img_path = row[img_path_idx]
+                                                if img_path not in seen_csv_img_paths:
+                                                    seen_csv_img_paths.add(img_path)
+                                                    new_csv_rows.append(row)
+                                                    added += 1
+                                        print(f"    CSV: +{added}")
+                                        total_csv_added += added
+                            except Exception as e:
+                                print(f"    CSV 错误：{e}")
+                        
+                        # 处理图片
+                        if merge_images:
+                            ext_count = 0
+                            skip_count = 0
+                            for member in zf.namelist():
+                                if member.startswith(f"{dir_name}/") and member.lower().endswith(tuple(possible_extensions)):
+                                    filename = Path(member).name
+                                    is_result = filename.rsplit('.', 1)[0].endswith('_result')
+                                    if is_result and not extract_result_images:
+                                        continue
+                                    target = TARGET_IMAGES_DIR / filename
+                                    if not target.exists():
+                                        try:
+                                            with zf.open(member) as src:
+                                                with open(target, 'wb') as dst:
+                                                    shutil.copyfileobj(src, dst)
+                                            ext_count += 1
+                                        except Exception as e:
+                                            print(f"    图片错误 {filename}: {e}")
+                                    else:
+                                        skip_count += 1
+                            total_imgs_extracted += ext_count
+                            print(f"    IMG: +{ext_count}, skip {skip_count}")
+            except Exception as e:
+                print(f"  压缩包错误：{e}")
 
-    total_added_rows = 0
-    total_extracted_imgs = 0
-
-    # 3. 遍历压缩包
-    for zip_path in zip_files:
-        print(f"\n正在处理压缩包: {zip_path.name}")
-
-        try:
-            with zipfile.ZipFile(zip_path, 'r') as zf:
-                # 建立 namelist 的 O(1) 查找集合
-                zip_namelist_set = set(zf.namelist())
-                
-                # ==========================================
-                # 任务 1：完全独立处理 CSV 文件
-                # ==========================================
-                csv_members = [m for m in zip_namelist_set if m.endswith('arknights.csv')]
-
-                zip_added_csv_count = 0
-                
-                for csv_member in csv_members:
-                    header, data, encoding = read_csv_from_zip(zf, csv_member)
-
-                    if header is None or header != expected_header:
-                        print(f"  [跳过] {csv_member}: 表头不符合预期格式")
-                        continue
-
-                    zip_new_csv_rows = []
-                    skip_csv_count = 0
-
-                    for row in data:
-                        img_path = row[img_path_idx]
-
-                        if img_path not in seen_csv_img_paths:
-                            seen_csv_img_paths.add(img_path)
-                            zip_new_csv_rows.append(row)
+    # 3.2 处理 data/下的日期目录
+    date_dirs = [
+        d for d in DATA_DIR.iterdir() 
+        if d.is_dir() 
+        and d.name not in ('compressed', 'images', '.git')
+        and len(d.name) == 19  # 2026_04_26__18_47_37
+        and d.name[4] == '_' and d.name[7] == '_' and d.name[10] == '_'
+    ]
+    
+    if date_dirs:
+        print(f"\n[阶段 2] 处理 {len(date_dirs)} 个日期目录...")
+        for date_dir in sorted(date_dirs):
+            print(f"\n目录：{date_dir.name}")
+            total_sources += 1
+            
+            # CSV
+            csv_path = date_dir / "arknights.csv"
+            if csv_path.exists():
+                try:
+                    with open(csv_path, 'r', encoding='utf-8-sig', newline='') as f:
+                        reader = csv.reader(f)
+                        header = next(reader, None)
+                        if header == expected_header:
+                            added = 0
+                            for row in reader:
+                                if len(row) > img_path_idx:
+                                    img_path = row[img_path_idx]
+                                    if img_path not in seen_csv_img_paths:
+                                        seen_csv_img_paths.add(img_path)
+                                        new_csv_rows.append(row)
+                                        added += 1
+                            print(f"  CSV: +{added}")
+                            total_csv_added += added
+                except Exception as e:
+                    print(f"  CSV 错误：{e}")
+            
+            # 图片
+            if merge_images:
+                ext_count = 0
+                skip_count = 0
+                for img_path in date_dir.glob("*"):
+                    if img_path.is_file() and img_path.suffix.lower() in possible_extensions:
+                        filename = img_path.name
+                        is_result = filename.rsplit('.', 1)[0].endswith('_result')
+                        if is_result and not extract_result_images:
+                            continue
+                        target = TARGET_IMAGES_DIR / filename
+                        if not target.exists():
+                            try:
+                                shutil.copy2(img_path, target)
+                                ext_count += 1
+                            except:
+                                pass
                         else:
-                            skip_csv_count += 1
+                            skip_count += 1
+                total_imgs_extracted += ext_count
+                if ext_count > 0:
+                    print(f"  IMG: +{ext_count}, skip {skip_count}")
 
-                    # 追加写入 CSV
-                    if zip_new_csv_rows:
-                        mode = 'a' if is_csv_initialized else 'w'
-                        with open(target_csv_path, mode, newline='', encoding='utf-8-sig') as f:
-                            writer = csv.writer(f)
-                            if not is_csv_initialized:
-                                writer.writerow(expected_header)
-                                is_csv_initialized = True
-                            writer.writerows(zip_new_csv_rows)
-                    
-                    zip_added_csv_count += len(zip_new_csv_rows)
-                    print(f"  -> {csv_member} (编码: {encoding})")
-                    print(f"     CSV: 新增 {len(zip_new_csv_rows)} 条，重复跳过 {skip_csv_count} 条")
+    # 4. 写入 CSV
+    if new_csv_rows:
+        mode = 'a' if TARGET_CSV_PATH.exists() and seen_csv_img_paths else 'w'
+        with open(TARGET_CSV_PATH, mode, newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            if mode == 'w':
+                writer.writerow(expected_header)
+            writer.writerows(new_csv_rows)
+        print(f"\n已追加 {len(new_csv_rows)} 条到 {TARGET_CSV_PATH.name}")
 
-                total_added_rows += zip_added_csv_count
-
-                # ==========================================
-                # 任务 2：完全独立处理图片文件
-                # ==========================================
-                zip_extracted_img_count = 0
-                zip_skip_img_count = 0
-
-                if merge_images:
-                    for member in zip_namelist_set:
-                        # 过滤出所有图片文件
-                        if member.lower().endswith(tuple(possible_extensions)):
-                            # 排除 Mac 系统压缩可能产生的隐藏文件干扰
-                            if "__MACOSX" in member:
-                                continue
-                                
-                            filename = Path(member).name
-                            is_result_img = filename.rsplit('.', 1)[0].endswith('_result')
-
-                            # 根据参数决定是否跳过 result 图
-                            if is_result_img and not extract_result_images:
-                                continue
-
-                            target_img_path = target_images_dir / filename
-                            
-                            # 增量判断：如果本地没有，则解压提取
-                            if target_img_path.exists():
-                                zip_skip_img_count += 1
-                            else:
-                                try:
-                                    with zf.open(member) as source_file:
-                                        with open(target_img_path, 'wb') as target_file:
-                                            shutil.copyfileobj(source_file, target_file)
-                                    zip_extracted_img_count += 1
-                                except Exception as e:
-                                    print(f"  [错误] 提取图片 {member} 失败: {e}")
-                    
-                    print(f"     IMG: 提取新图 {zip_extracted_img_count} 张，已存在跳过 {zip_skip_img_count} 张")
-                    total_extracted_imgs += zip_extracted_img_count
-
-        except zipfile.BadZipFile:
-            print(f"压缩包损坏，跳过: {zip_path.name}")
-        except Exception as e:
-            print(f"处理压缩包 {zip_path.name} 时出错: {e}")
-
-    print(f"\n全部处理完成！")
-    print(f"总计新增 CSV 记录: {total_added_rows} 条")
-    if merge_images:
-        print(f"总计提取新图片: {total_extracted_imgs} 张")
+    print(f"\n完成！处理源：{total_sources}, CSV: +{total_csv_added}, IMG: +{total_imgs_extracted}")
 
 
 if __name__ == '__main__':
-    merge_imgs = False # 设置为 True 则提取阵容图
-    extract_res_imgs = False  # 设置为 True 则同时提取带有 _result 的结果图
+    merge_imgs = False
+    extract_res_imgs = False
     process_archives(merge_images=merge_imgs, extract_result_images=extract_res_imgs)
