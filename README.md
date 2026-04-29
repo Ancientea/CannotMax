@@ -2,6 +2,12 @@
 
 这是一个基于深度学习的明日方舟游戏辅助工具，用于自动识别游戏画面中的单位并预测战斗结果。本项目集成了高精度的图像识别、战斗模拟以及自动化数据处理流。
 
+## 系统要求
+
+- **操作系统**：Windows 10/11
+- **Python 版本**：>= 3.10
+- **显卡**（可选）：NVIDIA GPU（支持 CUDA 12.8/13.0）或纯 CPU 模式
+
 ## 功能特点
 
 - **多模式画面捕获**：
@@ -13,23 +19,53 @@
 - **全自动化流程**：支持自动数据收集、自动清洗、模型训练及验证。
 - **历史匹配**：支持与历史战斗记录进行相似度匹配。
 
-## 手动安装步骤
+## 安装指南
+
+### 前置要求
 
 1. **安装 uv**：
    参考 [uv 官方文档](https://docs.astral.sh/uv/getting-started/installation) 进行安装。
 
-2. **配置环境**：
    ```bash
-   # 安装基础依赖
-   uv sync
-   # (可选) 安装 CUDA 12.8 支持以加速训练和预测
-   uv sync --extra cu128
+   # Windows PowerShell
+   powershell -ExecutionPolicy BypassUser -c "irm https://astral.sh/uv/install.ps1 | iex"
    ```
 
-3. **运行主程序**：
+2. **克隆项目**：
    ```bash
-   uv run main.py
+   git clone https://github.com/Ancientea/CannotMax.git
+   cd CannotMax
    ```
+
+### 环境配置
+
+根据你的硬件选择对应的安装方式：
+
+#### 方案 1：CPU 模式（最兼容）
+```bash
+uv sync --extra cpu
+```
+
+#### 方案 2：CUDA 12.8 加速（推荐）
+```bash
+uv sync --extra cu128
+```
+**要求**：NVIDIA 显卡 + CUDA 12.8 工具包（可选，PyTorch 会自动包含运行时）
+
+#### 方案 3：CUDA 13.0 加速（最新）
+```bash
+uv sync --extra cu130
+```
+**要求**：NVIDIA 显卡 + CUDA 13.0 工具包（可选）
+
+#### 方案 4：带数据上传支持
+```bash
+# CUDA 12.8 + WandB
+uv sync --extra cu128 --extra wandb
+
+# CUDA 13.0 + SwanLab
+uv sync --extra cu130 --extra swanlab
+```
 
 ## 使用指南
 
@@ -62,7 +98,11 @@
 - 建议在训练模型前收集足够的数据
 1. **启动训练**：
    ```bash
-   uv run train.py
+   uv run train_old.py
+   ```
+   Train with log
+   ```bash
+   uv run train.py 
    ```
 
 ## 开发说明

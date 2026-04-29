@@ -4,6 +4,7 @@
 venv/
 .venv/
 __pycache__/
+.mypy_cache/
 
 # ===========================
 # 2. Pixi 包管理环境
@@ -30,6 +31,8 @@ __pycache__/
 # ===========================
 # 模型文件
 models/Local_models/*
+models/lightning_logs/*
+models/*.png
 *.pth
 *.onnx
 *.onnx.data
@@ -60,6 +63,7 @@ screenshot.png
 # 日志
 log.txt
 *.log
+outputs
 
 # 临时目录
 tmp
