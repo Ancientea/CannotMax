@@ -52,6 +52,11 @@ class AdbConnector(BaseConnector):
     def screen_height(self) -> int:
         return self._screen_height
 
+    @property
+    def is_maa_available(self) -> bool:
+        """Check if MAA Framework is available and initialized."""
+        return self._maa_available
+
     def connect(self) -> bool:
         """Connect to ADB device and initialize MAA if available."""
         try:

@@ -56,6 +56,11 @@ class PcConnector(BaseConnector):
     def screen_height(self) -> int:
         return self._screen_height
 
+    @property
+    def is_maa_available(self) -> bool:
+        """Check if MAA Framework is available and initialized."""
+        return self._maa_available
+
     def connect(self) -> bool:
         """Connect to PC window and initialize MAA or WinRT."""
         hwnd = win32gui.FindWindow(None, self._window_name)
