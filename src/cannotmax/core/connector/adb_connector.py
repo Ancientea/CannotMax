@@ -57,6 +57,11 @@ class AdbConnector(BaseConnector):
         """Check if MAA Framework is available and initialized."""
         return self._maa_available
 
+    @property
+    def device_serial(self) -> str:
+        """Get the device serial number."""
+        return self._device_serial
+
     def connect(self) -> bool:
         """Connect to ADB device and initialize MAA if available."""
         try:
