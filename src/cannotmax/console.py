@@ -60,8 +60,17 @@ def main():
     args = parser.parse_args()
     
     if args.command is None:
-        parser.print_help()
-        sys.exit(1)
+        # 无命令时启动 GUI
+        import sys as _sys
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtCore import Qt
+        
+        app = QApplication(_sys.argv)
+        app.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
+        from .gui.main_window import MainWindow
+        window = MainWindow()
+        window.show()
+        _sys.exit(app.exec())
     
     args.func(args)
 
