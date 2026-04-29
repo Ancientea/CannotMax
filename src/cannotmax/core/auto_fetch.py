@@ -215,8 +215,13 @@ class AutoFetch:
             region_id = res["region_id"]
             if "error" not in res:
                 matched_id = res["matched_id"]
-                number = res["number"]
+                number_str = res["number"]
                 if matched_id != 0:
+                    # 转换为 int，确保是数字
+                    try:
+                        number = int(number_str) if number_str.isdigit() else 0
+                    except (ValueError, AttributeError):
+                        number = 0
                     if region_id < 3:  # 左侧怪物
                         left_monster_data[matched_id - 1] = number
                     else:  # 右侧怪物
@@ -442,7 +447,11 @@ class AutoFetch:
             if "error" not in res:
                 matched_id = res["matched_id"]
                 if matched_id != 0:
-                    number = res.get("number", 1)
+                    number_str = res.get("number", "1")
+                    try:
+                        number = int(number_str) if number_str.isdigit() else 1
+                    except (ValueError, AttributeError):
+                        number = 1
                     processed_monsters.append(f"{matched_id}x{number}")
         # 生成唯一的文件名（使用日期时间字符串）
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -509,9 +518,14 @@ class AutoFetch:
             if "error" not in res:
                 region_id = res["region_id"]
                 matched_id = res["matched_id"]
-                number = res["number"]
+                number_str = res["number"]
                 if matched_id == 0:
                     continue
+                # 转换为 int，确保是数字
+                try:
+                    number = int(number_str) if number_str.isdigit() else 0
+                except (ValueError, AttributeError):
+                    number = 0
                 if region_id < 3:
                     left_counts[matched_id - 1] = number
                 else:
@@ -718,6 +732,9 @@ class AutoFetch:
                 # 活动主界面状态，点击加入赛事跳转到选择模式界面（未选择）状态
                 self.connector.click(relative_points[0])
                 self._log(logging.INFO, "加入赛事")
+                # 等待界面切换
+                if not self._sleep_with_check(1):
+                    return
             case GameState.MODE_SELECTION_UNSELECTED:
                 # 选择模式界面（未选择），点击模式跳转到已选择
                 if self.game_mode == "30人":
