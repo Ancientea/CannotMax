@@ -28,18 +28,32 @@ logger = logging.getLogger(__name__)
 
 def get_device(prefer_gpu=True):
     """
-    prefer_gpu (bool): 是否优先尝试使用GPU
+    prefer_gpu (bool): 是否优先尝试使用 GPU
     """
     if prefer_gpu:
+        # Try CUDA first
         if torch.cuda.is_available():
-            logger.info("Use torch with cuda")
-            return torch.device("cuda")
-        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            try:
+                # Test CUDA initialization by creating a simple tensor
+                torch.cuda.mem_get_info()
+                logger.info(f"Use torch with cuda (GPU: {torch.cuda.get_device_name(0)})")
+                return torch.device("cuda")
+            except RuntimeError as e:
+                if "CUBLAS" in str(e) or "CUDA" in str(e):
+                    logger.warning(f"CUDA initialization failed: {e}, falling back to CPU")
+                else:
+                    raise
+        
+        # Try MPS (Apple Silicon)
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             logger.info("Use torch with mps")
-            return torch.device("mps")  # Apple Silicon GPU
-        elif hasattr(torch, "xpu") and torch.xpu.is_available():  # Intel GPU
+            return torch.device("mps")
+        
+        # Try XPU (Intel GPU)
+        if hasattr(torch, "xpu") and torch.xpu.is_available():
             logger.info("Use torch with xpu")
             return torch.device("xpu")
+    
     logger.info("Use torch with cpu")
     return torch.device("cpu")
 
@@ -49,12 +63,16 @@ class CannotModel:
         self.device = get_device()
         self.is_model_loaded = False
         self.model_path = self._resolve_model_path(model_path)
+        self.model = None
+        
         try:
             self.load_model()  # 初始化时加载模型
             self.is_model_loaded = True
         except Exception as e:
             logger.error(f"模型加载失败：{e}")
-            self.model = None
+            # 允许程序继续运行，但预测会失败
+            import sys
+            sys.exit(1)  # 模型加载失败无法继续，退出
 
     def _resolve_model_path(self, path: Path) -> Optional[Path]:
         """
@@ -122,6 +140,7 @@ class CannotModel:
                 )
 
             try:
+                # Try loading to target device
                 model = torch.load(
                     self.model_path,
                     map_location=self.device,
@@ -129,11 +148,20 @@ class CannotModel:
                 )
             except TypeError:  # 如果旧版本 PyTorch 不认识 weights_only
                 model = torch.load(self.model_path, map_location=self.device)
+            except RuntimeError as e:
+                # CUDA error: try CPU
+                if "CUDA" in str(e) or "CUBLAS" in str(e):
+                    logger.warning(f"CUDA 加载失败：{e}，尝试使用 CPU")
+                    self.device = torch.device("cpu")
+                    model = torch.load(self.model_path, map_location="cpu")
+                else:
+                    raise
+            
             model.eval()
             self.model = model.to(self.device)
 
         except Exception as e:
-            error_msg = f"模型加载失败: {str(e)}"
+            error_msg = f"模型加载失败：{str(e)}"
             if "missing keys" in str(e):
                 error_msg += "\n可能是模型结构不匹配，请重新训练模型"
             raise e  # 无法继续运行，退出程序
