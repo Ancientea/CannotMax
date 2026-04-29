@@ -1,3 +1,12 @@
+"""Battlefield terrain recognition using ONNX/PyTorch.
+
+Recognizes battlefield terrain features (wind, terrain type, etc.) from screenshots
+using YOLO-based detection. Maps detected elements to feature indices.
+
+Usage:
+    recognizer = FieldRecognizer(onnx_path, class_map_path)
+    field_data = recognizer.recognize_field(screenshot)
+"""
 import json
 import re
 import logging

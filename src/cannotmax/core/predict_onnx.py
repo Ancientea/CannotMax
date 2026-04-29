@@ -1,3 +1,12 @@
+"""ONNX runtime prediction for battle outcome.
+
+Fallback inference engine when PyTorch is unavailable. Loads ONNX models
+exported from UnitAwareTransformer and provides identical prediction API.
+
+Usage:
+    predictor = ONNXPredictor(model_path)
+    prob = predictor.get_prediction(left_counts, right_counts)
+"""
 from pathlib import Path
 
 import onnxruntime as ort

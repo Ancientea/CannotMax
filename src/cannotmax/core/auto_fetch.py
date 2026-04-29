@@ -1,3 +1,14 @@
+"""Auto-fetch data collection module.
+
+Handles automated battle data collection via state machine:
+- MAIN_MENU → MODE_SELECTION → PRE_BATTLE → IN_BATTLE → SETTLEMENT → FINISHED
+- Monster recognition and prediction during battles
+- Data saving with image timestamps
+
+Usage:
+    fetcher = AutoFetch(connector, game_mode, is_invest, callbacks...)
+    fetcher.start_auto_fetch()
+"""
 import os
 
 # 设置 OpenCV 日志级别为 ERROR，减少 libpng 警告

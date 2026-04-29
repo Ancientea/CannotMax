@@ -1,7 +1,20 @@
+"""Monster recognition via template matching and OCR.
+
+Identifies monsters in 6 battlefield regions using:
+- Template matching against reference images (load_ref_images)
+- OCR for monster count extraction (RapidOCR)
+- Debug mode with intermediate image saving
+
+Regions: 3 left + 3 right, each containing monster type + count
+
+Usage:
+    recognizer = RecognizeMonster()
+    results = recognizer.process_regions(screenshot)
+    # results: [{region_id, matched_id, number, confidence}, ...]
+"""
 import logging
 import cv2
 import numpy as np
-from pathlib import Path
 from PIL import ImageGrab
 from rapidocr import RapidOCR, EngineType
 

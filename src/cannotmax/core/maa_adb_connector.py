@@ -1,3 +1,20 @@
+"""MAA Framework integration for multi-platform device control.
+
+Wraps MAA Framework to provide unified interface for:
+- ADB connections (emulators: LDPlayer, MuMu, BlueStacks, Nox)
+- Screen capture (screenshot)
+- Input simulation (click, tap, drag)
+- Image recognition and OCR
+- Emulator extras (device rotation, etc.)
+
+Connection types: adb, ldplayer, mumu, mumu12, bluestacks, nox
+Input methods: adb_shell, minitouch_adb_key, maatouch (default), emulator_extras
+
+Usage:
+    connector = MaaAdbConnector(serial="127.0.0.1:5555")
+    screenshot = connector.capture_screenshot()
+    connector.click((x, y))
+"""
 import logging
 import subprocess
 from dataclasses import dataclass, field

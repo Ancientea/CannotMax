@@ -1,3 +1,16 @@
+"""PyTorch battle outcome prediction.
+
+Primary inference engine using UnitAwareTransformer. Supports:
+- GPU acceleration (CUDA) when available
+- Monster count features (60 dimensions)
+- Terrain features (optional, 6 dimensions)
+- Model loading from checkpoint with auto-device placement
+
+Usage:
+    predictor = PyTorchPredictor()
+    predictor.load_model("models/best_model.pth")
+    prob = predictor.get_prediction(left_counts, right_counts)
+"""
 import re
 from datetime import datetime
 from functools import cache
