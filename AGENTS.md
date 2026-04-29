@@ -13,6 +13,14 @@ uv run cannotmax
 # or
 python -m src.cannotmax
 
+# CLI commands
+uv run cannotmax train          # Train model
+uv run cannotmax eval           # Evaluate model
+uv run cannotmax convert -i model.pth -o model.onnx  # Convert to ONNX
+
+# Run training directly
+python -m src.cannotmax.training
+
 # Run simulator (standalone)
 uv run -m src.cannotmax.simulator.sim_mc
 ```
@@ -37,62 +45,85 @@ uv run -m src.cannotmax.simulator.sim_mc
 src/cannotmax/
 ├── __init__.py          # Package root
 ├── __main__.py          # Entry point for python -m src.cannotmax
-├── cli.py               # Entry point for uv run cannotmax
+├── console.py           # CLI entry point (uv run cannotmax)
 ├── config/              # Configuration layer
 │   ├── settings.py
 │   └── constants.py
 ├── core/                # Core functionality
-│   ├── recognize.py     # Monster recognition
+│   ├── recognize.py     # Monster recognition (template matching + OCR)
 │   ├── predict.py       # PyTorch inference
 │   ├── predict_onnx.py  # ONNX fallback
 │   ├── auto_fetch.py    # Auto-fetch loop
-│   └── maa_adb_connector.py
+│   ├── maa_adb_connector.py  # MAA Framework ADB connection
+│   └── winrt_connector.py     # WinRT screen capture (renamed from winrt_capture.py)
 ├── gui/                 # PyQt6 GUI
 │   ├── main_window.py
 │   └── input_panel_ui.py
+├── models/              # Neural network models (Phase 9)
+│   ├── __init__.py
+│   ├── dataset.py       # ArknightsDataset, TOTAL_FEATURE_COUNT
+│   └── transformer.py   # UnitAwareTransformer
+├── training/            # Training module (Phase 9)
+│   ├── __init__.py
+│   ├── __main__.py      # python -m entry point
+│   ├── trainer.py       # Training loop
+│   └── evaluator.py     # Validation logic
+├── pipelines/           # Data processing pipelines (Phase 9)
+│   ├── merge_data.py
+│   ├── data_cleaning.py
+│   └── data_package.py
+├── cli/                 # CLI utilities (Phase 9)
+│   ├── convert_model.py # PyTorch → ONNX conversion
+│   └── HumanDataCheck.py
+├── tools/               # Utilities
+│   ├── statistics.py
+│   └── battlefield_composite/  # Image processing
 ├── simulator/           # Battlefield simulation
 │   ├── battle_field.py
 │   ├── main_sim.py      # PyQt6 simulator GUI
 │   └── sim_mc.py        # Tkinter multi-core simulator
-├── tools/               # Data processing utilities
 └── legacy/              # Legacy fallback (loadData.py)
 ```
 
+### Entry Points
+1. **GUI**: `uv run cannotmax` → `console.py` → `gui/main_window.py`
+2. **CLI**: `uv run cannotmax train` → `console.py` → `training/trainer.py`
+3. **Module**: `python -m src.cannotmax.training` → `training/__main__.py`
+
 ### Capture Modes
 1. **ADB**: MAA Framework ADB connection (`maa_adb_connector.py`) - emulators (LDPlayer, MuMu, BlueStacks)
-2. **PC**: Official Arknights PC client (`loadData.PcConnector`)
-3. **WIN**: WinRT window capture (`winrt_capture.py`) - requires `windows-capture` library
+2. **PC**: Official Arknights PC client (`legacy/loadData.PcConnector`)
+3. **WIN**: WinRT window capture (`core/winrt_connector.py`) - requires `windows-capture` library
 
 ### Key Files
 - `src/cannotmax/gui/main_window.py`: Main application window (PyQt6)
 - `src/cannotmax/core/recognize.py`: Monster recognition (template matching + OCR)
 - `src/cannotmax/core/predict.py`: Model inference (PyTorch/ONNX fallback)
+- `src/cannotmax/models/transformer.py`: UnitAwareTransformer model definition
+- `src/cannotmax/models/dataset.py`: ArknightsDataset data loading
+- `src/cannotmax/training/trainer.py`: Training loop and utilities
 - `src/cannotmax/simulator/sim_mc.py`: Tkinter GUI simulator
 - `src/cannotmax/simulator/main_sim.py`: PyQt6 simulator GUI
 
 ### Model Loading
 - Tries `predict.py` (PyTorch) first, falls back to `predict_onnx.py`
-- Model structure changes require retraining (check for `size mismatch` errors)
+- Model structure: `UnitAwareTransformer(num_units=MONSTER_COUNT+FIELD_FEATURE_COUNT)`
+- **Critical**: `UnitAwareTransformer` must be in `__main__` namespace before `torch.load()`
 
 ## MAA Framework Integration
-
-### Win32Controller (Windows Capture Alternative)
-- MAA Framework provides `Win32Controller` for Windows window capture
-- **Goal**: Replace `winrt_capture.py` + `windows-capture` dependency
-- **Current State**: `winrt_capture.py` still used; migration requires modifying `recognize.py` lines 61-91
-- **Docs**: https://maafw.com/docs/1.1-QuickStarted
 
 ### ADB Connection
 - `AdbConnectorAdapter` wraps MAA Framework with legacy fallback
 - Connection types: `adb`, `ldplayer`, `mumu`, `mumu12`, `bluestacks`, `nox`
 - Input methods: `adb_shell`, `minitouch_adb_key`, `maatouch` (default), `emulator_extras`
+- **Binaries**: Auto-loaded from `site-packages/maa/bin/` (no `3rdparty/maafw/` needed)
 
 ## Testing & Development
 
 ### Import Rules (Phase 9)
 - **Relative imports required**: All code inside `src/cannotmax/` must use relative imports (`from ..config`, `from .core`, etc.)
 - **No absolute imports**: Do not use `from src.cannotmax.config` inside the package
-- **Entry points only**: `__main__.py` and `cli.py` may use absolute imports
+- **Entry points only**: `__main__.py` and `console.py` may use absolute imports
 
 ### Resolution Requirements
 - Target: 1920×1080 (16:9)
@@ -108,7 +139,7 @@ src/cannotmax/
 ## Git & Remote
 - Remote: `https://github.com/HDAnzz/CannotMax`
 - Branch workflow: Standard git flow
-- Current branch: `refactor` (Phase 9: Import standardization)
+- Current branch: `refactor` (Phase 9: Module separation)
 
 ## Skills
 
@@ -128,31 +159,31 @@ src/cannotmax/
 
 ## Common Agent Pitfalls
 
-1. **Don't delete `winrt_capture.py`**: Imported by `recognize.py` (line 10) and `main.py` (line 28)
+1. **Don't delete `winrt_connector.py`**: Imported by `recognize.py` and `gui/main_window.py` (was `winrt_capture.py`)
 2. **Don't assume cu128 works**: Network issues common; provide CPU fallback
-3. **MAA Framework binary**: Located in `3rdparty/maafw/` (moved from root)
+3. **MAA binaries**: Auto-loaded from `maa` package; `3rdparty/maafw/` deleted
 4. **OpenCV conflict**: `opencv-python` and `opencv-python-headless` are incompatible
 5. **PyQt6 threads**: `ADBConnectorThread` runs in separate `QThread` to avoid UI blocking
 6. **Relative imports**: Use `from ..config` not `from src.cannotmax.config` inside package
-7. **Direct script execution**: `sim_mc.py` and `main_sim.py` need `__package__` handling for direct execution
+7. **Model loading**: `UnitAwareTransformer` must be in `__main__` namespace before `torch.load()`
+8. **Data paths**: `data/arknights.csv` (root-level), `data/compressed/*.zip` (archive)
+9. **Field features**: `FIELD_FEATURE_COUNT = 0` (dataset has no terrain features)
 
 ## Data Flow
 1. Screenshot → `recognize.py` extracts 6 monster zones + OCR
 2. Results → `main_window.py` updates input panel
-3. Prediction → `CannotModel` (PyTorch/ONNX) with terrain features
+3. Prediction → `CannotModel` (PyTorch/ONNX) with `UnitAwareTransformer`
 4. Auto-fetch: `auto_fetch.py` loops through battle → screenshot → recognition → prediction
 
-## Current Phase: Phase 9 - Import Standardization
+## Current Phase: Phase 9 - Module Separation
 
-**Goal**: Convert all absolute imports (`from src.cannotmax...`) to relative imports (`from ..xxx`)
+**Goal**: Separate model definitions, training logic, and data pipelines into distinct modules
 
-**Files to fix**:
-- `core/auto_fetch.py`
-- `core/predict.py`, `core/predict_onnx.py`
-- `core/recognize.py`
-- `gui/main_window.py`
-- `gui/simular_history_match_ui.py`
-- `simulator/main_sim.py`, `simulator/sim_mc.py`, `simulator/unit.py`
-- `tools/package.py`
+**Completed**:
+- `models/`: `UnitAwareTransformer` (transformer.py), `ArknightsDataset` (dataset.py)
+- `training/`: Training loop (trainer.py), validation (evaluator.py)
+- `pipelines/`: Data processing scripts (merge_data.py, data_cleaning.py)
+- `cli/`: CLI utilities (convert_model.py)
+- `console.py`: Unified CLI entry point with argparse
 
-**Status**: In progress (see commit 7b29a37)
+**Status**: Complete (commits 5d1a4b2, 25bdde4, eb75c01, latest)
