@@ -20,7 +20,7 @@ from rapidocr import RapidOCR, EngineType
 
 from ..config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT
 from ..utils import find_monster_zone
-from .connector.winrt_connector import WinRTScreenCapture
+from .connector import PcConnector
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -88,28 +88,26 @@ class RecognizeMonster:
         self.drawing = False
         self.rapidocr_eng = get_rapidocr_engine()
         self.ref_images = load_ref_images()
-        self._winrt: WinRTScreenCapture | None = None
+        self._connector: PcConnector | None = None
 
-        # 初始化 WinRTScreenCapture
+        # 初始化 PcConnector
         if self.method == "WIN":
             if window_name is not None or monitor_index is not None:
                 try:
-                    logger.info("初始化 WinRT 屏幕捕获...")
-                    self._winrt = WinRTScreenCapture(
-                        window_name=window_name,
-                        monitor_index=monitor_index,
-                        capture_cursor=False,
-                        draw_border=None,
-                        minimum_update_interval_ms=16,  # ~60FPS，按需
-                    )
+                    logger.info("初始化 PcConnector...")
+                    self._connector = PcConnector(window_name=window_name)
+                    self._connector.connect()
 
                     # 重置 main_roi = 全图，方便用户重新框选
-                    frame = self._winrt.snapshot_once()
-                    h, w = frame.shape[:2]
-                    self.main_roi = [(0, 0), (w - 1, h - 1)]
+                    frame = self._connector.capture_screenshot()
+                    if frame is not None:
+                        h, w = frame.shape[:2]
+                        self.main_roi = [(0, 0), (w - 1, h - 1)]
+                    else:
+                        logger.warning("PcConnector capture failed, using default ROI")
                 except Exception as e:
-                    logger.exception("WinRT capture init failed: %s", e)
-                    self._winrt = None  # 将 _winrt 设置为 None，表示初始化失败
+                    logger.exception("PcConnector init failed: %s", e)
+                    self._connector = None  # 将 _connector 设置为 None，表示初始化失败
                     raise  # 重新抛出异常，以便上层捕获
             else:
                 logger.info("WIN 模式未指定窗口或显示器，将使用 PIL 作为回退")
@@ -129,11 +127,14 @@ class RecognizeMonster:
     def select_roi(self):
         """改进的交互式区域选择"""
         while True:
-            # 获取初始截图
-            if self.method == "WIN" and self._winrt is not None:
-                # 用当前 WinRT 帧作为底图（已经是BGR）
-                logger.info("使用 WinRT 帧作为底图")
-                img = self._winrt.snapshot_once()
+            # 获取初始图片
+            if self.method == "WIN" and self._connector is not None:
+                # 使用 PcConnector 截图（已经是 BGR）
+                logger.info("使用 PcConnector 截图作为底图")
+                img = self._connector.capture_screenshot()
+                if img is None:
+                    logger.error("PcConnector capture failed")
+                    continue
             elif self.method == "WIN" or self.method == "PIL":
                 # 兼容旧路径：整屏抓取
                 logger.info("使用 PIL 抓取全屏作为底图")
@@ -213,9 +214,9 @@ class RecognizeMonster:
         logger.info(f"获取区域 {self.main_roi} 的屏幕截图")
         (x1, y1), (x2, y2) = self.main_roi
         bbox = (x1, y1, x2, y2)
-        if self.method == "WIN" and self._winrt is not None:
-            logger.info("使用 WinRT 进行截图")
-            screenshot = self._winrt.snapshot_once(bbox=bbox)  # BGR
+        if self.method == "WIN" and self._connector is not None:
+            logger.info("使用 PcConnector 进行截图")
+            screenshot = self._connector.capture_screenshot(roi=bbox)  # BGR
         else:
             logger.info("使用 PIL 进行截图")
             screenshot = np.array(ImageGrab.grab(bbox=bbox))

@@ -122,14 +122,25 @@ class PcConnector(BaseConnector):
             logger.error(f"WinRT initialization failed: {e}")
             self._winrt_capture = None
 
-    def capture_screenshot(self) -> Optional[np.ndarray]:
-        """Capture screenshot using MAA (preferred) or WinRT."""
+    def capture_screenshot(self, roi: Optional[tuple] = None) -> Optional[np.ndarray]:
+        """Capture screenshot using MAA (preferred) or WinRT.
+        
+        Args:
+            roi: Optional ROI tuple ((x1, y1), (x2, y2)) to crop the screenshot
+        """
         if not self._is_connected:
             return None
 
         if self._maa_available and self._maa_controller:
-            return self._capture_maa()
-        return self._capture_winrt()
+            img = self._capture_maa()
+        else:
+            img = self._capture_winrt()
+        
+        if roi and img is not None:
+            (x1, y1), (x2, y2) = roi
+            img = img[y1:y2+1, x1:x2+1]
+        
+        return img
 
     def _capture_maa(self) -> Optional[np.ndarray]:
         """Capture using MAA FramePool."""
