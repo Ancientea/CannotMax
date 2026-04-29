@@ -24,18 +24,18 @@ import PyQt6.QtCore as QtCore
 
 from ..core import auto_fetch
 from ..core.connector import AdbConnector, PcConnector
-from ..core.maa_adb_connector import (
+from ..core.connector.maa_registry import (
     ConnectionTypeRegistry,
     InputMethodRegistry,
     MaaFrameworkDetector,
 )
+from ..core.connector.winrt_capture import WinRTScreenCapture
 from . import DarkModeStyleFix
 from ..analytics import similar_history_match
 from ..core import recognize
 from ..config import MONSTER_COUNT
 from ..analytics.specialmonster import SpecialMonsterHandler
 from ..pipelines import data_package
-from ..core.connector import winrt_connector
 from ..config import FIELD_FEATURE_COUNT, MONSTER_DATA
 from . import HistoryMatchUI, InputPanelUI
 
@@ -659,7 +659,7 @@ class ArknightsApp(QMainWindow):
                 cv2.destroyAllWindows()
             except Exception:
                 pass
-            dlg = winrt_connector.WindowPickerDialog(self)
+            dlg = WinRTScreenCapture.WindowPickerDialog(self)
             if dlg.exec():
                 sel = dlg.get_selection()
                 logger.info(f"选择了截屏源: {sel}")
