@@ -32,7 +32,7 @@ from ..core.maa_adb_connector import (
     MaaFrameworkDetector,
 )
 from . import DarkModeStyleFix
-from ..data import similar_history_match
+from ..analytics import similar_history_match
 from ..core import recognize
 from ..config import MONSTER_COUNT
 from ..data.specialmonster import SpecialMonsterHandler
