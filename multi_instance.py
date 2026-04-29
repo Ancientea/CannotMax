@@ -121,12 +121,17 @@ class DeviceInstance:
         self.status = "已停止"
         self.auto_fetch_thread = None  # 保存线程引用
         self.stop_event = threading.Event()  # 使用Event对象进行线程间通信，更可靠
+        self.start_time = None  # 实例启动时间戳
 
     def start(self, game_mode, is_invest):
         try:
             logger.info(f"[{self.serial}] 开始启动实例，游戏模式: {game_mode}, 自动投资: {is_invest}")
             self.stop_event.clear()
             self.status = "连接中"
+            
+            # 记录实例启动时间戳
+            self.start_time = time.time()
+            
             self.connector.connect()
             if not self.connector.is_connected:
                 self.status = "连接失败"
@@ -136,7 +141,7 @@ class DeviceInstance:
             self.login_manager = LoginManager(self.connector)
             logger.info(f"[{self.serial}] 尝试首次启动自动登录")
             self.status = "登录中"
-            login_success = self.login_manager.auto_login(first_start=True, stop_callback=lambda: not self.stop_event.is_set())
+            login_success = self.login_manager.auto_login_with_restart(first_start=True, stop_callback=lambda: not self.stop_event.is_set())
             
             # 检查是否在登录过程中用户点击了停止
             if self.stop_event.is_set():
@@ -168,6 +173,7 @@ class DeviceInstance:
                 recognizer=get_recognizer(),
                 cannot_model=get_cannot_model(),
                 field_recognizer=get_field_recognizer() if FIELD_FEATURE_COUNT > 0 else None,
+                start_timestamp=self.start_time,  # 传递实例启动时间戳
             )
             logger.info(f"[{self.serial}] 初始化 AutoFetch 成功")
             self.auto_fetch.start_auto_fetch()
@@ -394,7 +400,7 @@ class MultiInstanceManager(QMainWindow):
                 t = threading.Thread(target=start_single_instance, args=(port,), daemon=True)
                 t.start()
                 threads.append(t)
-                time.sleep(2)
+                time.sleep(3)
             for t in threads:
                 t.join()
         

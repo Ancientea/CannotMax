@@ -47,6 +47,7 @@ class AutoFetch:
         recognizer=None,
         cannot_model=None,
         field_recognizer=None,
+        start_timestamp=None,  
     ):
         self.connector = connector
         self.game_mode = game_mode  # 游戏模式（30人或自娱自乐）
@@ -65,7 +66,7 @@ class AutoFetch:
         self.monster_image = None  # 当前轮次怪物图片
         self.auto_fetch_running = False  # 自动获取数据的状态
         self.auto_fetch_thread = None  # 线程引用
-        self.start_time = time.time()  # 记录开始时间
+        self.start_time = start_timestamp if start_timestamp is not None else time.time()  # 使用预先确定的时间戳
         self.training_duration = training_duration  # 训练时长
         self.data_folder = Path(f"data")  # 数据文件夹路径
         self.image_buffer = deque(maxlen=5)  # 图片缓存队列，设置队列长短来保存结算前的图片
@@ -378,22 +379,7 @@ class AutoFetch:
         # 返回左侧是否比右侧亮
         return brightness_diff > 0
 
-    def cut_recognize_image(self, screenshot):
-        """
-        裁切复核图片
-        """
-        from recognize import RecognizeMonster
-        roi_rel = RecognizeMonster.ROI_RELATIVE
-        x1 = int(roi_rel[0][0] * self.connector.screen_width)
-        y1 = int(roi_rel[0][1] * self.connector.screen_height)
-        x2 = int(roi_rel[1][0] * self.connector.screen_width)
-        y2 = int(roi_rel[1][1] * self.connector.screen_height)
-        # 截取指定区域
-        roi = screenshot[y1:y2, x1:x2]
-        current_image = cv2.resize(
-            roi, (roi.shape[1] // 2, roi.shape[0] // 2)
-        )  # 保存缩放后的图片到内存
-        return current_image
+
 
     @staticmethod
     def get_image_name(recognize_results, battle_result=None):
@@ -612,7 +598,7 @@ class AutoFetch:
                 self._log(logging.ERROR, f"已达到最大重启次数 {self.login_manager.max_restart_count} 次，停止运行")
                 self.auto_fetch_running = False
                 self.stop_callback()
-            elif not self.login_manager.restart_and_login(lambda: self.auto_fetch_running):
+            elif not self.login_manager.restart_and_login(first_start=False, stop_callback=lambda: self.auto_fetch_running):
                 self._log(logging.WARNING, "本次重启登录失败，将在下次超时后重试")
             
             # 检测完毕后，无论结果如何，重置计时器，避免频繁阻塞
@@ -721,7 +707,7 @@ class AutoFetch:
             except Exception as e:
                 self._log(logging.ERROR, f"自动获取数据出错:\n{e}")
                 break
-            # time.sleep(2)
+
         else:
             self._log(logging.INFO, "auto_fetch_running is False, exiting loop")
             return
@@ -732,7 +718,7 @@ class AutoFetch:
     def start_auto_fetch(self):
         if not self.auto_fetch_running:
             self.auto_fetch_running = True
-            self.start_time = time.time()
+            # 使用初始化时设置的时间戳，不重新获取当前时间
             start_time = datetime.datetime.fromtimestamp(self.start_time).strftime(
                 r"%Y_%m_%d__%H_%M_%S"
             )
