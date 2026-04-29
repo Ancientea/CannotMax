@@ -73,46 +73,37 @@ class ArknightsApp:
         images = {}
         monster_csv_path = PROJECT_ROOT / 'monster_greenvine.csv'
 
-        id_to_name = {}
+        # 单次读取，建立 id -> {primary, alt} 映射
+        id_to_names = {}
         try:
             with open(monster_csv_path, "r", encoding="utf-8-sig") as f:
-                reader = csv.reader(f)
-                header = next(reader)
-                id_idx = header.index("id")
-                name_idx = header.index("原始名称")
+                reader = csv.DictReader(f)
                 for row in reader:
-                    id_to_name[int(row[id_idx])] = row[name_idx]
+                    rid = int(row["id"])
+                    id_to_names[rid] = {
+                        "primary": row["原始名称"],
+                        "alt": row["名称"]
+                    }
         except Exception as e:
             print(f"Failed to read monster CSV: {e}")
 
-        for i in range(1, self.MONSTER_COUNT + 1):  # 使用动态 MONSTER_COUNT
-            name = id_to_name.get(i, str(i))
-            image_path = IMAGES_DIR / f"{name}.png"
-            if image_path.exists():
-                image = Image.open(image_path).resize((80, 80))
-                images[str(i)] = ImageTk.PhotoImage(image)
-            else:
-                # 尝试用“名称”列备用
-                try:
-                    with open(monster_csv_path, "r", encoding="utf-8-sig") as f:
-                        reader = csv.reader(f)
-                        header = next(reader)
-                        id_idx = header.index("id")
-                        alt_name_idx = header.index("名称")
-                        for row in reader:
-                            if int(row[id_idx]) == i:
-                                alt_name = row[alt_name_idx]
-                                alt_path = IMAGES_DIR / f"{alt_name}.png"
-                                if alt_path.exists():
-                                    image = Image.open(alt_path).resize((80, 80))
-                                    images[str(i)] = ImageTk.PhotoImage(image)
-                                    break
-                except Exception:
-                    pass
-
-                if str(i) not in images or images[str(i)] is None:
-                    print(f"Image for {name} not found.")
-                    images[str(i)] = None  # 占位符
+        for i in range(1, self.MONSTER_COUNT + 1):
+            names = id_to_names.get(i, {"primary": str(i), "alt": None})
+            
+            # 依次尝试主名称和备用名称
+            image = None
+            for name in [names["primary"], names["alt"]]:
+                if name is None:
+                    break
+                image_path = IMAGES_DIR / f"{name}.png"
+                if image_path.exists():
+                    image = ImageTk.PhotoImage(Image.open(image_path).resize((80, 80)))
+                    break
+            
+            images[str(i)] = image
+            if image is None:
+                print(f"Image for {i} not found.")
+        
         return images
 
     def show_row(self, row_index):
