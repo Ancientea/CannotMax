@@ -98,7 +98,7 @@ class CannotModel:
         """初始化时加载模型"""
         import sys
         # 将 UnitAwareTransformer 导入到 __main__ 模块，解决 torch.load 反序列化问题
-        from ..train import UnitAwareTransformer
+        from ..models import UnitAwareTransformer
         sys.modules["__main__"].UnitAwareTransformer = UnitAwareTransformer
 
         try:

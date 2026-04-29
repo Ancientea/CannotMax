@@ -9,8 +9,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
+
 from .config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from .models import UnitAwareTransformer, ArknightsDataset, TOTAL_FEATURE_COUNT
 
 
 @cache
