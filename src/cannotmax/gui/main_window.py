@@ -63,7 +63,7 @@ except ImportError:
 
 class ADBConnectorThread(QThread):
     """
-    Worker thread to run loadData.AdbConnector.connect() without blocking the UI.
+    Worker thread to run AdbConnector.connect() without blocking the UI.
     """
 
     connect_finished = pyqtSignal()

@@ -12,7 +12,6 @@ from .recognize import RecognizeMonster
 from .predict import CannotModel
 from .auto_fetch import AutoFetch
 from .field_recognition import FieldRecognizer
-from .winrt_connector import WinRTScreenCapture, WindowPickerDialog
 from .connector import AdbConnector, PcConnector, BaseConnector
 
 __all__ = [
@@ -23,6 +22,4 @@ __all__ = [
     "PcConnector",
     "BaseConnector",
     "FieldRecognizer",
-    "WinRTScreenCapture",
-    "WindowPickerDialog",
 ]

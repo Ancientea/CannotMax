@@ -343,7 +343,7 @@ class MaaAdbConnector:
 
 class AdbConnectorAdapter:
     def __init__(self, adb_path: str = r".\3rdparty\platform-tools\adb.exe"):
-        from ..legacy import AdbConnector
+        from .connector import AdbConnector
         self._legacy_connector = AdbConnector()
         self._maa_connector: MaaAdbConnector | None = None
         self._use_maa: bool = False

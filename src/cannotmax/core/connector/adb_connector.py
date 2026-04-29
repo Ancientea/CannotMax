@@ -11,15 +11,13 @@ Usage:
     conn.click((0.5, 0.5))  # MAA click or ADB input tap
 """
 import subprocess
-import time
-import gzip
 import logging
 from pathlib import Path
 from typing import Optional
 import numpy as np
 import cv2
 
-from . import BaseConnector
+from .base_connector import BaseConnector
 
 logger = logging.getLogger(__name__)
 

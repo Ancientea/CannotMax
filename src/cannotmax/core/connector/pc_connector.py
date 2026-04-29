@@ -18,8 +18,8 @@ import win32gui
 import win32con
 import ctypes
 
-from .. import WinRTScreenCapture
-from . import BaseConnector
+from .base_connector import BaseConnector
+from .winrt_connector import WinRTScreenCapture
 
 logger = logging.getLogger(__name__)
 
