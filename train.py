@@ -130,13 +130,13 @@ def _plot_from_dict(metrics: dict, save_path: Path, output_name: str | None = No
     print(f"学习曲线已保存: {output_path}")
 
 
-def _flatten_params(data, prefix: str = "") -> dict[str, object]:
+def _flatten_params(data, prefix: str = "", sep: str = ".") -> dict[str, object]:
     flattened: dict[str, object] = {}
 
     if isinstance(data, Mapping):
         for key, value in data.items():
-            full_key = f"{prefix}.{key}" if prefix else str(key)
-            flattened.update(_flatten_params(value, full_key))
+            full_key = f"{prefix}{sep}{key}" if prefix else str(key)
+            flattened.update(_flatten_params(value, full_key, sep=sep))
     else:
         flattened[prefix] = data
 
@@ -149,17 +149,27 @@ def log_config_to_loggers(logger_instance, cfg: DictConfig):
         return
 
     config_payload: dict[str, object] = {}
+    section_display_names = {
+        "model": "MODEL_YAML",
+        "data": "DATA_YAML",
+        "runtime": "RUNTIME_YAML",
+        "trainer": "TRAINER_YAML",
+    }
+
     for section_name in ("model", "data", "runtime", "trainer"):
         section_cfg = cfg.get(section_name)
         if section_cfg is None:
             continue
 
+        group_name = section_display_names.get(section_name, section_name.upper())
         section_container = OmegaConf.to_container(section_cfg, resolve=True)
         if isinstance(section_container, Mapping):
-            section_payload = _flatten_params(section_container, section_name)
+            section_payload = _flatten_params(section_container, group_name, sep="/")
             config_payload.update(section_payload)
         else:
-            config_payload[section_name] = section_container
+            config_payload[group_name] = section_container
+
+        config_payload[f"{group_name}/__source__"] = f"conf/{section_name}/{section_name}.yaml"
 
     if not config_payload:
         return
