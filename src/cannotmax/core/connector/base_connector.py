@@ -33,6 +33,18 @@ class BaseConnector(ABC):
         pass
     
     @abstractmethod
+    def ensure_connected(self, max_retries: int = 3) -> bool:
+        """Ensure connection is active. Auto-connect if needed with retry.
+        
+        Args:
+            max_retries: Maximum connection attempts before giving up (default: 3)
+        
+        Returns:
+            bool: True if connected after call, False if all retries failed.
+        """
+        pass
+    
+    @abstractmethod
     def capture_screenshot(self) -> Optional[np.ndarray]:
         """
         Capture screenshot as BGR numpy array.
@@ -65,4 +77,14 @@ class BaseConnector(ABC):
     @abstractmethod
     def disconnect(self) -> None:
         """Disconnect and cleanup resources."""
+        pass
+    
+    @abstractmethod
+    def _capture_internal(self) -> Optional[np.ndarray]:
+        """Actual capture logic, assumes connected."""
+        pass
+    
+    @abstractmethod
+    def _click_internal(self, point: tuple[float, float]) -> None:
+        """Actual click logic, assumes connected."""
         pass
