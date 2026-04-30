@@ -1,6 +1,9 @@
 # 全局地形特征数量常量
 FIELD_FEATURE_COUNT: int = 0
 
+# Debug mode: save intermediate images and verbose logging
+DEBUG_MODE: bool = True
+
 # 单位配置（从 constants.py 迁移）
 UNIT_CONFIG = {
     1: {
