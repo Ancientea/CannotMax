@@ -91,7 +91,7 @@ class ArknightsApp(QMainWindow):
 
         # Single connector managed by factory
         self.connector_factory = ConnectorFactory()
-        self._mode_switch_lock = threading.Lock()  # Mutex for mode switching
+        self._mode_switch_mutex = QtCore.QMutex()  # Qt thread-safe mutex
 
         self.auto_fetch_running = False
         self.is_invest = False
@@ -152,29 +152,31 @@ class ArknightsApp(QMainWindow):
         Args:
             mode: Capture mode (ADB/PC/WIN)
         """
-        with self._mode_switch_lock:
-            self.current_capture_mode = mode
-            logger.info(f"Switching to mode: {mode}")
-            
-            # Update UI controls visibility
-            is_win_mode = mode == "WIN"
-            is_adb_mode = mode == "ADB"
-            
-            self.choose_window_button.setEnabled(is_win_mode)
-            self.reselect_button.setEnabled(is_win_mode)
-            self.serial_label.setEnabled(is_adb_mode)
-            self.serial_entry.setEnabled(is_adb_mode)
-            self.serial_button.setEnabled(is_adb_mode)
-            self.connection_type_label.setEnabled(is_adb_mode)
-            self.connection_type_combo.setEnabled(is_adb_mode)
-            self.input_method_label.setEnabled(is_adb_mode)
-            self.input_method_combo.setEnabled(is_adb_mode)
-            
-            # Get connector (reuse or create)
-            kwargs = self._get_connector_kwargs(mode)
-            new_connector = self.connector_factory.get_connector(mode, **kwargs)
-            
-            self.connector = new_connector  # Update current connector reference
+        # Qt mutex with RAII-style locking (auto-unlock on scope exit)
+        locker = QtCore.QMutexLocker(self._mode_switch_mutex)
+        
+        self.current_capture_mode = mode
+        logger.info(f"Switching to mode: {mode}")
+        
+        # Update UI controls visibility
+        is_win_mode = mode == "WIN"
+        is_adb_mode = mode == "ADB"
+        
+        self.choose_window_button.setEnabled(is_win_mode)
+        self.reselect_button.setEnabled(is_win_mode)
+        self.serial_label.setEnabled(is_adb_mode)
+        self.serial_entry.setEnabled(is_adb_mode)
+        self.serial_button.setEnabled(is_adb_mode)
+        self.connection_type_label.setEnabled(is_adb_mode)
+        self.connection_type_combo.setEnabled(is_adb_mode)
+        self.input_method_label.setEnabled(is_adb_mode)
+        self.input_method_combo.setEnabled(is_adb_mode)
+        
+        # Get connector (reuse or create)
+        kwargs = self._get_connector_kwargs(mode)
+        new_connector = self.connector_factory.get_connector(mode, **kwargs)
+        
+        self.connector = new_connector  # Update current connector reference
 
     def _on_connector_ready(self, mode: str):
         """Called when connector successfully connected."""
