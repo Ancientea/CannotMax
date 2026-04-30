@@ -213,12 +213,18 @@ class AdbConnector(BaseConnector):
         """Get list of connected ADB devices."""
         try:
             cmd = f"{self._adb_path} devices"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=2)
             devices = []
             for line in result.stdout.split("\n"):
                 if "\tdevice" in line:
                     devices.append(line.split("\t")[0])
             return devices
+        except subprocess.TimeoutExpired:
+            logger.warning("Get device list timed out")
+            return []
+        except FileNotFoundError:
+            logger.warning("ADB executable not found")
+            return []
         except Exception as e:
             logger.exception(f"Get device list failed: {e}")
             return []

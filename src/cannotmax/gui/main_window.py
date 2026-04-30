@@ -92,6 +92,15 @@ class ArknightsApp(QMainWindow):
         # Single connector managed by factory
         self.connector_factory = ConnectorFactory()
         self.connector = None  # Current active connector
+        
+        # Pre-instantiate AdbConnector for device list (but don't set as active connector)
+        self._device_list_connector = None
+        try:
+            from ..core.connector.adb_connector import AdbConnector
+            self._device_list_connector = AdbConnector(adb_serial="127.0.0.1:5555")
+            logger.info("Pre-initialized AdbConnector for device detection")
+        except Exception as e:
+            logger.warning(f"Failed to pre-initialize AdbConnector: {e}")
 
         self.auto_fetch_running = False
         self.is_invest = False
@@ -594,7 +603,24 @@ class ArknightsApp(QMainWindow):
         self.update_monster_signal.connect(self.update_monster)
         self.update_prediction_signal.connect(self.update_prediction)
         self.update_statistics_signal.connect(self.update_statistics)
-        self.refresh_device_list()
+        
+        # Refresh device list in background to avoid blocking UI
+        from PyQt6.QtCore import QThread, pyqtSignal
+        class DeviceListThread(QThread):
+            finished = pyqtSignal(list)
+        def run_thread():
+            thread = DeviceListThread()
+            def run():
+                try:
+                    devices = self._device_list_connector.get_device_list() if self._device_list_connector else []
+                except:
+                    devices = []
+                self.finished.emit(devices)
+            thread.run = run
+            thread.finished.connect(lambda devs: self._populate_serial_combo(devs))
+            thread.start()
+        run_thread()
+        
         DarkModeStyleFix.apply(QApplication.instance())
 
     def toggle_input_panel(self):
@@ -1001,17 +1027,9 @@ class ArknightsApp(QMainWindow):
         )
         self.stats_label.setText(stats_text)
 
-    def refresh_device_list(self):
-        """刷新并更新模拟器序列号下拉列表"""
+    def _populate_serial_combo(self, devices):
+        """Populate serial entry with device list (called from thread)"""
         current_text = self.serial_entry.currentText()
-        if self.connector is None:
-            # Connector not initialized yet, show default
-            self.serial_entry.clear()
-            self.serial_entry.addItem("127.0.0.1:5555")
-            self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
-            return
-        
-        devices = self.connector.get_device_list()
         self.serial_entry.clear()
         if devices:
             self.serial_entry.addItems(devices)
@@ -1021,9 +1039,29 @@ class ArknightsApp(QMainWindow):
                 self.serial_entry.setCurrentIndex(0)
         else:
             self.serial_entry.addItem("127.0.0.1:5555")
-            self.serial_entry.setCurrentText(
-                current_text if current_text else "127.0.0.1:5555"
-            )
+            self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
+
+    def refresh_device_list(self):
+        """刷新并更新模拟器序列号下拉列表"""
+        current_text = self.serial_entry.currentText()
+        
+        # Try pre-initialized connector first, then active connector
+        connector = getattr(self, '_device_list_connector', None) or self.connector
+        
+        if connector is None:
+            # No connector available, show default
+            self.serial_entry.clear()
+            self.serial_entry.addItem("127.0.0.1:5555")
+            self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
+            return
+        
+        try:
+            devices = connector.get_device_list()
+        except Exception as e:
+            logger.warning(f"Failed to get device list: {e}")
+            devices = None
+        
+        self._populate_serial_combo(devices if devices else [])
 
     def on_connection_type_changed(self, index):
         type_id = self.connection_type_combo.currentData()
