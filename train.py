@@ -2,6 +2,7 @@ import time
 from functools import cache
 from datetime import datetime
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 import numpy as np
 import pandas as pd
@@ -16,6 +17,10 @@ from config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 from models.model import UnitAwareTransformer
 from models.muon import get_muon_lion_optimizers
 
+print(f"场地特征数量: {FIELD_FEATURE_COUNT}")
+
+# 计算总特征数量 (怪物特征 + 场地特征) * 2 + Result + ImgPath
+TOTAL_FEATURE_COUNT = (MONSTER_COUNT + FIELD_FEATURE_COUNT) * 2
 
 @cache
 def get_device(prefer_gpu=True):
@@ -34,11 +39,36 @@ def get_device(prefer_gpu=True):
 
 device = get_device()
 
-print(f"场地特征数量: {FIELD_FEATURE_COUNT}")
-
-# 计算总特征数量 (怪物特征 + 场地特征) * 2 + Result + ImgPath
-TOTAL_FEATURE_COUNT = (MONSTER_COUNT + FIELD_FEATURE_COUNT) * 2
-
+def plot_learning_curve(train_losses, val_losses, train_accs, val_accs, save_path):
+    """绘制学习曲线并保存为图片"""
+    epochs = range(1, len(train_losses) + 1)
+    
+    plt.figure(figsize=(12, 5))
+    
+    # 绘制 Loss 曲线
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, train_losses, 'b-', label='Train Loss')
+    plt.plot(epochs, val_losses, 'r-', label='Val Loss')
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid(True)
+    
+    # 绘制 Accuracy 曲线
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs, train_accs, 'b-', label='Train Acc')
+    plt.plot(epochs, val_accs, 'r-', label='Val Acc')
+    plt.title('Training and Validation Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy (%)')
+    plt.legend()
+    plt.grid(True)
+    
+    plt.tight_layout()
+    plt.savefig(save_path)
+    print(f"学习曲线已保存至: {save_path}")
+    plt.close()
 
 def preprocess_data(csv_file):
     """预处理CSV文件，将异常值修正为合理范围"""
@@ -317,13 +347,14 @@ def main():
     # 配置参数
     config = {
         "data_file": "arknights.csv",
-        "batch_size": 1024,  # 512
+        "batch_size": 1024,
         "test_size": 0.1,
         "embed_dim": 128,  # 512
         "n_layers": 3,  # 3也可以
-        "num_heads": 16,
-        "lr": 1e-3,  # 新优化器可以改大一点 (甚至可以再大点)
-        "epochs": 30,  # 一般 30 epochs 足够过拟合
+        "num_heads": 4,
+        "lr": 3e-4,  # 新优化器可以改大一点
+        "lion_lr": 3e-4 / 10,  # 论文指出 Lion 优化器需要更小的学习率，但需要更小的学习率不太可能
+        "epochs": 50,  # 一般 30 epochs 足够过拟合
         "seed": 42,  # 随机数种子
         "save_dir": "models",  # 存到哪里
         "max_feature_value": 100,  # 限制特征最大值，防止极端值造成不稳定
@@ -412,11 +443,9 @@ def main():
     )
 
     # 损失函数和优化器 (引入 Muon 与 Lion 混合策略)
-    criterion = nn.BCELoss()
-    # 论文指出 Lion 优化器需要更小的学习率，但需要更小的学习率不太可能
-    lion_lr = config["lr"] / 1.0
+    criterion = nn.MSELoss()
     muon_opt, lion_opt = get_muon_lion_optimizers(
-        model, muon_lr=config["lr"], lion_lr=lion_lr, weight_decay=1e-1
+        model, muon_lr=config["lr"], lion_lr=config["lion_lr"], weight_decay=1e-1
     )
     scheduler_muon = optim.lr_scheduler.CosineAnnealingLR(muon_opt, T_max=config["epochs"])
     scheduler_lion = optim.lr_scheduler.CosineAnnealingLR(lion_opt, T_max=config["epochs"])
@@ -433,7 +462,7 @@ def main():
 
     # 训练循环
     for epoch in range(config["epochs"]):
-        print(f"\nEpoch {epoch + 1}/{config['epochs']}")
+        print(f"Epoch {epoch + 1}/{config['epochs']}")
 
         # 训练
         train_loss, train_acc = train_one_epoch(
@@ -461,8 +490,6 @@ def main():
                 Path(config["save_dir"]) / "best_model_acc.pth",
             )
             print("保存了新的最佳准确率模型!")
-        else:
-            print(f"最佳准确率为: {best_acc:.2f}")
 
         # 保存最佳模型（基于损失）
         if val_loss < best_loss:
@@ -472,8 +499,8 @@ def main():
                 Path(config["save_dir"]) / "best_model_loss.pth",
             )
             print("保存了新的最佳损失模型!")
-        else:
-            print(f"最佳损失为: {best_loss:.4f}")
+
+        print(f"最佳准确率为: {best_acc:.2f}, 最佳损失为: {best_loss:.4f}")
 
         torch.save(
             model, Path(config["save_dir"]) / "best_model_full.pth"
@@ -492,9 +519,7 @@ def main():
         # }, os.path.join(config['save_dir'], 'latest_checkpoint.pth'))
 
         # 打印训练信息
-        print(f"Train Loss: {train_loss:.4f} | Acc: {train_acc:.2f}%")
-        print(f"Val Loss: {val_loss:.4f} | Acc: {val_acc:.2f}%")
-        print("-" * 40)
+        print(f"Train Loss: {train_loss:.4f} | Acc: {train_acc:.2f}%  Val Loss: {val_loss:.4f} | Acc: {val_acc:.2f}%")
 
         # 计时
         if epoch == 0:
@@ -508,10 +533,7 @@ def main():
             estimated_total_time = avg_epoch_time * config["epochs"]
             remaining_time = estimated_total_time - elapsed_time
 
-            print(f"Epoch Time: {epoch_duration:.2f}s")
-            print(f"Elapsed Time: {elapsed_time / 60:.2f}min")
-            print(f"Estimated Remaining Time: {remaining_time / 60:.2f}min")
-            print(f"Estimated Total Time: {estimated_total_time / 60:.2f}min")
+            print(f"Epoch Time: {epoch_duration:.2f}s, Elapsed Time: {elapsed_time / 60:.2f}min, Estimated Remaining Time: {remaining_time / 60:.2f}min, Estimated Total Time: {estimated_total_time / 60:.2f}min")
             epoch_start_time = current_time  # Reset for next epoch
 
         print("-" * 40)
@@ -542,11 +564,8 @@ def main():
         old_full_path.rename(new_full_path)
         print(f"模型文件已重命名: {old_full_path} -> {new_full_path}")
 
-    # 保存最终训练历史
-    # plot_training_history(
-    #     train_losses, val_losses, train_accs, val_accs,
-    #     save_path=os.path.join(config['save_dir'], 'final_training_history.png')
-    # )
+    # 绘制学习曲线
+    plot_learning_curve(train_losses, val_losses, train_accs, val_accs, save_dir_path / f"learning_curve_{base_filename}.png")
 
 
 if __name__ == "__main__":

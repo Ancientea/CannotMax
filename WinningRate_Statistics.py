@@ -23,6 +23,13 @@ def load_data():
 def get_monster_name(monster_id):
     """根据怪物ID获取怪物名称"""
     if monster_id in MONSTER_DATA.index:
+        return MONSTER_DATA.loc[monster_id]['名称']
+    return f'怪物{monster_id}'
+
+
+def get_monster_original_name(monster_id):
+    """根据怪物ID获取怪物原始名称（用于匹配图片）"""
+    if monster_id in MONSTER_DATA.index:
         return MONSTER_DATA.loc[monster_id]['原始名称']
     return f'怪物{monster_id}'
 
@@ -619,33 +626,38 @@ def create_html_table(df, columns, title, is_combo=False, monster_relations=None
         if is_combo and 'ID1' in row and 'ID2' in row:
             monster1_name = get_monster_name(row['ID1'])
             monster2_name = get_monster_name(row['ID2'])
+            monster1_orig = get_monster_original_name(row['ID1'])
+            monster2_orig = get_monster_original_name(row['ID2'])
             html += f"""<td>
                 <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                <img src="images/{monster1_name}.png" onerror="this.src='images/empty.png'" style="width:30px;height:30px;">
+                <img src="images/{monster1_orig}.png" onerror="this.src='images/empty.png'" style="width:30px;height:30px;">
                 <span>{monster1_name}</span><br>
-                <img src="images/{monster2_name}.png" onerror="this.src='images/empty.png'" style="width:30px;height:30px;">
+                <img src="images/{monster2_orig}.png" onerror="this.src='images/empty.png'" style="width:30px;height:30px;">
                 <span>{monster2_name}</span>
             </td>"""
         elif '怪物ID' in row:
             monster_name = get_monster_name(row['怪物ID'])
+            monster_orig = get_monster_original_name(row['怪物ID'])
             display_name = row.get('怪物', monster_name)
             monster_id = row['怪物ID']
             html += f"""<td>
                 <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                <img src="images/{monster_name}.png" onerror="this.src='images/empty.png'" style="width:50px;height:50px;">
+                <img src="images/{monster_orig}.png" onerror="this.src='images/empty.png'" style="width:50px;height:50px;">
                 <span style="font-weight:bold;">{display_name}</span>
             </td>"""
         else:
             # 对于胜率表，使用索引作为怪物名称
             monster_name = idx
             # 尝试从怪物数据中获取ID
+            monster_orig = monster_name
             for mid in range(1, MONSTER_COUNT + 1):
                 if get_monster_name(mid) == monster_name:
                     monster_id = mid
+                    monster_orig = get_monster_original_name(mid)
                     break
             html += f"""<td>
                 <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                <img src="images/{monster_name}.png" onerror="this.src='images/empty.png'" style="width:50px;height:50px;">
+                <img src="images/{monster_orig}.png" onerror="this.src='images/empty.png'" style="width:50px;height:50px;">
                 <span style="font-weight:bold;">{monster_name}</span>
             </td>"""
         
@@ -669,8 +681,9 @@ def create_html_table(df, columns, title, is_combo=False, monster_relations=None
             if relations and 'best_teammates' in relations and relations['best_teammates']:
                 teammates = []
                 for teammate in relations['best_teammates']:
+                    teammate_orig = get_monster_original_name(teammate['partner_id'])
                     teammates.append(f"""<div style="margin:3px 0;">
-                        <img src="images/{teammate['partner_name']}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
+                        <img src="images/{teammate_orig}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
                         <small>{teammate['partner_name']} ({teammate['lift']:.2f}x)</small>
                     </div>""")
                 html += "".join(teammates)
@@ -683,8 +696,9 @@ def create_html_table(df, columns, title, is_combo=False, monster_relations=None
             if relations and 'counters' in relations and relations['counters']:
                 counters = []
                 for counter in relations['counters']:
+                    counter_orig = get_monster_original_name(counter['opponent_id'])
                     counters.append(f"""<div style="margin:3px 0;">
-                        <img src="images/{counter['opponent_name']}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
+                        <img src="images/{counter_orig}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
                         <small>{counter['opponent_name']} ({counter['win_rate']:.0%})</small>
                     </div>""")
                 html += "".join(counters)
@@ -697,8 +711,9 @@ def create_html_table(df, columns, title, is_combo=False, monster_relations=None
             if relations and 'countered_by' in relations and relations['countered_by']:
                 countered = []
                 for counter in relations['countered_by']:
+                    counter_orig = get_monster_original_name(counter['opponent_id'])
                     countered.append(f"""<div style="margin:3px 0;">
-                        <img src="images/{counter['opponent_name']}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
+                        <img src="images/{counter_orig}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
                         <small>{counter['opponent_name']} ({counter['lose_rate']:.0%})</small>
                     </div>""")
                 html += "".join(countered)
@@ -733,10 +748,11 @@ def create_device_counter_html(device_counter_effects):
         row_number = 1
         for effect in effects:
             monster_name = effect['怪物']
+            monster_orig = get_monster_original_name(effect['怪物ID'])
             html += f"""<tr>
                 <td>
                     <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                    <img src="images/{monster_name}.png" onerror="this.src='images/empty.png'" style="width:40px;height:40px;">
+                    <img src="images/{monster_orig}.png" onerror="this.src='images/empty.png'" style="width:40px;height:40px;">
                     <span style="font-weight:bold;">{monster_name}</span>
                 </td>
                 <td style="color: {'red' if effect['克制程度'] > 0 else 'green'};">{effect['克制程度']:.2%}</td>

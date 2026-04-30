@@ -4,6 +4,7 @@
 venv/
 .venv/
 __pycache__/
+.mypy_cache/
 
 # ===========================
 # 2. Pixi 包管理环境
@@ -29,7 +30,7 @@ __pycache__/
 # 5. 模型权重与构建产物
 # ===========================
 # 模型文件
-models/Local_models/*
+models/*.png
 *.pth
 *.onnx
 *.onnx.data
