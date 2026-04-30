@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Optional
+import logging
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 class BaseConnector(ABC):
     """Abstract base class for device connectors.
@@ -44,25 +47,20 @@ class BaseConnector(ABC):
         """
         pass
     
-    @abstractmethod
     def capture_screenshot(self) -> Optional[np.ndarray]:
-        """
-        Capture screenshot as BGR numpy array.
-        
-        Returns:
-            np.ndarray: BGR image (H, W, 3), None if failed
-        """
-        pass
+        """Capture screenshot with auto-connect."""
+        if not self.ensure_connected():
+            logger.warning("Cannot capture: device not connected")
+            return None
+        return self._capture_internal()
     
-    @abstractmethod
-    def click(self, point: tuple[float, float]) -> None:
-        """
-        Click at relative coordinates (0-1).
-        
-        Args:
-            point: (x, y) where x,y in [0, 1]
-        """
-        pass
+    def click(self, point: tuple[float, float]) -> bool:
+        """Click with auto-connect. Returns True if successful."""
+        if not self.ensure_connected():
+            logger.warning("Cannot click: device not connected")
+            return False
+        self._click_internal(point)
+        return True
     
     @abstractmethod
     def get_device_list(self) -> list[str]:
