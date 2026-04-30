@@ -135,9 +135,7 @@ class ArknightsApp(QMainWindow):
         """Get constructor kwargs for connector based on mode."""
         if mode == "ADB":
             return {
-                "adb_serial": self.serial_entry.currentText(),
-                "connection_type": self.connection_type_combo.currentData(),
-                "input_method": self.input_method_combo.currentData()
+                "adb_serial": self.serial_entry.currentText()
             }
         elif mode == "PC":
             return {"window_name": "明日方舟"}
@@ -632,7 +630,6 @@ class ArknightsApp(QMainWindow):
         self.size_animation.finished.connect(set_fixed_after_animation)
 
 
-
     def choose_capture_window(self):
         """弹出对话框选择窗口作为 WinRT 截屏源，用于窗口捕获模式"""
         import traceback, cv2
@@ -1007,6 +1004,13 @@ class ArknightsApp(QMainWindow):
     def refresh_device_list(self):
         """刷新并更新模拟器序列号下拉列表"""
         current_text = self.serial_entry.currentText()
+        if self.connector is None:
+            # Connector not initialized yet, show default
+            self.serial_entry.clear()
+            self.serial_entry.addItem("127.0.0.1:5555")
+            self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
+            return
+        
         devices = self.connector.get_device_list()
         self.serial_entry.clear()
         if devices:
@@ -1020,6 +1024,30 @@ class ArknightsApp(QMainWindow):
             self.serial_entry.setCurrentText(
                 current_text if current_text else "127.0.0.1:5555"
             )
+
+    def on_connection_type_changed(self, index):
+        type_id = self.connection_type_combo.currentData()
+        if not type_id:
+            return
+        default_address = ConnectionTypeRegistry.get_default_address(type_id)
+        if default_address:
+            self.serial_entry.setCurrentText(default_address)
+            if self.connector:
+                self.connector.update_device_serial(default_address)
+        if self.connector and self.connector.is_connected:
+            self.connector.disconnect()
+            self.maa_status_label.setText('已断开，请重新连接')
+            self.maa_status_label.setStyleSheet('color: #aa0000; font-size: 10px;')
+
+    def on_input_method_changed(self, index):
+        method_id = self.input_method_combo.currentData()
+        if not method_id:
+            return
+        if self.connector:
+            self.connector.set_input_method(method_id)
+        if self.connector and self.connector.is_connected:
+            QMessageBox.information(self, '提示', '输入方式已更改，请重新连接以生效')
+
 
     def update_device_serial(self):
         new_serial = self.serial_entry.currentText()
