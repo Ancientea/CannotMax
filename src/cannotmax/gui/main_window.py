@@ -4,10 +4,10 @@ import logging
 import subprocess
 import sys
 import time
-import toml
 import numpy as np
 from pathlib import Path
-import onnxruntime  # workaround: Pre-import to avoid ImportError: DLL load failed while importing onnxruntime_pybind11_state: 动态链接库(DLL)初始化例程失败。
+from importlib.metadata import version as get_version, PackageNotFoundError
+import onnxruntime  # workaround: Pre-import to avoid ImportError: DLL load failed while importing onnxruntime_pybind11_state: 动态链接库 (DLL) 初始化例程失败。
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout
 from PyQt6.QtWidgets import (
     QLabel,
@@ -105,22 +105,22 @@ class ArknightsApp(QMainWindow):
 
         # 初始化UI后加载历史数据
         logger.info("尝试获取错题本")
-        self.history_match = None
         self.history_match = similar_history_match.HistoryMatch()
         # Ensure feat_past and N_history are initialized
         try:
-            self.history_match.feat_past = np.hstack(
-                [self.history_match.past_left, self.history_match.past_right]
-            )
+            self.history_match.feat_past = np.hstack([self.history_match.past_left, self.history_match.past_right])
+            self.history_match.N_history = 0 if self.history_match.labels is None else len(self.history_match.labels)
+            logger.info("错题本加载成功")
         except Exception:
-            self.history_match.feat_past = None
-        self.history_match.N_history = (
-            0 if self.history_match.labels is None else len(self.history_match.labels)
-        )
-        logger.info("错题本加载成功")
+            self.history_match.feat_past = np.empty()
+            self.history_match.N_history = 0
+            logger.warning("错题本加载失败")
 
         # 初始化特殊怪物语言触发处理程序
         self.special_monster_handler = SpecialMonsterHandler()
+
+        # Initialize to ADB mode (lazy connection, no blocking)
+        self.on_mode_changed("ADB")
 
         self.init_ui()
 
@@ -131,8 +131,6 @@ class ArknightsApp(QMainWindow):
             self.input_panel.predict_button.setEnabled(False)
             self.input_panel.predict_button.setToolTip("模型未加载，无法使用此功能")
         
-        # Initialize to ADB mode (lazy connection, no blocking)
-        self.on_mode_changed("ADB")
 
     def _get_connector_kwargs(self, mode: str) -> dict:
         """Get constructor kwargs for connector based on mode."""
@@ -220,18 +218,16 @@ class ArknightsApp(QMainWindow):
 
     def init_ui(self):
         try:
-            with open("pyproject.toml", "r", encoding="utf-8") as f:
-                pyproject_data = toml.load(f)
-                version = pyproject_data["project"]["version"]
-        except (FileNotFoundError, KeyError):
-            version = "unknown"
+            version_str = get_version("CannotMax-Greenvine")
+        except PackageNotFoundError:
+            version_str = "dev"
         model_name = (
             Path(self.cannot_model.model_path).name
             if self.cannot_model.model_path
             else "未加载"
         )
         self.setWindowTitle(
-            f"铁鲨鱼_Arknights Neural Network - v{version} - model: {model_name}"
+            f"铁鲨鱼_Arknights Neural Network - v{version_str} - model: {model_name}"
         )
         self.setWindowIcon(QIcon("ico/icon.ico"))
         self.setGeometry(100, 100, 500, 580)
