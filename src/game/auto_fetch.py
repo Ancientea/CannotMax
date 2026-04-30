@@ -806,8 +806,8 @@ class AutoFetch:
                 if not self.auto_fetch_running:
                     break
 
-                # 更新活动时间（心跳）
-                self.update_prediction_callback(0)
+                # 刷新当前预测显示（心跳）：不要写入固定0，避免把GUI错误覆盖成“左方100%”
+                self.update_prediction_callback(self.current_prediction)
 
                 self.auto_fetch_data()
 
