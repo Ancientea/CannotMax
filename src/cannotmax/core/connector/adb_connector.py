@@ -198,7 +198,7 @@ class AdbConnector(BaseConnector):
             logger.exception(f"Legacy screencap failed: {e}")
             return None
 
-    def click(self, point: tuple[float, float]) -> None:
+    def _click_internal(self, point: tuple[float, float]) -> None:
         """Click using MAA (preferred) or legacy ADB input tap."""
         if not self._is_connected:
             return
