@@ -29,6 +29,7 @@ import winrt_capture
 from config import FIELD_FEATURE_COUNT, MONSTER_DATA
 from simular_history_match_ui import HistoryMatchUI
 from input_panel_ui import InputPanelUI
+from prediction_share_image import create_prediction_share_pixmap
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.getLogger("PIL").setLevel(logging.INFO)
@@ -134,6 +135,8 @@ class ArknightsApp(QMainWindow):
         if not self.cannot_model.is_model_loaded:
             self.recognize_button.setEnabled(False)
             self.recognize_button.setToolTip("模型未加载，无法使用此功能")
+            self.copy_image_button.setEnabled(False)
+            self.copy_image_button.setToolTip("模型未加载，无法使用此功能")
             self.input_panel.predict_button.setEnabled(False)
             self.input_panel.predict_button.setToolTip("模型未加载，无法使用此功能")
 
@@ -261,6 +264,12 @@ class ArknightsApp(QMainWindow):
         self.recognize_only_button.setStyleSheet(self.qt_button_style)
         self.recognize_only_button.setFixedWidth(80)  # 小按钮
         result_identify_layout.addWidget(self.recognize_only_button)
+
+        self.copy_image_button = QPushButton("复制图片")
+        self.copy_image_button.clicked.connect(self.copy_prediction_image)
+        self.copy_image_button.setStyleSheet(self.qt_button_style)
+        self.copy_image_button.setFixedWidth(90)
+        result_identify_layout.addWidget(self.copy_image_button)
 
         result_layout.addWidget(result_identify_group)
 
@@ -837,6 +846,36 @@ class ArknightsApp(QMainWindow):
         if self.history_match_ui.isVisible():
             left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
             self.history_match_ui.render_similar_matches(left_monsters_dict, right_monsters_dict)
+
+    def get_active_monsters(self, monsters_dict):
+        monsters = []
+        for monster_id_text, entry in monsters_dict.items():
+            count_text = entry.text()
+            if not count_text.isdigit() or int(count_text) <= 0:
+                continue
+            monster_id = int(monster_id_text)
+            monster_name = MONSTER_DATA["原始名称"][monster_id]
+            monsters.append((monster_id, monster_name, int(count_text)))
+        return monsters
+
+    def copy_prediction_image(self):
+        left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
+        left_monsters = self.get_active_monsters(left_monsters_dict)
+        right_monsters = self.get_active_monsters(right_monsters_dict)
+
+        if not left_monsters and not right_monsters:
+            QMessageBox.information(self, "提示", "请先填写或识别双方怪物。")
+            return
+
+        prediction = self.get_prediction()
+        self.update_prediction(prediction)
+        self.update_input_display()
+
+        model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
+        pixmap = create_prediction_share_pixmap(left_monsters, right_monsters, prediction, model_name)
+        QApplication.clipboard().setPixmap(pixmap)
+        self.copy_image_button.setText("已复制")
+        QtCore.QTimer.singleShot(1200, lambda: self.copy_image_button.setText("复制图片"))
 
     def get_recognize(self):
         """
