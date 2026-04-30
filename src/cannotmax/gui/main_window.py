@@ -139,6 +139,9 @@ class ArknightsApp(QMainWindow):
             self.recognize_button.setToolTip("模型未加载，无法使用此功能")
             self.input_panel.predict_button.setEnabled(False)
             self.input_panel.predict_button.setToolTip("模型未加载，无法使用此功能")
+        
+        # Initialize to ADB mode (lazy connection, no blocking)
+        self.on_mode_changed("ADB")
 
     def _get_connector_kwargs(self, mode: str) -> dict:
         """Get constructor kwargs for connector based on mode."""
