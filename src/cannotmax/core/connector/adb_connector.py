@@ -165,7 +165,7 @@ class AdbConnector(BaseConnector):
             logger.warning("Failed to get resolution, using default 1920x1080")
             return 1920, 1080
 
-    def capture_screenshot(self) -> Optional[np.ndarray]:
+    def _capture_internal(self) -> Optional[np.ndarray]:
         """Capture screenshot using MAA (preferred) or legacy ADB."""
         if not self._is_connected:
             return None
