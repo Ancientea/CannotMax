@@ -200,16 +200,21 @@ class RecognizeMonster:
 
     def _recognize_region(self, region_img: np.ndarray, region_id: int, matched_threshold=0.5, ocr_threshold=0.95) -> dict:
         """
-        Recognize a single region (template matching + OCR).
+        Recognize a single monster region (template matching + OCR).
+        
+        Expects a pre-cropped monster region image (approx 162x119),
+        not a full screenshot. The region contains one monster type
+        and its count.
         
         Args:
-            region_img: Cropped region image
+            region_img: Pre-cropped monster region (approx 162x119)
             region_id: Region index (0-5)
             matched_threshold: Template matching confidence threshold
             ocr_threshold: OCR confidence threshold
             
         Returns:
-            Recognition result dict
+            Recognition result dict with keys: region_id, matched_id, 
+            number, confidence (and optionally error)
         """
         # Template matching
         try:
