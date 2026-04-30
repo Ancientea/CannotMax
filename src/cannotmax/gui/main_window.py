@@ -179,8 +179,8 @@ class ArknightsApp(QMainWindow):
         
         self.connector = new_connector  # Update current connector reference
 
-    def _on_connector_ready(self, mode: str):
-        """Called when connector successfully connected."""
+    def _update_connector_ready_ui(self):
+        """Update UI after successful connection (called from get_recognize)."""
         self.recognize_button.setEnabled(True)
         self.auto_fetch_button.setEnabled(True)
         
@@ -193,25 +193,14 @@ class ArknightsApp(QMainWindow):
                 self.maa_status_label.setText("使用自有实现")
                 self.maa_status_label.setStyleSheet("color: #996600; font-size: 10px;")
         
-        logger.info(f"Switched to {mode} mode")
-    
-    def _on_connector_failed(self, mode: str):
-        """Called when connector creation failed."""
-        self.recognize_button.setEnabled(False)
-        self.auto_fetch_button.setEnabled(False)
-        self.maa_status_label.setText(f"{mode} 创建失败")
-        self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
-        
-        QMessageBox.warning(
-            self, "连接失败", 
-            f"无法创建 {mode} 连接，请检查设备/窗口是否可用"
-        )
+        logger.info(f"Connected to {self.current_capture_mode} mode")
 
     def init_ui(self):
         try:
             version_str = get_version("CannotMax-Greenvine")
         except PackageNotFoundError:
             version_str = "dev"
+        
         model_name = (
             Path(self.cannot_model.model_path).name
             if self.cannot_model.model_path
@@ -885,11 +874,19 @@ class ArknightsApp(QMainWindow):
         try:
             # 1. Ensure connection (lazy connection with 3-retry)
             if not self.connector.ensure_connected():
+                # Connection failed: disable buttons and show error
+                self.recognize_button.setEnabled(False)
+                self.auto_fetch_button.setEnabled(False)
+                self.maa_status_label.setText(f"{self.current_capture_mode} 连接失败")
+                self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
                 QMessageBox.warning(
                     self, "连接失败", 
                     "请检查设备/窗口是否可用，或手动点击【切换连接】按钮"
                 )
                 return
+            
+            # Connection successful: update UI
+            self._update_connector_ready_ui()
             
             # 2. Get full-screen screenshot
             screenshot = self.connector.capture_screenshot()
