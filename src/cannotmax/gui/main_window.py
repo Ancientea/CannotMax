@@ -131,6 +131,88 @@ class ArknightsApp(QMainWindow):
             self.input_panel.predict_button.setEnabled(False)
             self.input_panel.predict_button.setToolTip("模型未加载，无法使用此功能")
 
+    def _get_connector_kwargs(self, mode: str) -> dict:
+        """Get constructor kwargs for connector based on mode."""
+        if mode == "ADB":
+            return {
+                "adb_serial": self.serial_entry.currentText(),
+                "connection_type": self.connection_type_combo.currentData(),
+                "input_method": self.input_method_combo.currentData()
+            }
+        elif mode == "PC":
+            return {"window_name": "明日方舟"}
+        elif mode == "WIN":
+            # Try to get last selected window name if available
+            return {"window_name": getattr(self, "_win_window_name", "")}
+        return {}
+
+    def on_mode_changed(self, mode: str):
+        """Switch capture mode."""
+        if getattr(self, "_switching_mode", False):
+            logger.warning("Mode switching in progress, ignoring")
+            return
+        self._switching_mode = True
+        
+        try:
+            self.current_capture_mode = mode
+            logger.info(f"Switching to mode: {mode}")
+            
+            # Update UI controls visibility
+            is_win_mode = mode == "WIN"
+            is_adb_mode = mode == "ADB"
+            
+            self.choose_window_button.setEnabled(is_win_mode)
+            self.reselect_button.setEnabled(is_win_mode)
+            self.serial_label.setEnabled(is_adb_mode)
+            self.serial_entry.setEnabled(is_adb_mode)
+            self.serial_button.setEnabled(is_adb_mode)
+            self.connection_type_label.setEnabled(is_adb_mode)
+            self.connection_type_combo.setEnabled(is_adb_mode)
+            self.input_method_label.setEnabled(is_adb_mode)
+            self.input_method_combo.setEnabled(is_adb_mode)
+            
+            # Get connector (reuse or create)
+            kwargs = self._get_connector_kwargs(mode)
+            new_connector = self.connector_factory.get_connector(mode, **kwargs)
+            
+            if new_connector is not None:
+                self.connector = new_connector
+                self._on_connector_ready(mode)
+            else:
+                self.connector = None
+                self._on_connector_failed(mode)
+                
+        finally:
+            self._switching_mode = False
+
+    def _on_connector_ready(self, mode: str):
+        """Called when connector successfully connected."""
+        self.recognize_button.setEnabled(True)
+        self.auto_fetch_button.setEnabled(True)
+        
+        # Update MAA status
+        if hasattr(self.connector, "is_maa_available"):
+            if self.connector.is_maa_available:
+                self.maa_status_label.setText("MAA Framework 已连接")
+                self.maa_status_label.setStyleSheet("color: #00aa00; font-size: 10px;")
+            else:
+                self.maa_status_label.setText("使用自有实现")
+                self.maa_status_label.setStyleSheet("color: #996600; font-size: 10px;")
+        
+        logger.info(f"Switched to {mode} mode")
+    
+    def _on_connector_failed(self, mode: str):
+        """Called when connector failed to connect."""
+        self.recognize_button.setEnabled(False)
+        self.auto_fetch_button.setEnabled(False)
+        self.maa_status_label.setText(f"{mode} 连接失败")
+        self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
+        
+        QMessageBox.warning(
+            self, "连接失败", 
+            f"无法连接到 {mode}，请检查设备/窗口是否可用"
+        )
+
     def init_ui(self):
         try:
             with open("pyproject.toml", "r", encoding="utf-8") as f:
