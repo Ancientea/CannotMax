@@ -30,7 +30,6 @@ __pycache__/
 # 5. 模型权重与构建产物
 # ===========================
 # 模型文件
-models/Local_models/*
 models/lightning_logs/*
 models/*.png
 *.pth
