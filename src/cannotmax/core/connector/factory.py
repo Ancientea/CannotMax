@@ -12,7 +12,7 @@ class ConnectorFactory:
     """Manages Connector lifecycle with per-mode singleton pooling."""
     
     def __init__(self):
-        self._pool: dict[str, BaseConnector] = {}
+        self._pool: dict[str, tuple[BaseConnector, dict]] = {}  # (connector, kwargs)
     
     def get_connector(self, mode: str, **kwargs) -> Optional[BaseConnector]:
         """
@@ -25,10 +25,19 @@ class ConnectorFactory:
         Returns:
             Connected connector or None if failed
         """
-        # Reuse existing if connected
+        # Reuse existing if connected and config matches
         if mode in self._pool:
-            existing = self._pool[mode]
-            if existing.is_connected:
+            existing, existing_kwargs = self._pool[mode]
+            
+            # Check if config changed (e.g., different ADB serial)
+            if existing_kwargs != kwargs:
+                logger.info(f"{mode} config changed, recreating connector")
+                try:
+                    existing.disconnect()
+                except Exception as e:
+                    logger.warning(f"Disconnect failed: {e}")
+                del self._pool[mode]
+            elif existing.is_connected:
                 logger.debug(f"Reusing existing {mode} connector")
                 return existing
             else:
@@ -52,7 +61,7 @@ class ConnectorFactory:
             success = connector.connect()
             
             if success:
-                self._pool[mode] = connector
+                self._pool[mode] = (connector, kwargs)
                 logger.info(f"{mode} connected successfully")
                 return connector
             else:
@@ -74,7 +83,7 @@ class ConnectorFactory:
     
     def disconnect_all(self):
         """Disconnect all connectors in pool."""
-        for mode, conn in list(self._pool.items()):
+        for mode, (conn, _) in list(self._pool.items()):
             try:
                 conn.disconnect()
             except Exception as e:
