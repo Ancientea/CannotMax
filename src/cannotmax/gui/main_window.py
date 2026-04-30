@@ -23,12 +23,12 @@ from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
 import PyQt6.QtCore as QtCore
 
 from ..core import auto_fetch
-from ..core.connector import AdbConnector, PcConnector
 from ..core.connector.maa_registry import (
     ConnectionTypeRegistry,
     InputMethodRegistry,
     MaaFrameworkDetector,
 )
+from ..core.connector.factory import ConnectorFactory
 from ..core.connector.winrt_capture import WinRTScreenCapture, WindowPickerDialog
 from .dark_mode_style_fix import DarkModeStyleFix
 from ..analytics import similar_history_match
@@ -61,22 +61,6 @@ except ImportError:
     logger.info("Using ONNX model for predictions.")
 
 
-class ADBConnectorThread(QThread):
-    """
-    Worker thread to run AdbConnector.connect() without blocking the UI.
-    """
-
-    connect_finished = pyqtSignal()
-
-    def __init__(self, app: "ArknightsApp"):
-        super().__init__()
-        self.app = app
-
-    def run(self):
-        self.app.adb_connector.connect()
-        self.connect_finished.emit()
-
-
 class ArknightsApp(QMainWindow):
     # 添加自定义信号
     update_button_signal = pyqtSignal(str)  # 用于更新按钮文本
@@ -105,12 +89,9 @@ class ArknightsApp(QMainWindow):
         # 捕获模式：ADB, PC, WIN
         self.current_capture_mode = "ADB"
 
-        # 尝试连接模拟器
-        self.adb_connector = AdbConnector()
-        self.pc_connector = PcConnector()
-        self.adb_connector_thread = ADBConnectorThread(self)
-        self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
-        self.adb_connector_thread.start()
+        # Single connector managed by factory
+        self.connector_factory = ConnectorFactory()
+        self.connector = None  # Current active connector
 
         self.auto_fetch_running = False
         self.is_invest = False
@@ -119,8 +100,8 @@ class ArknightsApp(QMainWindow):
         # 模型
         self.cannot_model = CannotModel()
 
-        # 怪物识别模块
-        self.recognizer = recognize.RecognizeMonster(method="ADB")
+        # Recognizer (single instance, no method parameter)
+        self.recognizer = recognize.RecognizeMonster()
 
         # 初始化UI后加载历史数据
         logger.info("尝试获取错题本")
@@ -614,15 +595,6 @@ class ArknightsApp(QMainWindow):
                 self.pc_connector.connect()
                 if not self.pc_connector.is_connected:
                     QMessageBox.warning(self, "警告", "未能连接到PC端窗口(明日方舟)。")
-
-    def on_adb_connected(self):
-        logger.info("模拟器初始化完成")
-        if self.adb_connector.is_maa_available:
-            self.maa_status_label.setText("MAA Framework已连接")
-            self.maa_status_label.setStyleSheet("color: #00aa00; font-size: 10px;")
-        else:
-            self.maa_status_label.setText("使用自有ADB实现（MAA Framework不可用）")
-            self.maa_status_label.setStyleSheet("color: #996600; font-size: 10px;")
 
     def on_connection_type_changed(self, index):
         type_id = self.connection_type_combo.currentData()
