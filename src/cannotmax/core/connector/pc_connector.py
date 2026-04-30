@@ -132,6 +132,25 @@ class PcConnector(BaseConnector):
         )
         return True
 
+    def ensure_connected(self, max_retries: int = 3) -> bool:
+        """Ensure connection with retry logic."""
+        if self._is_connected:
+            return True
+        
+        for attempt in range(max_retries):
+            try:
+                if self.connect():
+                    return True
+                if attempt < max_retries - 1:
+                    time.sleep(0.5)  # 500ms delay between retries
+            except Exception as e:
+                logger.warning(f"Connection attempt {attempt+1}/{max_retries} failed: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(0.5)
+        
+        logger.error(f"Failed to connect after {max_retries} attempts")
+        return False
+
     def _init_maa(self):
         """Initialize MAA Win32Controller if available."""
         maa_controller = None
@@ -180,12 +199,8 @@ class PcConnector(BaseConnector):
             logger.error(f"WinRT initialization failed: {e}")
             self._winrt_capture = None
 
-    def capture_screenshot(self, roi: Optional[tuple] = None) -> Optional[np.ndarray]:
-        """Capture screenshot using MAA (preferred) or WinRT.
-        
-        Args:
-            roi: Optional ROI tuple ((x1, y1), (x2, y2)) to crop the screenshot
-        """
+    def _capture_internal(self) -> Optional[np.ndarray]:
+        """Capture screenshot using MAA (preferred) or WinRT."""
         if not self._is_connected:
             return None
 
@@ -193,10 +208,6 @@ class PcConnector(BaseConnector):
             img = self._capture_maa()
         else:
             img = self._capture_winrt()
-        
-        if roi and img is not None:
-            (x1, y1), (x2, y2) = roi
-            img = img[y1:y2+1, x1:x2+1]
         
         return img
 
@@ -219,7 +230,7 @@ class PcConnector(BaseConnector):
             logger.error(f"WinRT capture failed: {e}")
             return None
 
-    def click(self, point: tuple[float, float]) -> None:
+    def _click_internal(self, point: tuple[float, float]) -> None:
         """Click using MAA (preferred) or SendInput."""
         if not self._is_connected:
             return
