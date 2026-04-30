@@ -149,7 +149,7 @@ def log_config_to_loggers(logger_instance, cfg: DictConfig):
         return
 
     config_payload: dict[str, object] = {}
-    for section_name in ("model", "data", "trainer"):
+    for section_name in ("model", "data", "runtime", "trainer"):
         section_cfg = cfg.get(section_name)
         if section_cfg is None:
             continue
@@ -180,7 +180,7 @@ def main(cfg: DictConfig | None = None):
         return
     print(f"配置:\n{OmegaConf.to_yaml(cfg)}")
 
-    L.seed_everything(cfg.trainer.seed, workers=True)
+    L.seed_everything(cfg.runtime.seed, workers=True)
 
     accelerator, devices = get_accelerator_and_device()
     precision = get_precision(accelerator)
@@ -197,10 +197,10 @@ def main(cfg: DictConfig | None = None):
     elif accelerator == "cpu":
         print("警告: 未检测到GPU，将在CPU上运行训练，这可能会很慢!")
 
-    save_dir = cfg.trainer.save_dir
+    save_dir = cfg.runtime.save_dir
     Path(save_dir).mkdir(parents=True, exist_ok=True)
 
-    data_module = ArknightsDataModule(cfg.data, seed=cfg.trainer.seed)
+    data_module = ArknightsDataModule(cfg.data, seed=cfg.runtime.seed)
 
     lightning_module = ArknightsLightningModule(cfg.model, cfg.trainer)
 
