@@ -22,12 +22,7 @@ from ..config import (
     MONSTER_DATA, 
     MONSTER_IMAGES, 
     MONSTER_COUNT,
-    get_relative_regions,
-    get_relative_regions_nums,
 )
-from .roi_selector import ROISelector
-from .screenshot_helper import ScreenshotHelper
-from .connector import PcConnector
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -152,161 +147,126 @@ def add_black_border(img: cv2.typing.MatLike, border_size=3):
 
 class RecognizeMonster:
     """Monster recognition via template matching and OCR."""
-    
-    ROI_RELATIVE = [(0.2464, 0.8410), (0.7542, 0.9510)]  # 16:9 下怪物区域相对坐标
 
-    def __init__(
-        self,
-        method: str = "ADB",
-        window_name: str | None = None,
-        monitor_index: int | None = None,
-    ):
-        self.method = method
-        self.main_roi = [(0, 0), (1919, 1079)]
-        self.rapidocr_eng = get_rapidocr_engine()
+    def __init__(self):
+        """Initialize recognizer."""
         self.ref_images = load_ref_images()
-        self._connector: PcConnector | None = None
-        self._roi_selector = ROISelector()
-        self._screenshot_helper = ScreenshotHelper(method=method, connector=None)
-        # Load relative regions from config
-        self.relative_regions = get_relative_regions()
-        self.relative_regions_nums = get_relative_regions_nums()
+        self.ocr = get_rapidocr_engine()
+        self.main_roi = None  # Optional custom ROI
 
-        # Initialize connector for WIN mode
-        if self.method == "WIN" and window_name is not None:
-            try:
-                logger.info("初始化 PcConnector...")
-                self._connector = PcConnector(window_name=window_name)
-                self._connector.connect()
-                self._screenshot_helper._connector = self._connector
-                
-                # Get initial frame to set ROI
-                frame = self._connector.capture_screenshot()
-                if frame is not None:
-                    h, w = frame.shape[:2]
-                    self.main_roi = [(0, 0), (w - 1, h - 1)]
-            except Exception as e:
-                logger.exception("PcConnector init failed: %s", e)
-                self._connector = None
-
-    def select_roi(self, example_image_path: str = "images/eg.png"):
-        """Interactive ROI selection."""
-        if self.method == "WIN" and self._connector is not None:
-            img = self._connector.capture_screenshot()
-            if img is not None:
-                return self._roi_selector.select_roi(img, example_image_path)
-        elif self.method in ("WIN", "PIL"):
-            from PIL import ImageGrab
-            screenshot = np.array(ImageGrab.grab())
-            img = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
-            return self._roi_selector.select_roi(img, example_image_path)
-        else:
-            logger.error(f"当前模式 {self.method} 不支持交互式选择 ROI")
-            return None
-
-    def process_regions(
-        self,
-        image: cv2.typing.MatLike,
-        matched_threshold=0.5,
-        ocr_threshold=0.95,
-    ):
+    def process_regions(self, screenshot: np.ndarray) -> list[dict]:
         """
-        Process all 6 regions for monster recognition.
+        Process full-screen screenshot to identify monsters.
         
         Args:
-            image: Screenshot image (required, must be cropped to monster bar region)
+            screenshot: Full-screen BGR image (any resolution)
+        
+        Returns:
+            List of 6 recognition results
+        """
+        # 1. Detect monster bar (auto-detect via find_monster_zone)
+        from ..utils import find_monster_zone
+        
+        try:
+            monster_roi, cropped = find_monster_zone.cutFrame(screenshot)
+        except Exception as e:
+            logger.error(f"Monster bar detection failed: {e}")
+            return []
+        
+        if monster_roi is None or cropped is None:
+            logger.error("Could not detect monster bar")
+            return []
+        
+        # 2. Crop to standard 975x119
+        try:
+            monster_bar = cv2.resize(cropped, (975, 119))
+        except Exception as e:
+            logger.error(f"Crop failed: {e}")
+            return []
+        
+        # 3. Split into 6 regions and recognize
+        results = []
+        region_width = 975 // 6
+        
+        for i in range(6):
+            x1 = i * region_width
+            x2 = (i + 1) * region_width if i < 5 else 975
+            region_img = monster_bar[:, x1:x2]
+            
+            result = self._recognize_region(region_img, i)
+            results.append(result)
+        
+        return results
+
+    def _recognize_region(self, region_img: np.ndarray, region_id: int, matched_threshold=0.5, ocr_threshold=0.95) -> dict:
+        """
+        Recognize a single region (template matching + OCR).
+        
+        Args:
+            region_img: Cropped region image
+            region_id: Region index (0-5)
             matched_threshold: Template matching confidence threshold
             ocr_threshold: OCR confidence threshold
             
         Returns:
-            list[dict]: Recognition results for each region
+            Recognition result dict
         """
-        results = []
-        
-        # Validate input image
-        if image is None or image.size == 0:
-            raise ValueError("截图为空")
-        
-        screenshot = image
-        
-        # Resize to standard 975x119
-        screenshot = cv2.resize(screenshot, (975, 119))
-        main_height = screenshot.shape[0]
-        main_width = screenshot.shape[1]
-        
-        if intelligent_workers_debug:
-            cv2.imwrite("images/tmp/zone.png", screenshot)
-        
-        # Process each of 6 regions
-        for idx, rel in enumerate(self.relative_regions):
-            try:
-                # Template matching
-                rx1 = int(rel[0] * main_width)
-                ry1 = int(rel[1] * main_height)
-                rx2 = int(rel[2] * main_width)
-                ry2 = int(rel[3] * main_height)
-                sub_roi = screenshot[ry1:ry2, rx1:rx2]
-                
-                matched_id, confidence = find_best_match(sub_roi, self.ref_images)
-                logger.info(f"target: {idx} matched_id: {matched_id}, confidence: {confidence:.4f}")
-                
-                if matched_id != 0 and confidence < matched_threshold:
-                    raise ValueError(f"模板匹配置信度过低：{confidence}")
-                    
-            except Exception as e:
-                logger.exception(f"区域 {idx} 匹配失败：{str(e)}")
-                results.append({
-                    "region_id": idx, "matched_id": 0, "number": "N/A", "error": str(e)
-                })
-                continue
+        # Template matching
+        try:
+            matched_id, confidence = find_best_match(region_img, self.ref_images)
+            logger.info(f"target: {region_id} matched_id: {matched_id}, confidence: {confidence:.4f}")
             
-            try:
-                # OCR
-                rel_num = self.relative_regions_nums[idx]
-                rx1_num = int(rel_num[0] * main_width)
-                ry1_num = int(rel_num[1] * main_height)
-                rx2_num = int(rel_num[2] * main_width)
-                ry2_num = int(rel_num[3] * main_height)
-                sub_roi_num = screenshot[ry1_num:ry2_num, rx1_num:rx2_num]
-                
-                processed = preprocess(sub_roi_num)
-                processed = crop_to_min_bounding_rect(processed)
-                processed = add_black_border(processed, border_size=3)
-                
-                number, ocr_confidence = self.do_num_ocr(processed)
-                if number != "" and ocr_confidence < ocr_threshold:
-                    raise ValueError(f"OCR 置信度过低：{ocr_confidence}")
-                
-                if intelligent_workers_debug:
-                    cv2.imwrite(f"images/tmp/target_{idx}.png", sub_roi)
-                    cv2.imwrite(f"images/tmp/number_{idx}.png", processed)
-                
-                if number == "" and matched_id != 0:
-                    raise ValueError("发现有怪物但无数量异常数据！")
-                if matched_id == 0 and number != "":
-                    raise ValueError("发现无怪物但有数量异常数据！")
-                
-                results.append({
-                    "region_id": idx,
-                    "matched_id": matched_id,
-                    "number": number if number else "N/A",
-                    "confidence": round(confidence, 2),
-                })
-                
-            except Exception as e:
-                logger.exception(f"区域 {idx} OCR 识别失败：{str(e)}")
-                results.append({
-                    "region_id": idx,
-                    "matched_id": matched_id,
-                    "number": "N/A",
-                    "error": str(e),
-                })
+            if matched_id != 0 and confidence < matched_threshold:
+                raise ValueError(f"模板匹配置信度过低：{confidence}")
+        except Exception as e:
+            logger.exception(f"区域 {region_id} 匹配失败：{str(e)}")
+            return {
+                "region_id": region_id, "matched_id": 0, "number": "N/A", "error": str(e)
+            }
         
-        return results
+        # OCR on the number area (right side of region)
+        try:
+            # Number is typically on the right ~30% of the region
+            h, w = region_img.shape[:2]
+            num_x1 = int(w * 0.6)
+            sub_roi_num = region_img[:, num_x1:]
+            
+            processed = preprocess(sub_roi_num)
+            processed = crop_to_min_bounding_rect(processed)
+            processed = add_black_border(processed, border_size=3)
+            
+            number, ocr_confidence = self.do_num_ocr(processed)
+            if number != "" and ocr_confidence < ocr_threshold:
+                raise ValueError(f"OCR 置信度过低：{ocr_confidence}")
+            
+            if intelligent_workers_debug:
+                Path("images/tmp").mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(f"images/tmp/target_{region_id}.png", region_img)
+                cv2.imwrite(f"images/tmp/number_{region_id}.png", processed)
+            
+            if number == "" and matched_id != 0:
+                raise ValueError("发现有怪物但无数量异常数据！")
+            if matched_id == 0 and number != "":
+                raise ValueError("发现无怪物但有数量异常数据！")
+            
+            return {
+                "region_id": region_id,
+                "matched_id": matched_id,
+                "number": number if number else "N/A",
+                "confidence": round(confidence, 2),
+            }
+        except Exception as e:
+            logger.exception(f"区域 {region_id} OCR 识别失败：{str(e)}")
+            return {
+                "region_id": region_id,
+                "matched_id": matched_id,
+                "number": "N/A",
+                "error": str(e),
+            }
 
     def do_num_ocr(self, img: cv2.typing.MatLike):
         """Perform OCR on number region."""
-        result = self.rapidocr_eng(img, use_det=False, use_cls=False, use_rec=True)
+        result = self.ocr(img, use_det=False, use_cls=False, use_rec=True)
         logger.info(f"OCR: text: '{result.txts[0]}', score: {result.scores[0]}")
         if result.txts[0] != "" and not result.txts[0].isdigit():
             raise ValueError(f"OCR 识别结果不是数字：'{result.txts[0]}'")
@@ -314,14 +274,18 @@ class RecognizeMonster:
 
 
 if __name__ == "__main__":
-    print("请用鼠标拖拽选择主区域...")
-    recognizer = RecognizeMonster(method="PIL")
-    main_roi = recognizer.select_roi()
-    results = recognizer.process_regions()
-    print("\n识别结果：")
-    for res in results:
-        if "error" in res:
-            print(f"区域{res['region_id']}: 错误 - {res['error']}")
-        else:
-            if res["matched_id"] != 0:
-                print(f"区域{res['region_id']} => 匹配 ID:{res['matched_id']} 数字:{res['number']} 置信度:{res['confidence']}")
+    # Example usage with test image
+    test_img = "images/tmp/zone1.png"
+    if Path(test_img).exists():
+        screenshot = cv2.imread(test_img)
+        recognizer = RecognizeMonster()
+        results = recognizer.process_regions(screenshot)
+        print("识别结果：")
+        for res in results:
+            if "error" in res:
+                print(f"区域{res['region_id']}: 错误 - {res['error']}")
+            else:
+                if res["matched_id"] != 0:
+                    print(f"区域{res['region_id']} => 匹配 ID:{res['matched_id']} 数字:{res['number']} 置信度:{res['confidence']}")
+    else:
+        print(f"测试图片 {test_img} 不存在")
