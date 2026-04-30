@@ -6,6 +6,7 @@ solving the lazy connection vs. instance pooling contradiction.
 import logging
 from enum import Enum
 from typing import Optional
+from win32gui import IsWindow  # Module-level import for performance
 from .base_connector import BaseConnector
 from .adb_connector import AdbConnector
 from .pc_connector import PcConnector
@@ -56,38 +57,38 @@ class ConnectorFactory:
             existing, existing_kwargs, state = self._pool[mode]
             
             if existing_kwargs != kwargs:
-                logger.info(f"{mode} config changed, discarding connector")
+                logger.info("%s config changed, discarding connector", mode)
                 self._discard_connector(existing)
                 del self._pool[mode]
             else:
                 # 2. State-based decision (NO ACTIVE TESTING!)
                 if state == ConnectorState.VALID:
-                    logger.debug(f"Reusing VALID {mode} connector (no check)")
+                    logger.debug("Reusing VALID %s connector (no check)", mode)
                     return existing
                 
                 elif state == ConnectorState.INVALID:
-                    logger.info(f"{mode} connector INVALID, rebuilding...")
+                    logger.info("%s connector INVALID, rebuilding...", mode)
                     self._discard_connector(existing)
                     del self._pool[mode]
                 
                 else:  # IDLE
                     # 3. Light local check (0.1μs, no network IO!)
-                    logger.debug(f"{mode} connector IDLE, checking local state...")
+                    logger.debug("%s connector IDLE, checking local state...", mode)
                     if self._is_local_usable(existing):
-                        logger.debug(f"{mode} connector passed local check, marking VALID")
+                        logger.debug("%s connector passed local check, marking VALID", mode)
                         self._pool[mode] = (existing, kwargs, ConnectorState.VALID)
                         return existing
                     else:
-                        logger.info(f"{mode} connector failed local check (idle), rebuilding...")
+                        logger.info("%s connector failed local check (idle), rebuilding...", mode)
                         self._discard_connector(existing)
                         del self._pool[mode]
         
         # 4. Create new (truly lazy, no connection!)
-        logger.info(f"Creating new {mode} connector (IDLE state)")
+        logger.info("Creating new %s connector (IDLE state)", mode)
         try:
             connector = self._create_connector(mode, **kwargs)
             self._pool[mode] = (connector, kwargs, ConnectorState.IDLE)
-            logger.debug(f"{mode} connector created (IDLE)")
+            logger.debug("%s connector created (IDLE)", mode)
             return connector
         except Exception as e:
             logger.exception(f"{mode} creation exception: {e}")
@@ -105,7 +106,7 @@ class ConnectorFactory:
             if self._pool[mode][0] is connector:
                 # Simply mark IDLE (0 overhead!)
                 self._pool[mode] = (connector, kwargs, ConnectorState.IDLE)
-                logger.debug(f"Returned {mode} connector to pool (IDLE)")
+                logger.debug("Returned %s connector to pool (IDLE)", mode)
     
     def mark_invalid(self, mode: str):
         """Mark connector as invalid (call from error handlers).
@@ -115,7 +116,21 @@ class ConnectorFactory:
         if mode in self._pool:
             conn, kwargs, _ = self._pool[mode]
             self._pool[mode] = (conn, kwargs, ConnectorState.INVALID)
-            logger.debug(f"Marked {mode} connector INVALID")
+            logger.debug("Marked %s connector INVALID", mode)
+    
+    def mark_valid(self, mode: str):
+        """Mark connector as valid (call after successful operation).
+        
+        Used when IDLE connector passes first use (e.g., successful screenshot).
+        Only marks VALID if currently IDLE (idempotent).
+        """
+        if mode in self._pool:
+            conn, kwargs, state = self._pool[mode]
+            if state == ConnectorState.IDLE:
+                self._pool[mode] = (conn, kwargs, ConnectorState.VALID)
+                logger.debug("Marked %s connector VALID (IDLE→VALID)", mode)
+            elif state != ConnectorState.VALID:
+                logger.debug("Attempted to mark %s VALID, but state is %s", mode, state)
     
     def _is_local_usable(self, connector: BaseConnector) -> bool:
         """Lightweight local check (NO NETWORK IO!).
@@ -142,7 +157,6 @@ class ConnectorFactory:
                 if not hasattr(connector, '_hwnd') or connector._hwnd is None:
                     return False
                 # IsWindow is local API call, <1ms
-                from win32gui import IsWindow
                 return IsWindow(connector._hwnd)
             
             else:
@@ -150,7 +164,7 @@ class ConnectorFactory:
                 return getattr(connector, '_connected', False)
                 
         except Exception as e:
-            logger.debug(f"Local check exception: {e}")
+            logger.debug("Local check exception: %s", e)
             return False
     
     def _discard_connector(self, connector: BaseConnector):
@@ -158,7 +172,7 @@ class ConnectorFactory:
         try:
             connector.disconnect()
         except Exception as e:
-            logger.warning(f"Discard disconnect failed: {e}")
+            logger.warning("Discard disconnect failed: %s", e)
     
     def _create_connector(self, mode: str, **kwargs) -> BaseConnector:
         """Create connector instance (not connected)."""
@@ -175,5 +189,5 @@ class ConnectorFactory:
             try:
                 conn.disconnect()
             except Exception as e:
-                logger.warning(f"Disconnect {mode} failed: {e}")
+                logger.warning("Disconnect %s failed: %s", mode, e)
         self._pool.clear()
