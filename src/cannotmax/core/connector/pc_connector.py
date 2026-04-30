@@ -300,3 +300,21 @@ class PcConnector(BaseConnector):
     def update_device_serial(self, serial: str) -> str:
         """No-op for PC connector."""
         return self._window_name
+
+    def disconnect(self) -> None:
+        """Disconnect PC connector and cleanup resources."""
+        try:
+            if self._maa_controller is not None:
+                del self._maa_controller
+                self._maa_controller = None
+            self._maa_available = False
+            
+            if self._winrt_capture is not None:
+                self._winrt_capture.stop()
+                self._winrt_capture = None
+            
+            self._is_connected = False
+            self._hwnd = None
+            logger.info(f"PC disconnected: {self._window_name}")
+        except Exception as e:
+            logger.warning(f"PC disconnect error: {e}")

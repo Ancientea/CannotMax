@@ -252,3 +252,15 @@ class AdbConnector(BaseConnector):
             logger.exception(f"Update device serial failed: {e}")
             self._device_serial = ""
             return ""
+
+    def disconnect(self) -> None:
+        """Disconnect ADB and cleanup MAA controller."""
+        try:
+            if self._maa_controller is not None:
+                del self._maa_controller
+                self._maa_controller = None
+            self._maa_available = False
+            self._is_connected = False
+            logger.info(f"ADB disconnected: {self._device_serial}")
+        except Exception as e:
+            logger.warning(f"ADB disconnect error: {e}")

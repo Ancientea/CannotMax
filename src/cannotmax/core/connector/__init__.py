@@ -12,7 +12,13 @@ Both connectors automatically detect MAA Framework availability:
 from .base_connector import BaseConnector
 from .adb_connector import AdbConnector
 from .pc_connector import PcConnector
+from .factory import ConnectorFactory
 
-__all__ = ["BaseConnector", "AdbConnector", "PcConnector"]
+__all__ = [
+    "BaseConnector",
+    "AdbConnector",
+    "PcConnector",
+    "ConnectorFactory",
+]
 
 

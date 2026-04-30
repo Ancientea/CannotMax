@@ -61,3 +61,8 @@ class BaseConnector(ABC):
     def update_device_serial(self, serial: str) -> str:
         """Update device serial/connection string."""
         pass
+
+    @abstractmethod
+    def disconnect(self) -> None:
+        """Disconnect and cleanup resources."""
+        pass
