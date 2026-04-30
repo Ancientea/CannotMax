@@ -133,13 +133,8 @@ class AdbConnector:
                         self.device_serial = serial
                         return dev
 
-            # 自动选择第一个可用设备
-            if devices:
-                self.device_serial = devices[0]
-                logger.info(f"自动选择第一个可用设备: {self.device_serial}")
-                return self.device_serial
-
-            logger.error("未找到可连接的Android设备")
+            # 只使用指定的设备，不要自动选择其他设备
+            logger.error(f"未找到指定的设备: {serial}，当前在线设备: {devices}")
             self.device_serial = ""
             return ""
 

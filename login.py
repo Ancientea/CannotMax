@@ -345,16 +345,32 @@ class LoginManager:
             return False
         
         # 等待登录完成，最多等待70秒
-        self._log(logging.INFO, "等待登录完成")
+        self._log(logging.INFO, "等待登录完成 (最长70秒，动态检测)...")
         start_time = time.time()
+        
         while time.time() - start_time < 70:
             if not check_stop():
                 return False
-            # 简单的等待，不进行复杂的页面检测
-            if not sleep_with_check(1):
+                
+            # 每隔3秒进行一次检测，避免频繁截图和识别抢占CPU（特别是多开时）
+            if not sleep_with_check(3):
                 return False
+                
+            screenshot = self.connector.capture_screenshot()
+            if screenshot is not None:
+                comp_matched, _ = self.match_template(screenshot, "competition_page", threshold=0.7)
+                ann_matched, _ = self.match_template(screenshot, "announcement_close", threshold=0.9)
+                event_matched, _ = self.match_template(screenshot, "event_claim_close", threshold=0.9)
+                
+                if comp_matched or ann_matched or event_matched:
+                    elapsed = int(time.time() - start_time)
+                    self._log(logging.INFO, f"检测到游戏界面已加载 (耗时: {elapsed}秒)，提前结束等待")
+                    if not sleep_with_check(3):
+                        return False
+                        
+                    break
         
-        # 寻找争锋频道页面，最多等待30秒
+        # 寻找争锋频道入口，最多等待30秒
         self._log(logging.INFO, "寻找争锋频道入口")
         start_time = time.time()
         
@@ -365,50 +381,55 @@ class LoginManager:
                 return True
         
         # 识别失败时点击右上角两次
-        click_count = 0
-        while click_count < 2:
-            self._log(logging.INFO, "未检测到争锋频道入口，点击屏幕右上角")
+        self._log(logging.INFO, "未检测到争锋频道入口，点击屏幕右上角")
+        for _ in range(2):
             self.connector.click((0.1, 0.1))
             if not sleep_with_check(2):
                 return False
-            click_count += 1
             
             # 点击右上角后，立即再次检查争锋频道入口
-            if not sleep_with_check(1):
-                return False
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
                 if self._check_and_click_competition_page(screenshot, sleep_with_check, check_stop):
                     return True
-        
-        # 识别失败后识别关闭按钮
+
+        # 同时检测两种关闭按钮五次（每次间隔2秒）
+        self._log(logging.INFO, "尝试检测并关闭公告/活动弹窗")
         close_buttons = ["announcement_close", "event_claim_close"]
-        close_button_found = False
-        for button in close_buttons:
+        for i in range(5):
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
-                matched, pos = self.match_template(screenshot, button, threshold=0.9)
-                if matched:
-                    h, w = screenshot.shape[:2]
-                    rel_x = pos[0] / w
-                    rel_y = pos[1] / h
-                    self._log(logging.INFO, f"{button}位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
-                    self.connector.click((rel_x, rel_y))
-                    self._log(logging.INFO, f"关闭{button}页面")
-                    close_button_found = True
-                    if not sleep_with_check(1):
-                        return False
-                    break
-        
-        # 再次识别争锋频道入口
-        if close_button_found:
-            if not sleep_with_check(1):
+                for button in close_buttons:
+                    matched, pos = self.match_template(screenshot, button, threshold=0.9)
+                    if matched:
+                        h, w = screenshot.shape[:2]
+                        rel_x = pos[0] / w
+                        rel_y = pos[1] / h
+                        self._log(logging.INFO, f"{button}位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})")
+                        self.connector.click((rel_x, rel_y))
+                        self._log(logging.INFO, f"第 {i+1} 次检测，关闭 {button} 页面")
+                        break  # 发现并点击了一个按钮后，跳出内层循环，避免同一张截图重复点击
+            
+            # 每次检测完等待2秒
+            if not sleep_with_check(2):
                 return False
+
+        # 关闭完之后，20秒内重复检测争锋频道入口
+        self._log(logging.INFO, "检测争锋频道入口")
+        check_start_time = time.time()
+        while time.time() - check_start_time < 20:
+            if not check_stop():
+                return False
+                
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
                 if self._check_and_click_competition_page(screenshot, sleep_with_check, check_stop):
                     return True
-        
+            
+            # 每次轮询间隔2秒，避免频繁截图造成性能浪费
+            if not sleep_with_check(2):
+                return False
+
         # 还是失败的话就重启
         self._log(logging.ERROR, "未找到争锋频道入口，登录流程失败")
         return False
