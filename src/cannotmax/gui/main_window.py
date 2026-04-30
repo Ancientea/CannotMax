@@ -882,36 +882,29 @@ class ArknightsApp(QMainWindow):
             )
 
     def get_recognize(self):
-        """
-        根据当前模式获取截图并识别
-        """
-        screenshot = None
-        if self.current_capture_mode in ["ADB", "PC"]:
+        """Recognize monsters from screenshot."""
+        if self.connector is None:
+            QMessageBox.warning(self, "未连接", "请先连接设备/窗口")
+            return
+        
+        try:
+            # 1. Get full-screen screenshot
             screenshot = self.connector.capture_screenshot()
             if screenshot is None:
-                # 尝试重新连接一次
-                self.connector.connect()
-                screenshot = self.connector.capture_screenshot()
-            if screenshot is None:
-                logger.error(f"{self.current_capture_mode} 截图失败")
-                return []
-        elif self.current_capture_mode == "WIN":
-            # WIN 模式：截图
-            try:
-                screenshot = self.recognizer._screenshot_helper.capture_screenshot(
-                    bbox=self.recognizer.main_roi, auto_detect_zone=True
-                )
-            except Exception as e:
-                logger.error(f"WIN 截图失败：{e}")
-                return []
-            if screenshot is None:
-                logger.error("WIN 截图失败")
-                return []
-
-        if screenshot is not None:
+                raise Exception("截图失败")
+            
+            # 2. Recognizer handles: detect → crop → split → recognize
             results = self.recognizer.process_regions(screenshot)
-            return results
-        return []
+            
+            if not results:
+                raise Exception("未检测到怪物条")
+            
+            # 3. Update UI
+            self.update_monster(results)
+            
+        except Exception as e:
+            logger.exception(f"Recognition failed: {e}")
+            QMessageBox.warning(self, "识别失败", str(e))
 
     def update_monster(self, results):
         """
@@ -932,12 +925,10 @@ class ArknightsApp(QMainWindow):
         self.input_panel.set_monster_counts(left_counts, right_counts)
 
     def recognize_only(self):
-        recognize_results = self.get_recognize()
-        self.update_monster(recognize_results)
+        self.get_recognize()
 
     def recognize_and_predict(self):
-        recognize_results = self.get_recognize()
-        self.update_monster(recognize_results)
+        self.get_recognize()
         prediction = self.get_prediction()
         self.update_prediction(prediction)
         # 历史对局
