@@ -30,6 +30,7 @@ from ..core.connector.maa_registry import (
 )
 from ..core.connector.factory import ConnectorFactory, ConnectorState
 from ..core.connector.winrt_capture import WinRTScreenCapture, WindowPickerDialog
+from ..core.roi_selector import ROISelector
 from .dark_mode_style_fix import DarkModeStyleFix
 from ..analytics import similar_history_match
 from ..core import recognize
@@ -102,6 +103,7 @@ class ArknightsApp(QMainWindow):
 
         # Recognizer (single instance, no method parameter)
         self.recognizer = recognize.RecognizeMonster()
+        self.roi_selector = ROISelector()
 
         # 初始化UI后加载历史数据
         logger.info("尝试获取错题本")
@@ -184,8 +186,10 @@ class ArknightsApp(QMainWindow):
         kwargs = self._get_connector_kwargs(mode)
         new_connector = self.connector_factory.get_connector(mode, **kwargs)
         
-        # Return old connector to pool if exists and is not same as new one
-        if self.connector is not None and self.connector is not new_connector:
+        # Return old connector to pool if it exists in the pool
+        if (self.connector is not None and 
+            self.connector is not new_connector and 
+            old_mode in self.connector_factory._pool):
             self.connector_factory.return_connector(old_mode, self.connector)
         
         self.connector = new_connector
@@ -926,14 +930,8 @@ class ArknightsApp(QMainWindow):
             if not results:
                 raise Exception("未检测到怪物条")
             
-            # 3. Success: mark VALID and update UI
-            # Only mark VALID if not already VALID (transition IDLE→VALID on success)
-            if current_state != ConnectorState.VALID:
-                self.connector_factory._pool[self.current_capture_mode] = (
-                    self.connector,
-                    self._get_connector_kwargs(self.current_capture_mode),
-                    ConnectorState.VALID
-                )
+            # 3. Success: mark VALID and update UI (IDLE→VALID transition)
+            self.connector_factory.mark_valid(self.current_capture_mode)
             self._update_connector_ready_ui()
             self.update_monster(results)
             
@@ -1004,10 +1002,17 @@ class ArknightsApp(QMainWindow):
         self.animate_size_change(target_width)
 
     def reselect_roi(self):
-        roi = self.recognizer.select_roi()
-        if roi:
-            self.recognizer.main_roi = roi
-            logger.info(f"已设置自定义 ROI: {roi}")
+        """Re-select ROI interactively."""
+        # Get current screenshot to display in ROI selector
+        try:
+            screenshot = self.connector.capture_screenshot()
+            roi = self.roi_selector.select_roi(screenshot)
+            if roi:
+                self.recognizer.main_roi = roi
+                logger.info(f"已设置自定义 ROI: {roi}")
+        except Exception as e:
+            logger.exception(f"ROI 选择失败：{e}")
+            QMessageBox.warning(self, "错误", f"无法获取截图进行 ROI 选择：{e}")
 
     def toggle_auto_fetch(self):
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
@@ -1141,7 +1146,9 @@ class ArknightsApp(QMainWindow):
         kwargs = self._get_connector_kwargs(self.current_capture_mode)
         self.connector = self.connector_factory.get_connector(self.current_capture_mode, **kwargs)
         self.serial_entry.setCurrentText(device_serial)
-        QMessageBox.information(self, "提示", f"已更新模拟器序列号为: {device_serial}")
+        # Update UI to reflect new connector state (IDLE)
+        self._update_ui_from_factory_state()
+        QMessageBox.information(self, "提示", f"已更新模拟器序列号为：{device_serial}")
 
     def start_callback(self):
         self.update_button_signal.emit("停止自动获取数据")
