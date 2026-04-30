@@ -111,7 +111,7 @@ class ArknightsApp(QMainWindow):
             self.history_match.N_history = 0 if self.history_match.labels is None else len(self.history_match.labels)
             logger.info("错题本加载成功")
         except Exception:
-            self.history_match.feat_past = None
+            self.history_match.feat_past = np.array([])
             self.history_match.N_history = 0
             logger.warning("错题本加载失败")
 
@@ -178,13 +178,7 @@ class ArknightsApp(QMainWindow):
             kwargs = self._get_connector_kwargs(mode)
             new_connector = self.connector_factory.get_connector(mode, **kwargs)
             
-            if new_connector is not None:
-                self.connector = new_connector
-                self._on_connector_ready(mode)
-            else:
-                self.connector = None
-                self._on_connector_failed(mode)
-                
+            self.connector = new_connector  # Update current connector reference
         finally:
             self._switching_mode = False
 
