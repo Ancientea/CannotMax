@@ -276,8 +276,14 @@ class WinRTScreenCapture:
                 self.stop()
                 raise RuntimeError("WinRT capture 尚未产生首帧")
 
-def list_visible_window_titles() -> list[str]:
-    """列出所有**可见**窗口的标题（去重并按字典序排序）。"""
+def list_visible_window_titles(filter_hwnds: Optional[list[int]] = None) -> list[str]:
+    """列出所有**可见**窗口的标题（去重并按字典序排序）。
+    
+    参数
+    ----
+    filter_hwnds: Optional[list[int]]
+        若提供，仅枚举这些 hwnd 对应的窗口；否则枚举所有窗口
+    """
     EnumWindows = ctypes.windll.user32.EnumWindows
     EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     IsWindowVisible = ctypes.windll.user32.IsWindowVisible
@@ -287,6 +293,10 @@ def list_visible_window_titles() -> list[str]:
     titles: list[str] = []
 
     def foreach(hwnd, lParam):
+        # 过滤：如果提供了 filter_hwnds，只处理这些 hwnd
+        if filter_hwnds is not None and hwnd not in filter_hwnds:
+            return True
+        
         if IsWindowVisible(hwnd):
             length = GetWindowTextLengthW(hwnd)
             if length > 0:
@@ -304,25 +314,33 @@ def list_visible_window_titles() -> list[str]:
 
 # ------------------------- 截屏源选择对话框 -------------------------
 class WindowPickerDialog(QDialog):
-    """列出可见窗口标题，并内置“整屏(1/2/3)”选项。双击确定。"""
+    """列出可见窗口标题，并内置"整屏 (1/2/3)"选项。双击确定。"""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, filter_hwnds: Optional[list[int]] = None):
+        """
+        参数
+        ----
+        parent: Parent widget
+        filter_hwnds: 若提供，仅枚举这些 hwnd 对应的窗口 (PC 多窗口模式)
+                     若为 None，枚举所有窗口 (WIN 模式)
+        """
         super().__init__(parent)
         self.setWindowTitle("选择截屏窗口")
         self.resize(520, 480)
         self.selected_title = None
+        self._filter_hwnds = filter_hwnds
 
         self.search = QLineEdit(self)
         self.search.setPlaceholderText("输入关键字过滤（支持大小写不敏感）")
 
         self.listw = QListWidget(self)
-        # 预置“整屏（主屏0/副屏1/2）”选项在最上面
-        self.listw.addItem("【整屏】主屏(1)")
-        self.listw.addItem("【整屏】副屏(2)")
-        self.listw.addItem("【整屏】副屏(3)")
+        # 预置"整屏（主屏 0/副屏 1/2）"选项在最上面
+        self.listw.addItem("【整屏】主屏 (1)")
+        self.listw.addItem("【整屏】副屏 (2)")
+        self.listw.addItem("【整屏】副屏 (3)")
         self.listw.addItem("—————— 窗口列表 ——————")
 
-        self._all_titles = list_visible_window_titles()
+        self._all_titles = list_visible_window_titles(filter_hwnds=filter_hwnds)
         for t in self._all_titles:
             self.listw.addItem(t)
 
