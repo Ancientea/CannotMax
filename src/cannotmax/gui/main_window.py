@@ -898,22 +898,30 @@ class ArknightsApp(QMainWindow):
     def get_recognize(self):
         """Recognize monsters from screenshot."""
         if self.connector is None:
-            QMessageBox.warning(self, "未连接", "请先连接设备/窗口")
+            QMessageBox.warning(self, "未连接", "请先切换模式并连接设备/窗口")
             return
         
         try:
-            # 1. Get full-screen screenshot
+            # 1. Ensure connection (lazy connection with 3-retry)
+            if not self.connector.ensure_connected():
+                QMessageBox.warning(
+                    self, "连接失败", 
+                    "请检查设备/窗口是否可用，或手动点击【切换连接】按钮"
+                )
+                return
+            
+            # 2. Get full-screen screenshot
             screenshot = self.connector.capture_screenshot()
             if screenshot is None:
-                raise Exception("截图失败")
+                raise Exception("截图失败，请检查设备连接")
             
-            # 2. Recognizer handles: detect → crop → split → recognize
+            # 3. Recognizer handles: detect → crop → split → recognize
             results = self.recognizer.process_regions(screenshot)
             
             if not results:
                 raise Exception("未检测到怪物条")
             
-            # 3. Update UI
+            # 4. Update UI
             self.update_monster(results)
             
         except Exception as e:
