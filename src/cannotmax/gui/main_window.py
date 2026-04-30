@@ -153,7 +153,8 @@ class ArknightsApp(QMainWindow):
             mode: Capture mode (ADB/PC/WIN)
         """
         # Qt mutex with RAII-style locking (auto-unlock on scope exit)
-        locker = QtCore.QMutexLocker(self._mode_switch_mutex)
+        # Note: _ variable name indicates intentionally unused; object must be kept alive
+        _ = QtCore.QMutexLocker(self._mode_switch_mutex)
         
         self.current_capture_mode = mode
         logger.info(f"Switching to mode: {mode}")
