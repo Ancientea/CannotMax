@@ -11,6 +11,7 @@ Usage:
     conn.click((0.5, 0.5))  # MAA click or ADB input tap
 """
 import subprocess
+import time
 import logging
 from pathlib import Path
 from typing import Optional
@@ -78,9 +79,11 @@ class AdbConnector(BaseConnector):
             self._init_maa()
 
             logger.info(
-                f"ADB connected: {self._device_serial}, "
-                f"{self._screen_width}x{self._screen_height}, "
-                f"MAA={'enabled' if self._maa_available else 'disabled'}"
+                "ADB connected: %s, %sx%s, MAA=%s",
+                self._device_serial,
+                self._screen_width,
+                self._screen_height,
+                'enabled' if self._maa_available else 'disabled'
             )
             return True
 
@@ -88,6 +91,25 @@ class AdbConnector(BaseConnector):
             logger.exception(f"ADB connection failed: {e}")
             self._is_connected = False
             return False
+
+    def ensure_connected(self, max_retries: int = 3) -> bool:
+        """Ensure connection with retry logic."""
+        if self._is_connected:
+            return True
+        
+        for attempt in range(max_retries):
+            try:
+                if self.connect():
+                    return True
+                if attempt < max_retries - 1:
+                    time.sleep(0.5)  # 500ms delay between retries
+            except Exception as e:
+                logger.warning(f"Connection attempt {attempt+1}/{max_retries} failed: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(0.5)
+        
+        logger.error(f"Failed to connect after {max_retries} attempts")
+        return False
 
     def _init_maa(self):
         """Initialize MAA Framework controller if available."""
