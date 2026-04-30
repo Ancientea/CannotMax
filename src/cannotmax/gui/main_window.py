@@ -1050,6 +1050,10 @@ class ArknightsApp(QMainWindow):
 
 
     def update_device_serial(self):
+        if self.connector is None:
+            QMessageBox.warning(self, "提示", "请先选择连接方式并连接设备")
+            return
+
         new_serial = self.serial_entry.currentText()
         device_serial = self.connector.update_device_serial(new_serial)
         self.connector.connect()  # 尝试连接新设备
