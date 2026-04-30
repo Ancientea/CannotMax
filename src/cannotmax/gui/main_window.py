@@ -805,11 +805,11 @@ class ArknightsApp(QMainWindow):
         """
         screenshot = None
         if self.current_capture_mode in ["ADB", "PC"]:
-            screenshot = self.active_connector.capture_screenshot()
+            screenshot = self.connector.capture_screenshot()
             if screenshot is None:
                 # 尝试重新连接一次
-                self.active_connector.connect()
-                screenshot = self.active_connector.capture_screenshot()
+                self.connector.connect()
+                screenshot = self.connector.capture_screenshot()
             if screenshot is None:
                 logger.error(f"{self.current_capture_mode} 截图失败")
                 return []
@@ -899,7 +899,7 @@ class ArknightsApp(QMainWindow):
     def toggle_auto_fetch(self):
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
             self.auto_fetch = auto_fetch.AutoFetch(
-                self.active_connector,
+                self.connector,
                 self.game_mode,
                 self.is_invest,
                 update_prediction_callback=self.update_prediction_callback,
