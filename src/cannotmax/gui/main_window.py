@@ -91,6 +91,7 @@ class ArknightsApp(QMainWindow):
 
         # Single connector managed by factory
         self.connector_factory = ConnectorFactory()
+        self._mode_switch_lock = threading.Lock()  # Mutex for mode switching
 
         self.auto_fetch_running = False
         self.is_invest = False
@@ -151,12 +152,7 @@ class ArknightsApp(QMainWindow):
         Args:
             mode: Capture mode (ADB/PC/WIN)
         """
-        if getattr(self, "_switching_mode", False):
-            logger.warning("Mode switching in progress, ignoring")
-            return
-        self._switching_mode = True
-        
-        try:
+        with self._mode_switch_lock:
             self.current_capture_mode = mode
             logger.info(f"Switching to mode: {mode}")
             
@@ -179,8 +175,6 @@ class ArknightsApp(QMainWindow):
             new_connector = self.connector_factory.get_connector(mode, **kwargs)
             
             self.connector = new_connector  # Update current connector reference
-        finally:
-            self._switching_mode = False
 
     def _on_connector_ready(self, mode: str):
         """Called when connector successfully connected."""
