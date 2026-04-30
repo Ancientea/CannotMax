@@ -549,74 +549,7 @@ class ArknightsApp(QMainWindow):
 
         self.size_animation.finished.connect(set_fixed_after_animation)
 
-    @property
-    def active_connector(self):
-        if self.current_capture_mode == "PC":
-            return self.pc_connector
-        return self.adb_connector
 
-    def on_mode_changed(self, mode):
-        """切换捕获模式"""
-        self.current_capture_mode = mode
-        logger.info(f"切换捕获模式为: {mode}")
-
-        is_win_mode = mode == "WIN"
-        is_adb_mode = mode == "ADB"
-        is_pc_mode = mode == "PC"
-
-        # 切换窗口捕获相关控件
-        self.choose_window_button.setEnabled(is_win_mode)
-        self.reselect_button.setEnabled(is_win_mode)
-
-        # 切换 ADB 相关控件
-        self.serial_label.setEnabled(is_adb_mode)
-        self.serial_entry.setEnabled(is_adb_mode)
-        self.serial_button.setEnabled(is_adb_mode)
-        self.connection_type_label.setEnabled(is_adb_mode)
-        self.connection_type_combo.setEnabled(is_adb_mode)
-        self.input_method_label.setEnabled(is_adb_mode)
-        self.input_method_combo.setEnabled(is_adb_mode)
-
-        if mode == "ADB":
-            self.refresh_device_list()
-            self.recognizer = recognize.RecognizeMonster(method="ADB")
-            if not self.adb_connector.device_serial:
-                self.adb_connector_thread.start()
-        elif mode == "WIN":
-            if self.recognizer.method != "WIN":
-                self.recognizer = recognize.RecognizeMonster(method="WIN")
-            if self.recognizer._connector is None:
-                self.choose_capture_window()
-        elif mode == "PC":
-            self.recognizer = recognize.RecognizeMonster(
-                method="ADB"
-            )  # reuse ADB reading methodology but on PC Connector
-            if not self.pc_connector.is_connected:
-                self.pc_connector.connect()
-                if not self.pc_connector.is_connected:
-                    QMessageBox.warning(self, "警告", "未能连接到PC端窗口(明日方舟)。")
-
-    def on_connection_type_changed(self, index):
-        type_id = self.connection_type_combo.currentData()
-        if not type_id:
-            return
-        default_address = ConnectionTypeRegistry.get_default_address(type_id)
-        if default_address:
-            self.serial_entry.setCurrentText(default_address)
-            self.adb_connector.set_connection_type(type_id)
-            self.adb_connector.set_device_serial(default_address)
-        if self.adb_connector.is_connected:
-            self.adb_connector.disconnect()
-            self.maa_status_label.setText("已断开，请重新连接")
-            self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
-
-    def on_input_method_changed(self, index):
-        method_id = self.input_method_combo.currentData()
-        if not method_id:
-            return
-        self.adb_connector.set_input_method(method_id)
-        if self.adb_connector.is_connected:
-            QMessageBox.information(self, "提示", "输入方式已更改，请重新连接以生效")
 
     def choose_capture_window(self):
         """弹出对话框选择窗口作为 WinRT 截屏源，用于窗口捕获模式"""
@@ -1001,7 +934,7 @@ class ArknightsApp(QMainWindow):
     def refresh_device_list(self):
         """刷新并更新模拟器序列号下拉列表"""
         current_text = self.serial_entry.currentText()
-        devices = self.adb_connector.get_device_list()
+        devices = self.connector.get_device_list()
         self.serial_entry.clear()
         if devices:
             self.serial_entry.addItems(devices)
@@ -1017,8 +950,8 @@ class ArknightsApp(QMainWindow):
 
     def update_device_serial(self):
         new_serial = self.serial_entry.currentText()
-        device_serial = self.adb_connector.update_device_serial(new_serial)
-        self.adb_connector.connect()  # 尝试连接新设备
+        device_serial = self.connector.update_device_serial(new_serial)
+        self.connector.connect()  # 尝试连接新设备
         self.serial_entry.setCurrentText(device_serial)
         QMessageBox.information(self, "提示", f"已更新模拟器序列号为: {device_serial}")
 
