@@ -61,29 +61,73 @@ class PcConnector(BaseConnector):
         """Check if MAA Framework is available and initialized."""
         return self._maa_available
 
+    def _find_all_windows(self, pattern: str) -> list[int]:
+        """Enumerate all visible windows with title containing pattern."""
+        matches = []
+
+        def enum_proc(hwnd, _):
+            if win32gui.IsWindowVisible(hwnd):
+                title = win32gui.GetWindowText(hwnd)
+                if pattern in title:
+                    matches.append(hwnd)
+            return True
+
+        win32gui.EnumWindows(enum_proc, 0)
+        return matches
+
+    def _select_window(self, hwnds: list[int]) -> Optional[int]:
+        """Show window picker dialog limited to given hwnds."""
+        from PyQt6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if not app:
+            logger.error("QApplication not available for window selection")
+            return None
+
+        from .winrt_capture import WindowPickerDialog
+        parent = app.activeWindow() if hasattr(app, 'activeWindow') else None
+        dlg = WindowPickerDialog(parent, filter_hwnds=hwnds)
+
+        if dlg.exec():
+            sel = dlg.get_selection()
+            if sel and "hwnd" in sel:
+                return sel["hwnd"]
+        return None
+
     def connect(self) -> bool:
-        """Connect to PC window and initialize MAA or WinRT."""
-        hwnd = win32gui.FindWindow(None, self._window_name)
-        if not hwnd:
-            logger.warning(f"Window not found: {self._window_name}")
+        """Connect to PC window with multi-window detection."""
+        # 1. Find all matching windows
+        hwnds = self._find_all_windows(self._window_name)
+
+        if not hwnds:
+            logger.error(f"No windows found matching: {self._window_name}")
             return False
 
-        self._hwnd = hwnd
-        rect = win32gui.GetClientRect(hwnd)
+        # 2. Select if multiple
+        if len(hwnds) == 1:
+            self._hwnd = hwnds[0]
+            logger.info(f"Auto-selected window: {self._hwnd}")
+        else:
+            logger.info(f"Found {len(hwnds)} windows, showing selector")
+            selected = self._select_window(hwnds)
+            if selected is None:
+                logger.info("User cancelled window selection")
+                return False
+            self._hwnd = selected
+
+        # 3. Get resolution
+        rect = win32gui.GetClientRect(self._hwnd)
         self._screen_width = rect[2] - rect[0]
         self._screen_height = rect[3] - rect[1]
 
-        # Try to initialize MAA
+        # 4. Initialize MAA or WinRT
         self._init_maa()
-
-        # If MAA failed, fallback to WinRT
         if not self._maa_available:
             self._init_winrt()
 
         self._is_connected = True
         logger.info(
             f"PC connected: {self._window_name}, "
-            f"{self._screen_width}x{self._screen_height}, "
+            f"hwnd={self._hwnd}, {self._screen_width}x{self._screen_height}, "
             f"MAA={'enabled' if self._maa_available else 'disabled'}"
         )
         return True

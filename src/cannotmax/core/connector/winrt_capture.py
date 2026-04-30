@@ -329,6 +329,7 @@ class WindowPickerDialog(QDialog):
         self.resize(520, 480)
         self.selected_title = None
         self._filter_hwnds = filter_hwnds
+        self._hwnd_to_title: dict[int, str] = {}
 
         self.search = QLineEdit(self)
         self.search.setPlaceholderText("输入关键字过滤（支持大小写不敏感）")
@@ -341,6 +342,28 @@ class WindowPickerDialog(QDialog):
         self.listw.addItem("—————— 窗口列表 ——————")
 
         self._all_titles = list_visible_window_titles(filter_hwnds=filter_hwnds)
+        if filter_hwnds:
+            # Build mapping when filter_hwnds provided
+            EnumWindows = ctypes.windll.user32.EnumWindows
+            EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            IsWindowVisible = ctypes.windll.user32.IsWindowVisible
+            GetWindowTextW = ctypes.windll.user32.GetWindowTextW
+            GetWindowTextLengthW = ctypes.windll.user32.GetWindowTextLengthW
+
+            def build_map(hwnd, _):
+                if filter_hwnds and hwnd not in filter_hwnds:
+                    return True
+                if IsWindowVisible(hwnd):
+                    length = GetWindowTextLengthW(hwnd)
+                    if length > 0:
+                        buff = ctypes.create_unicode_buffer(length + 1)
+                        GetWindowTextW(hwnd, buff, length + 1)
+                        t = buff.value.strip()
+                        if t:
+                            self._hwnd_to_title[hwnd] = t
+                return True
+            EnumWindows(EnumWindowsProc(build_map), 0)
+
         for t in self._all_titles:
             self.listw.addItem(t)
 
@@ -381,5 +404,11 @@ class WindowPickerDialog(QDialog):
         elif text.startswith("——————"):
             return None
         else:
-            # 返回 window_name
-            return {"window_name": text}
+            # 返回 window_name 和 hwnd (如果有映射)
+            result = {"window_name": text}
+            # 查找对应的 hwnd
+            for hwnd, title in self._hwnd_to_title.items():
+                if title == text:
+                    result["hwnd"] = hwnd
+                    break
+            return result
