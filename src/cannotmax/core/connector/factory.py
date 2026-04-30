@@ -32,12 +32,18 @@ class ConnectorFactory:
                 logger.debug(f"Reusing existing {mode} connector")
                 return existing
             else:
-                # Disconnect failed instance
-                try:
-                    existing.disconnect()
-                except Exception as e:
-                    logger.warning(f"Disconnect failed: {e}")
-                del self._pool[mode]
+                # Try to reconnect first
+                logger.info(f"Existing {mode} connector disconnected, attempting reconnect...")
+                if existing.connect():
+                    logger.debug(f"Reusing existing {mode} connector (reconnected)")
+                    return existing
+                else:
+                    # Reconnect failed: disconnect and remove
+                    try:
+                        existing.disconnect()
+                    except Exception as e:
+                        logger.warning(f"Disconnect failed: {e}")
+                    del self._pool[mode]
         
         # Create new
         logger.info(f"Creating new {mode} connector")
