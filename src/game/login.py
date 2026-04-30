@@ -478,7 +478,6 @@ class LoginManager:
             if not sleep_with_check(2):
                 return False
 <<<<<<< HEAD:src/game/login.py
-            click_count += 1
 
 =======
             

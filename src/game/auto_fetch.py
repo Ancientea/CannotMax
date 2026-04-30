@@ -237,8 +237,8 @@ class AutoFetch:
             field_feature_columns = self.field_recognizer.get_feature_columns()
             field_data_values = []
             for col in field_feature_columns:
-                if col in field_recoginze_result:
-                    field_data_values.append(field_recoginze_result[col])
+                if col in field_recognize_result:
+                    field_data_values.append(field_recognize_result[col])
                 else:
                     field_data_values.append(0)  # 默认值
 
