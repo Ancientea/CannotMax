@@ -66,8 +66,6 @@ def main():
         from PyQt6.QtCore import Qt
         
         app = QApplication(_sys.argv)  # PyQt6 默认启用 High DPI
-        from .gui.dark_mode_style_fix import DarkModeStyleFix
-        DarkModeStyleFix.apply(app)  # 应用深色模式样式
         from .gui.main_window import ArknightsApp
         window = ArknightsApp()
         window.show()
