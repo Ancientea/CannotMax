@@ -188,6 +188,7 @@ def log_config_to_loggers(logger_instance, cfg: DictConfig):
 def main(cfg: DictConfig | None = None):
     if cfg is None:
         return
+
     print(f"配置:\n{OmegaConf.to_yaml(cfg)}")
 
     L.seed_everything(cfg.runtime.seed, workers=True)
@@ -216,6 +217,8 @@ def main(cfg: DictConfig | None = None):
 
     total_units = MONSTER_COUNT + FIELD_FEATURE_COUNT
     print(f"模型使用特征数: 怪物({MONSTER_COUNT}) + 场地({FIELD_FEATURE_COUNT}) = {total_units}")
+    if cfg.get("model") is not None and cfg.model.get("dropout") is not None:
+        print(f"模型Dropout: {cfg.model.dropout}")
     print(
         f"模型参数数量: {sum(p.numel() for p in lightning_module.model.parameters() if p.requires_grad)}"
     )

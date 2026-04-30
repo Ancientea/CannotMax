@@ -24,6 +24,7 @@ class ArknightsLightningModule(L.LightningModule):
             embed_dim=model_cfg.embed_dim,
             num_heads=model_cfg.num_heads,
             num_layers=model_cfg.num_layers,
+            dropout=float(model_cfg.get("dropout", 0.3)),
         )
         self.criterion = nn.MSELoss()
         self.lr = trainer_cfg.lr
