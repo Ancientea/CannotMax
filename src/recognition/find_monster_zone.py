@@ -2,6 +2,8 @@ import logging
 import cv2
 import numpy as np
 
+from src.core.paths import ensure_tmp_images_dir
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -657,7 +659,7 @@ def cutFrame(image, high_tol=False):
 
 
 if __name__ == "__main__":
-    image = cv2.imread("src/resources/assets/images/tmp/zone1.png")
+    image = cv2.imread(str(ensure_tmp_images_dir() / "zone1.png"))
 
     height, width, _ = image.shape
 

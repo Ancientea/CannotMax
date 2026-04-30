@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 from src.recognition.recognize import INTELLIGENT_WORKERS_DEBUG
 from src.core.config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from src.core.paths import PROJECT_ROOT, process_image_path, simulation_path
 from collections.abc import Callable
 from collections import deque
 from .login import LoginManager
@@ -71,7 +72,7 @@ class AutoFetch:
             start_timestamp if start_timestamp is not None else time.time()
         )  # 使用预先确定的时间戳
         self.training_duration = training_duration  # 训练时长
-        self.data_folder = Path(f"data")  # 数据文件夹路径
+        self.data_folder = PROJECT_ROOT / "data"  # 数据文件夹路径
         self.image_buffer = deque(
             maxlen=5
         )  # 图片缓存队列，设置队列长短来保存结算前的图片
@@ -112,7 +113,7 @@ class AutoFetch:
 
     def _init_templates(self):
         for i in range(16):
-            img = cv2.imread(f"src/resources/assets/images/process/{i}.png")
+            img = cv2.imread(str(process_image_path(i)))
             if img is not None:
                 # 使用最近邻插值缩放模板，速度最快
                 img_resized = cv2.resize(
@@ -844,7 +845,7 @@ class AutoFetch:
             start_time = datetime.datetime.fromtimestamp(
                 self.start_time
             ).strftime(r"%Y_%m_%d__%H_%M_%S")
-            self.data_folder = Path(f"data/{start_time}")
+            self.data_folder = PROJECT_ROOT / "data" / start_time
             self._log(logging.INFO, f"创建文件夹: {self.data_folder}")
             self.data_folder.mkdir(parents=True, exist_ok=True)  # 创建文件夹
             (self.data_folder / "images").mkdir(parents=True, exist_ok=True)

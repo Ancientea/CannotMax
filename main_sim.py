@@ -9,9 +9,10 @@ import sys
 import logging
 
 from src.simulation.battle_field import Battlefield
-from src.simulation.utils import REVERSE_MONSTER_MAPPING, Faction
+from src.simulation.utils import Faction
 from src.simulation.vector2d import FastVector
 from src.simulation.monsters import AttackState, Monster
+from src.core.config import MONSTER_DATA, MONSTER_IMAGES
 from src.recognition.recognize import MONSTER_COUNT
 
 logger = logging.getLogger(__name__)
@@ -154,6 +155,16 @@ class SandboxSimulator:
         self.state_machine.transition_to(AppState.INITIAL)
         self.enter_setup_phase()
 
+    def _resolve_monster_icon_key(self, monster_name: str) -> str:
+        """根据怪物名称解析对应的图标文件名。"""
+        if monster_name in self.monster_icon_key_map:
+            return self.monster_icon_key_map[monster_name]
+
+        if monster_name in MONSTER_IMAGES:
+            return monster_name
+
+        return self.default_icon_key
+
     def update_ui_state(self):
         """根据当前状态更新所有控件状态"""
         states = self.state_machine.get_control_states()
@@ -182,8 +193,10 @@ class SandboxSimulator:
 
     def load_assets(self):
         self.icons = {}
+        self.monster_icon_key_map = {}
+        self.default_icon_key = "empty" if "empty" in MONSTER_IMAGES else ""
         try:
-            with open("simulator/monsters.json", encoding="utf-8") as f:
+            with open("src/simulation/monsters.json", encoding="utf-8") as f:
                 self.monster_data = json.load(f)["monsters"]
         except FileNotFoundError:
             logger.error("错误: monsters.json 未找到，请检查路径！")
@@ -191,31 +204,47 @@ class SandboxSimulator:
 
             return
 
-        for i in range(self.num_monsters):
-            image_file_id = i + 1
+        # 构建“名称/原始名称 -> 图标文件名”的映射，优先使用原始名称对应的图片。
+        for _, row in MONSTER_DATA.iterrows():
+            monster_name = str(row["名称"])
+            original_name = str(row["原始名称"])
+
+            icon_key = None
+            if original_name in MONSTER_IMAGES:
+                icon_key = original_name
+            elif monster_name in MONSTER_IMAGES:
+                icon_key = monster_name
+
+            if icon_key is None:
+                icon_key = self.default_icon_key
+
+            self.monster_icon_key_map[monster_name] = icon_key
+            self.monster_icon_key_map[original_name] = icon_key
+
+        # 为实际存在的图片创建 Tk 图像，未命中的统一回退到灰色或 empty。
+        for image_key, image_array in MONSTER_IMAGES.items():
             try:
-                image = Image.open(
-                    f"src/resources/assets/images/{image_file_id}.png"
-                )
-                self.icons[i] = {
-                    "red": ImageTk.PhotoImage(image.resize((40, 40))),
+                if image_array is None:
+                    raise ValueError("图像数据为空")
+
+                image = Image.fromarray(image_array[:, :, ::-1])
+                image_40 = image.resize((40, 40))
+                self.icons[image_key] = {
+                    "red": ImageTk.PhotoImage(image_40, master=self.master),
                     "blue": ImageTk.PhotoImage(
-                        image.resize((40, 40)).transpose(Image.FLIP_LEFT_RIGHT)
+                        image_40.transpose(Image.FLIP_LEFT_RIGHT),
+                        master=self.master,
                     ),
                 }
             except Exception as e:
-                # 同样，show_message_below_button 可能还不可用
-                logger.error(
-                    f"加载图标错误 (图标键: {i}, 文件名ID: {image_file_id}): {str(e)}"
-                )
-                self.icons[i] = {
-                    "red": ImageTk.PhotoImage(
-                        Image.new("RGB", (40, 40), "gray")
-                    ),
-                    "blue": ImageTk.PhotoImage(
-                        Image.new("RGB", (40, 40), "gray")
-                    ),
-                }
+                logger.error(f"加载图标错误 (图标键: {image_key}): {str(e)}")
+
+        if self.default_icon_key and self.default_icon_key not in self.icons:
+            fallback = Image.new("RGB", (40, 40), "gray")
+            self.icons[self.default_icon_key] = {
+                "red": ImageTk.PhotoImage(fallback, master=self.master),
+                "blue": ImageTk.PhotoImage(fallback, master=self.master),
+            }
 
     def init_battlefield_for_setup(self):
         self.state_machine.transition_to(AppState.SETUP)
@@ -497,17 +526,8 @@ class SandboxSimulator:
                 ui_unit.team = (
                     "red" if monster.faction == Faction.LEFT else "blue"
                 )
-                display_id_for_icon = REVERSE_MONSTER_MAPPING.get(monster.name)
-                if display_id_for_icon is None:
-                    logger.error(
-                        f"怪物名 {monster.name} 在 REVERSE_MONSTER_MAPPING 中未找到!"
-                    )
-                    self.show_message_below_button(
-                        f"怪物名 {monster.name} 在 REVERSE_MONSTER_MAPPING 中未找到!",
-                        is_error=True,
-                    )
-                    display_id_for_icon = 0
-                ui_unit.unit_id = display_id_for_icon
+                ui_unit.unit_id = self._resolve_monster_icon_key(monster.name)
+                ui_unit.monster_name = monster.name
                 ui_unit.health = monster.health
                 ui_unit.max_health = monster.max_health
                 ui_unit.skill = monster.get_skill_bar()
@@ -538,11 +558,12 @@ class SandboxSimulator:
         y_pixel = unit.y * self.cell_size
 
         icon_to_draw = None
-        if (
-            unit.unit_id in self.icons
-            and unit.team in self.icons[unit.unit_id]
-        ):
-            icon_to_draw = self.icons[unit.unit_id][unit.team]
+        icon_key = getattr(unit, "unit_id", self.default_icon_key)
+        if icon_key not in self.icons:
+            icon_key = self.default_icon_key
+
+        if icon_key in self.icons and unit.team in self.icons[icon_key]:
+            icon_to_draw = self.icons[icon_key][unit.team]
         else:
             self.canvas.create_rectangle(
                 x_pixel - 20,

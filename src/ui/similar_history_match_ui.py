@@ -14,6 +14,7 @@ import logging
 
 from src.analysis.similar_history_match import HistoryMatch
 from src.core.config import MONSTER_COUNT, MONSTER_DATA
+from src.core.paths import image_path
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +272,7 @@ class HistoryMatchUI(QFrame):
                 img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 try:
                     pixmap = QPixmap(
-                        f"src/resources/assets/images/{MONSTER_DATA['原始名称'][i+1]}.png"
+                        str(image_path(MONSTER_DATA['原始名称'][i + 1]))
                     )
                     if not pixmap.isNull():
                         pixmap = pixmap.scaled(

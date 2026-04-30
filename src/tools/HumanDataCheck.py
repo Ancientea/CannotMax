@@ -3,6 +3,8 @@ from PIL import Image, ImageTk
 import csv
 import os
 
+from src.core.paths import PROJECT_ROOT, image_path, data_path
+
 
 class ArknightsApp:
     def __init__(self, root):
@@ -74,7 +76,7 @@ class ArknightsApp:
         self.jump_button.pack(side=tk.LEFT, padx=5)
 
         # 初始化数据
-        self.data = self.read_csv("arknights.csv")
+        self.data = self.read_csv(PROJECT_ROOT / "data" / "raw" / "arknights.csv")
         self.current_row_index = 0
 
         # 加载图片
@@ -100,8 +102,8 @@ class ArknightsApp:
         base_dir = os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )
-        monster_csv_path = os.path.join(base_dir, "monster_greenvine.csv")
-        images_dir = os.path.join(base_dir, "images")
+        monster_csv_path = data_path("monster_greenvine.csv")
+        images_dir = data_path("images")
 
         id_to_name = {}
         try:

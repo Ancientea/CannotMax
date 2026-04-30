@@ -22,6 +22,7 @@ import numpy as np
 import logging
 
 from src.core.config import MONSTER_COUNT, MONSTER_DATA, FIELD_FEATURE_COUNT
+from src.core.paths import image_path, resource_path
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,9 @@ class InputPanelUI(QFrame):
         """
         try:
             # 加载类别映射
-            class_map_path = "src/tools/battlefield_recognize/class_to_idx.json"
+            class_map_path = resource_path(
+                "tools", "battlefield_recognize", "class_to_idx.json"
+            )
             with open(class_map_path, "r", encoding="utf-8") as f:
                 class_to_idx = json.load(f)
 
@@ -369,7 +372,7 @@ class InputPanelUI(QFrame):
 
             try:
                 pixmap = QPixmap(
-                    f"src/resources/assets/images/{MONSTER_DATA['原始名称'][i]}.png"
+                    str(image_path(MONSTER_DATA['原始名称'][i]))
                 )
                 if not pixmap.isNull():
                     pixmap = pixmap.scaled(

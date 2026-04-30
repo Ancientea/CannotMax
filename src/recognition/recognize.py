@@ -6,6 +6,7 @@ from PIL import ImageGrab
 from rapidocr import RapidOCR, EngineType
 
 from src.core.config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT
+from src.core.paths import ensure_tmp_images_dir, image_path
 from . import find_monster_zone
 from src.game.winrt_capture import WinRTScreenCapture
 
@@ -151,7 +152,7 @@ class RecognizeMonster:
             cv2.imshow("Select ROI", img)
 
             # 添加示例图片(要后弹出才看得见)
-            example_img = cv2.imread("src/resources/assets/images/eg.png")
+            example_img = cv2.imread(str(image_path("eg")))
             # 显示示例图片在单独的窗口中
             cv2.imshow("example", example_img)
 
@@ -212,9 +213,7 @@ class RecognizeMonster:
             screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
         try:
             # 手动框选的截图需先识别目标区域
-            cv2.imwrite(
-                f"src/resources/assets/images/tmp/zone1.png", screenshot
-            )
+            cv2.imwrite(str(ensure_tmp_images_dir() / "zone1.png"), screenshot)
             d_avatar, d_nums = find_monster_zone.cutFrame(screenshot)
             height, width, _ = screenshot.shape
             divisors = np.array([width, height, width, height])
@@ -285,9 +284,7 @@ class RecognizeMonster:
 
         if INTELLIGENT_WORKERS_DEBUG:  # 如果处于debug模式
             # 存储模板图像用于debug
-            cv2.imwrite(
-                f"src/resources/assets/images/tmp/zone.png", screenshot
-            )
+            cv2.imwrite(str(ensure_tmp_images_dir() / "zone.png"), screenshot)
 
         # 遍历所有区域
         for idx, rel in enumerate(relative_regions):
@@ -347,13 +344,13 @@ class RecognizeMonster:
                 if INTELLIGENT_WORKERS_DEBUG:  # 如果处于debug模式
                     # 存储模板图像用于debug
                     cv2.imwrite(
-                        f"src/resources/assets/images/tmp/target_{idx}.png",
+                        str(ensure_tmp_images_dir() / f"target_{idx}.png"),
                         sub_roi,
                     )
 
                     # 存储OCR图像用于debug
                     cv2.imwrite(
-                        f"src/resources/assets/images/tmp/number_{idx}.png",
+                        str(ensure_tmp_images_dir() / f"number_{idx}.png"),
                         processed,
                     )
 
@@ -533,11 +530,8 @@ def load_ref_images(ref_dir="images"):
 
         if INTELLIGENT_WORKERS_DEBUG:  # 如果处于debug模式
             # 存储模板图像用于debug
-            if not os.path.exists("src/resources/assets/images/tmp"):
-                os.makedirs("src/resources/assets/images/tmp")
-            cv2.imwrite(
-                f"src/resources/assets/images/tmp/xref_{i}.png", ref_resized
-            )
+            tmp_dir = ensure_tmp_images_dir()
+            cv2.imwrite(str(tmp_dir / f"xref_{i}.png"), ref_resized)
 
         ref_images[i] = ref_resized
     return ref_images

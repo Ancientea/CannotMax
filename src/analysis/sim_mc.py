@@ -1,5 +1,6 @@
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 import queue
 import threading
 import os
@@ -9,11 +10,24 @@ import tkinter as tk
 
 # from tkinter import messagebox # messagebox 已被自定义提示替代，可以注释或移除
 from PIL import Image, ImageTk
-from src.simulation.battle_field import Battlefield
+
 import json
 import random
 import sys
-from src.recognition.recognize import MONSTER_COUNT
+
+
+
+if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from src.simulation.battle_field import Battlefield
+    from src.core.config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT
+    from src.core.paths import DATA_DIR, PROJECT_ROOT, simulation_path
+    from src.simulation.utils import Faction
+else:
+    from ..simulation.battle_field import Battlefield
+    from ..core.config import MONSTER_DATA, MONSTER_IMAGES, MONSTER_COUNT
+    from ..core.paths import DATA_DIR, PROJECT_ROOT, simulation_path
+    from ..simulation.utils import Faction
 
 
 class AppState(Enum):
@@ -155,6 +169,16 @@ class SandboxSimulator:
         self.state_machine.transition_to(AppState.INITIAL)
         self.enter_setup_phase()
 
+    def _resolve_monster_icon_key(self, monster_name: str) -> str:
+        """根据怪物名称解析图标文件名。"""
+        if monster_name in self.monster_icon_key_map:
+            return self.monster_icon_key_map[monster_name]
+
+        if monster_name in MONSTER_IMAGES:
+            return monster_name
+
+        return self.default_icon_key
+
     def update_ui_state(self):
         """根据当前状态更新所有控件状态"""
         states = self.state_machine.get_control_states()
@@ -167,8 +191,10 @@ class SandboxSimulator:
 
     def load_assets(self):
         self.icons = {}
+        self.monster_icon_key_map = {}
+        self.default_icon_key = "empty" if "empty" in MONSTER_IMAGES else ""
         try:
-            with open("simulator/monsters.json", encoding="utf-8") as f:
+            with open(simulation_path("monsters.json"), encoding="utf-8") as f:
                 self.monster_data = json.load(f)["monsters"]
         except FileNotFoundError:
             print("错误: monsters.json 未找到，请检查路径！")
@@ -176,31 +202,47 @@ class SandboxSimulator:
 
             return
 
-        for i in range(self.num_monsters):
-            image_file_id = i + 1
+        # 建立“名称/原始名称 -> 图标文件名”的兼容映射。
+        for _, row in MONSTER_DATA.iterrows():
+            monster_name = str(row["名称"])
+            original_name = str(row["原始名称"])
+
+            icon_key = None
+            if original_name in MONSTER_IMAGES:
+                icon_key = original_name
+            elif monster_name in MONSTER_IMAGES:
+                icon_key = monster_name
+
+            if icon_key is None:
+                icon_key = self.default_icon_key
+
+            self.monster_icon_key_map[monster_name] = icon_key
+            self.monster_icon_key_map[original_name] = icon_key
+
+        # 只为实际存在的图片创建 Tk 图像，避免访问旧的数字编号路径。
+        for image_key, image_array in MONSTER_IMAGES.items():
             try:
-                image = Image.open(
-                    f"src/resources/assets/images/{image_file_id}.png"
-                )
-                self.icons[i] = {
-                    "red": ImageTk.PhotoImage(image.resize((40, 40))),
+                if image_array is None:
+                    raise ValueError("图像数据为空")
+
+                image = Image.fromarray(image_array[:, :, ::-1])
+                image_40 = image.resize((40, 40))
+                self.icons[image_key] = {
+                    "red": ImageTk.PhotoImage(image_40, master=self.master),
                     "blue": ImageTk.PhotoImage(
-                        image.resize((40, 40)).transpose(Image.FLIP_LEFT_RIGHT)
+                        image_40.transpose(Image.FLIP_LEFT_RIGHT),
+                        master=self.master,
                     ),
                 }
             except Exception as e:
-                # 同样，show_message_below_button 可能还不可用
-                print(
-                    f"加载图标错误 (图标键: {i}, 文件名ID: {image_file_id}): {str(e)}"
-                )
-                self.icons[i] = {
-                    "red": ImageTk.PhotoImage(
-                        Image.new("RGB", (40, 40), "gray")
-                    ),
-                    "blue": ImageTk.PhotoImage(
-                        Image.new("RGB", (40, 40), "gray")
-                    ),
-                }
+                print(f"加载图标错误 (图标键: {image_key}): {str(e)}")
+
+        if self.default_icon_key and self.default_icon_key not in self.icons:
+            fallback = Image.new("RGB", (40, 40), "gray")
+            self.icons[self.default_icon_key] = {
+                "red": ImageTk.PhotoImage(fallback, master=self.master),
+                "blue": ImageTk.PhotoImage(fallback, master=self.master),
+            }
 
     def init_battlefield_for_setup(self):
         self.state_machine.transition_to(AppState.SETUP)

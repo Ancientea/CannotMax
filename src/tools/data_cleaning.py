@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 
+from src.core.paths import PROJECT_ROOT, simulation_path
+
 
 def clean_data(file_path, output_path):
     print(f"开始清洗数据文件: {file_path}")
@@ -218,6 +220,6 @@ def clean_data(file_path, output_path):
 
 
 if __name__ == "__main__":
-    input_file = "arknights.csv"
-    output_file = "arknights_cleaned.csv"
+    input_file = PROJECT_ROOT / "data" / "raw" / "arknights.csv"
+    output_file = PROJECT_ROOT / "data" / "processed" / "arknights_cleaned.csv"
     clean_data(input_file, output_file)

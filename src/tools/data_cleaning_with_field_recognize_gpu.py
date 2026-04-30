@@ -9,6 +9,8 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 
+from src.core.paths import simulation_path, PROJECT_ROOT
+
 # ==============================================================================
 # SECTION 1: 游戏画面元素识别模块 (已修改为PyTorch+GPU)
 # ==============================================================================
@@ -314,11 +316,11 @@ def clean_data(
 
 if __name__ == "__main__":
     # 路径配置与之前保持一致
-    input_file = r"arknights.csv"
-    output_file = r"arknights_with_field_recognize_v2.csv"
-    screenshots_base_path = r"images"
+    input_file = PROJECT_ROOT / "data" / "raw" / "arknights.csv"
+    output_file = PROJECT_ROOT / "data" / "processed" / "arknights_with_field_recognize_v2.csv"
+    screenshots_base_path = PROJECT_ROOT / "data" / "images"
 
-    model_dir = r"battlefield_recognize"
+    model_dir = PROJECT_ROOT / "models" / "battlefield_recognize"
     onnx_model_path = os.path.join(model_dir, "field_recognize.onnx")
     class_map_path = os.path.join(model_dir, "class_to_idx.json")
 

@@ -3,11 +3,12 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from src.models.train import UnitAwareTransformer
+from src.core.paths import simulation_path
 
 # 配置参数（需要与训练时一致）
 CONFIG = {
-    "csv_path": "arknights.csv",
-    "model_path": "models/best_model_full.pth",
+    "csv_path": str(PROJECT_ROOT / "data" / "raw" / "arknights.csv"),
+    "model_path": str(PROJECT_ROOT / "models" / "best_model_full.pth"),
     "max_feature_value": 300,
     "embed_dim": 128,
     "num_heads": 8,

@@ -62,8 +62,10 @@ class Battlefield:
                 ):
                     results.append(m)
         else:
-            for id in self.hash_grid.query_neighbors(target_position, radius):
-                m = self.get_monster_with_id(id)
+            for monster_id in self.hash_grid.query_neighbors(
+                target_position, radius
+            ):
+                m = self.get_monster_with_id(monster_id)
                 if (
                     m.is_alive
                     and (m.position - target_position).magnitude <= radius
@@ -73,8 +75,8 @@ class Battlefield:
 
     def append_monster(self, monster: "Monster"):
         """添加一个怪物到战场"""
-        id = self.globalId
-        monster.id = id
+        monster_id = self.globalId
+        monster.id = monster_id
         self.globalId += 1
         self.monsters.append(monster)
         self.hash_grid.insert(monster.position, monster.id)
@@ -82,16 +84,16 @@ class Battlefield:
     def append_monster_name(self, name, faction, pos) -> "Monster":
         """添加一个怪物到战场，只需要名字"""
         data = next((m for m in self.monster_data if m["名字"] == name), None)
-        id = self.globalId
+        monster_id = self.globalId
         monster = MonsterFactory.create_monster(data, faction, pos, self)
-        monster.id = id
+        monster.id = monster_id
         self.globalId += 1
         self.monsters.append(monster)
         self.hash_grid.insert(monster.position, monster.id)
         return monster
 
-    def get_monster_with_id(self, id) -> "Monster":
-        return self.monsters[id]
+    def get_monster_with_id(self, monster_id) -> "Monster":
+        return self.monsters[monster_id]
 
     def setup_battle(self, left_army, right_army, monster_data):
         """二维战场初始化"""
@@ -128,7 +130,6 @@ class Battlefield:
 
         self.alive_monsters = self.monsters
         self.gameTime = 0
-        self.current_spawn = 0
         random.shuffle(self.monster_temporal_area_left)
         random.shuffle(self.monster_temporal_area_right)
         return True
@@ -199,7 +200,7 @@ class Battlefield:
         self.alive_monsters = [m for m in self.monsters if m.is_alive]
         winner = self.check_victory()
         if winner:
-            logger.info(f"\nVictory for {winner.name}!")
+            logger.info("\nVictory for %s!", winner.name)
             left = len(
                 [
                     m
@@ -207,9 +208,7 @@ class Battlefield:
                     if m.is_alive and m.faction == Faction.LEFT
                 ]
             )
-            logger.info(
-                f"左边存活{left} / 右边存活{len(self.alive_monsters) - left}"
-            )
+            logger.info("左边存活%s / 右边存活%s", left, len(self.alive_monsters) - left)
             return winner
 
         self.gameTime += VIRTUAL_TIME_DELTA
@@ -253,7 +252,7 @@ class Battlefield:
                     symbol = m.char_icon
                 grid[y, x] = symbol
 
-        logger.info(f"\nRound {self.round}")
+        logger.info("\nRound %s", self.round)
         for row in grid:
             logger.info(" ".join(row))
 

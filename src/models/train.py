@@ -20,11 +20,14 @@ if __name__ == "__main__":
     from src.core.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
     from src.models.model import UnitAwareTransformer
     from src.models.muon import get_muon_lion_optimizers
+    from src.core.paths import PROJECT_ROOT
 else:
     # Module import
     from ..core.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
     from .model import UnitAwareTransformer
     from .muon import get_muon_lion_optimizers
+    from ..core.paths import PROJECT_ROOT
+
 
 print(f"场地特征数量: {FIELD_FEATURE_COUNT}")
 
@@ -51,7 +54,6 @@ def get_device(prefer_gpu=True):
 
 
 device = get_device()
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def resolve_data_file(csv_file: str) -> Path:
@@ -67,15 +69,8 @@ def resolve_data_file(csv_file: str) -> Path:
         # 再尝试以项目根目录为基准
         candidates.append(PROJECT_ROOT / requested)
 
-    # 默认回退候选（兼容重构后目录）
-    candidates.extend(
-        [
-            PROJECT_ROOT / "arknights.csv",
-            PROJECT_ROOT / "data" / "train" / "arknights.csv",
-            PROJECT_ROOT / "data" / "arknights.csv",
-            PROJECT_ROOT / "src" / "simulation" / "arknights.csv",
-        ]
-    )
+    # 默认回退候选（当前仓库标准位置）
+    candidates.append(PROJECT_ROOT / "data" / "train" / "arknights.csv")
 
     for path in candidates:
         if path.exists() and path.is_file():
@@ -450,7 +445,7 @@ def stratified_random_split(dataset, test_size=0.1, seed=42):
 def main():
     # 配置参数
     config = {
-        "data_file": "data/arknights.csv",
+        "data_file": str(PROJECT_ROOT / "data" / "train" / "arknights.csv"),
         "batch_size": 1024,
         "test_size": 0.1,
         "embed_dim": 256,

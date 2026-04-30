@@ -2,13 +2,16 @@ import pandas as pd
 from math import sqrt
 from collections import defaultdict
 from src.core.config import MONSTER_COUNT, FIELD_FEATURE_COUNT, MONSTER_DATA
+from src.core.paths import image_path, PROJECT_ROOT
 
 FIELD_FEATURE_COUNT = 0
 
 
 def load_data():
     """加载数据"""
-    df = pd.read_csv("arknights.csv", header=None, low_memory=False)
+    df = pd.read_csv(
+        PROJECT_ROOT / "data" / "arknights.csv", header=None, low_memory=False
+    )
     # 设置列名
     monster_cols_left = [f"L{i+1}" for i in range(MONSTER_COUNT)]
     field_cols_left = [f"FL{i+1}" for i in range(FIELD_FEATURE_COUNT)]
@@ -37,6 +40,22 @@ def get_monster_original_name(monster_id):
     if monster_id in MONSTER_DATA.index:
         return MONSTER_DATA.loc[monster_id]["原始名称"]
     return f"怪物{monster_id}"
+
+
+def monster_image_uri(monster_name):
+    path = image_path(monster_name)
+    if not path.exists():
+        path = image_path("empty")
+    return path.resolve().as_uri()
+
+
+def monster_img_tag(monster_name, size):
+    uri = monster_image_uri(monster_name)
+    empty_uri = monster_image_uri("empty")
+    return (
+        f'<img src="{uri}" onerror="this.src=\'{empty_uri}\'" '
+        f'style="width:{size}px;height:{size}px;">'
+    )
 
 
 def calculate_all_monster_win_rates(df):
@@ -757,9 +776,9 @@ def create_html_table(
             monster2_orig = get_monster_original_name(row["ID2"])
             html += f"""<td>
                 <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                <img src="src/resources/assets/images/{monster1_orig}.png" onerror="this.src='src/resources/assets/images/empty.png'" style="width:30px;height:30px;">
+                {monster_img_tag(monster1_orig, 30)}
                 <span>{monster1_name}</span><br>
-                <img src="src/resources/assets/images/{monster2_orig}.png" onerror="this.src='src/resources/assets/images/empty.png'" style="width:30px;height:30px;">
+                {monster_img_tag(monster2_orig, 30)}
                 <span>{monster2_name}</span>
             </td>"""
         elif "怪物ID" in row:
@@ -769,7 +788,7 @@ def create_html_table(
             monster_id = row["怪物ID"]
             html += f"""<td>
                 <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                <img src="src/resources/assets/images/{monster_orig}.png" onerror="this.src='src/resources/assets/images/empty.png'" style="width:50px;height:50px;">
+                {monster_img_tag(monster_orig, 50)}
                 <span style="font-weight:bold;">{display_name}</span>
             </td>"""
         else:
@@ -784,7 +803,7 @@ def create_html_table(
                     break
             html += f"""<td>
                 <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                <img src="src/resources/assets/images/{monster_orig}.png" onerror="this.src='src/resources/assets/images/empty.png'" style="width:50px;height:50px;">
+                {monster_img_tag(monster_orig, 50)}
                 <span style="font-weight:bold;">{monster_name}</span>
             </td>"""
 
@@ -821,7 +840,7 @@ def create_html_table(
                         teammate["partner_id"]
                     )
                     teammates.append(f"""<div style="margin:3px 0;">
-                        <img src="src/resources/assets/images/{teammate_orig}.png" onerror="this.src='src/resources/assets/images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
+                        {monster_img_tag(teammate_orig, 20)}
                         <small>{teammate['partner_name']} ({teammate['lift']:.2f}x)</small>
                     </div>""")
                 html += "".join(teammates)
@@ -838,7 +857,7 @@ def create_html_table(
                         counter["opponent_id"]
                     )
                     counters.append(f"""<div style="margin:3px 0;">
-                        <img src="src/resources/assets/images/{counter_orig}.png" onerror="this.src='src/resources/assets/images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
+                        {monster_img_tag(counter_orig, 20)}
                         <small>{counter['opponent_name']} ({counter['win_rate']:.0%})</small>
                     </div>""")
                 html += "".join(counters)
@@ -859,7 +878,7 @@ def create_html_table(
                         counter["opponent_id"]
                     )
                     countered.append(f"""<div style="margin:3px 0;">
-                        <img src="src/resources/assets/images/{counter_orig}.png" onerror="this.src='src/resources/assets/images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
+                        {monster_img_tag(counter_orig, 20)}
                         <small>{counter['opponent_name']} ({counter['lose_rate']:.0%})</small>
                     </div>""")
                 html += "".join(countered)
@@ -898,7 +917,7 @@ def create_device_counter_html(device_counter_effects):
             html += f"""<tr>
                 <td>
                     <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                    <img src="src/resources/assets/images/{monster_orig}.png" onerror="this.src='src/resources/assets/images/empty.png'" style="width:40px;height:40px;">
+                    {monster_img_tag(monster_orig, 40)}
                     <span style="font-weight:bold;">{monster_name}</span>
                 </td>
                 <td style="color: {'red' if effect['克制程度'] > 0 else 'green'};">{effect['克制程度']:.2%}</td>
