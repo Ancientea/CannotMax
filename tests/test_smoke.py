@@ -9,31 +9,31 @@ def test_core_modules_import():
     """Test that core modules can be imported without errors."""
     # Test predict module
     try:
-        from predict import CannotModel
+        from src.cannotmax.core.predict import CannotModel
         assert CannotModel is not None
     except Exception as e:
         pytest.skip(f"CannotModel import failed: {e}")
 
     # Test recognize module
     try:
-        from recognize import RecognizeMonster
+        from src.cannotmax.core.recognize import RecognizeMonster
         assert RecognizeMonster is not None
     except Exception as e:
         pytest.skip(f"RecognizeMonster import failed: {e}")
 
     # Test connector module
     try:
-        from maa_adb_connector import AdbConnectorAdapter
-        adapter = AdbConnectorAdapter()
-        assert adapter is not None
+        from src.cannotmax.core.connector.adb_connector import AdbConnector
+        # AdbConnector requires device_serial parameter, just test import
+        assert AdbConnector is not None
     except Exception as e:
-        pytest.skip(f"AdbConnectorAdapter import failed: {e}")
+        pytest.skip(f"AdbConnector import failed: {e}")
 
 
 def test_config_loaded():
     """Test that config data loads correctly."""
     try:
-        from config import MONSTER_DATA, MONSTER_COUNT
+        from src.cannotmax.config import MONSTER_DATA, MONSTER_COUNT
         assert len(MONSTER_DATA) > 0
         assert MONSTER_COUNT > 0
     except Exception as e:

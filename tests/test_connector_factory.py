@@ -244,7 +244,8 @@ class TestLocalUsabilityCheck:
         """PcConnector local check should use win32gui.IsWindow()."""
         from src.cannotmax.core.connector.pc_connector import PcConnector
         
-        with patch('win32gui.IsWindow') as mock_iswindow:
+        # Patch the module-level import in factory
+        with patch('src.cannotmax.core.connector.factory.IsWindow') as mock_iswindow:
             mock_iswindow.return_value = True
             
             # Create mock that passes isinstance check for PcConnector
@@ -305,6 +306,27 @@ class TestPoolManagement:
             
             _, _, state = self.factory._pool["ADB"]
             assert state == ConnectorState.INVALID
+    
+    def test_mark_valid_idempotent(self):
+        """mark_valid() should only transition IDLE→VALID, not VALID→VALID or INVALID→VALID."""
+        with patch('src.cannotmax.core.connector.factory.AdbConnector') as MockAdb:
+            mock_conn = Mock(spec=BaseConnector)
+            MockAdb.return_value = mock_conn
+            
+            conn = self.factory.get_connector("ADB", adb_serial="127.0.0.1:5555")
+            
+            # IDLE → VALID
+            self.factory.mark_valid("ADB")
+            assert self.factory._pool["ADB"][2] == ConnectorState.VALID
+            
+            # VALID stays VALID (idempotent)
+            self.factory.mark_valid("ADB")
+            assert self.factory._pool["ADB"][2] == ConnectorState.VALID
+            
+            # INVALID stays INVALID (no transition from mark_valid)
+            self.factory.mark_invalid("ADB")
+            self.factory.mark_valid("ADB")
+            assert self.factory._pool["ADB"][2] == ConnectorState.INVALID
     
     def test_disconnect_all_clears_pool(self):
         """disconnect_all() should disconnect all connectors and clear pool."""

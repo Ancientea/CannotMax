@@ -22,7 +22,7 @@ class TestImports:
             RecognizeMonster,
             CannotModel,
             AutoFetch,
-            AdbConnectorAdapter,
+            AdbConnector,
             FieldRecognizer,
         )
         assert RecognizeMonster is not None
@@ -37,8 +37,8 @@ class TestImports:
         )
         assert InputPanelUI is not None
     
-    def test_data_import(self):
-        from src.cannotmax.data import (
+    def test_analytics_import(self):
+        from src.cannotmax.analytics import (
             HistoryMatch,
             SpecialMonsterHandler,
         )
@@ -57,9 +57,12 @@ class TestImports:
         )
         assert Battlefield is not None
     
-    def test_legacy_import(self):
-        from src.cannotmax.legacy import loadData
-        from src.cannotmax.legacy.loadData import AdbConnector
+    def test_connector_import(self):
+        from src.cannotmax.core.connector import (
+            AdbConnector,
+            PcConnector,
+            ConnectorFactory,
+        )
         assert AdbConnector is not None
     
     def test_tools_import(self):
@@ -73,8 +76,8 @@ class TestImports:
 class TestEntryPoint:
     """Test CLI entry points."""
     
-    def test_cli_import(self):
-        from src.cannotmax.cli import main
+    def test_console_import(self):
+        from src.cannotmax.console import main
         assert callable(main)
     
     def test_main_window_import(self):
