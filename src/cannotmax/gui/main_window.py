@@ -91,7 +91,6 @@ class ArknightsApp(QMainWindow):
 
         # Single connector managed by factory
         self.connector_factory = ConnectorFactory()
-        self.connector = None  # Current active connector
 
         self.auto_fetch_running = False
         self.is_invest = False
@@ -112,17 +111,18 @@ class ArknightsApp(QMainWindow):
             self.history_match.N_history = 0 if self.history_match.labels is None else len(self.history_match.labels)
             logger.info("错题本加载成功")
         except Exception:
-            self.history_match.feat_past = np.empty()
+            self.history_match.feat_past = None
             self.history_match.N_history = 0
             logger.warning("错题本加载失败")
 
         # 初始化特殊怪物语言触发处理程序
         self.special_monster_handler = SpecialMonsterHandler()
 
-        # Initialize to ADB mode (lazy connection, no blocking)
-        self.on_mode_changed("ADB")
-
         self.init_ui()
+
+        # Initialize to ADB mode (lazy connection, no blocking)
+        kwargs = {"adb_serial": self.serial_entry.currentText()}
+        self.connector = self.connector_factory.get_connector("ADB", **kwargs)
 
         # 如果模型未加载，显示提示并禁用预测相关按钮
         if not self.cannot_model.is_model_loaded:
