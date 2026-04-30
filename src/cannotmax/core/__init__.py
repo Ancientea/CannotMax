@@ -15,7 +15,6 @@ from .auto_fetch import AutoFetch
 from .field_recognition import FieldRecognizer
 from .connector import AdbConnector, PcConnector, BaseConnector
 from .roi_selector import ROISelector
-from .screenshot_helper import ScreenshotHelper
 
 __all__ = [
     "RecognizeMonster",
@@ -26,5 +25,4 @@ __all__ = [
     "BaseConnector",
     "FieldRecognizer",
     "ROISelector",
-    "ScreenshotHelper",
 ]

@@ -166,19 +166,18 @@ class RecognizeMonster:
         # 1. Detect monster bar (auto-detect via find_monster_zone)
         from ..utils import find_monster_zone
         
+        # Save original screenshot for debugging before processing
+        if DEBUG_MODE:
+            TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(f"{TMP_IMAGES_DIR}/original_screenshot.png", screenshot)
+        
         try:
             monster_roi, cropped = find_monster_zone.cutFrame(screenshot)
             # Save debug images of monster bar detection
             if DEBUG_MODE:
-                TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(f"{TMP_IMAGES_DIR}/original_screenshot.png", screenshot)
                 cv2.imwrite(f"{TMP_IMAGES_DIR}/cropped_monster_bar.png", cropped)
         except Exception as e:
             logger.exception("Monster bar detection failed: %s", e)
-            # Save original screenshot for debugging
-            if DEBUG_MODE:
-                TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(f"{TMP_IMAGES_DIR}/failed_screenshot.png", screenshot)
             return []
         
         if monster_roi is None or cropped is None:

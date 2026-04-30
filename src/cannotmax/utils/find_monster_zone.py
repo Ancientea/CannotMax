@@ -1,49 +1,14 @@
-import logging
 import cv2
 import numpy as np
+import warnings
+from scipy.optimize import least_squares
+from scipy.spatial.distance import pdist, squareform
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-def custom_least_squares(fun, x0, args=()):
-    """
-    A simple linear least squares solver to replace scipy.optimize.least_squares.
-    Constructs a numerical Jacobian and solves the linear system.
-    """
-    x = np.array(x0, dtype=float)
-    r = np.array(fun(x, *args))
-    if r.size == 0:
-        class Result:
-            def __init__(self, x): self.x = x
-        return Result(x)
-    
-    n = len(x)
-    J = np.zeros((len(r), n))
-    eps = 1e-6
-    for i in range(n):
-        x_eps = x.copy()
-        x_eps[i] += eps
-        r_eps = np.array(fun(x_eps, *args))
-        J[:, i] = (r_eps - r) / eps
-    
-    delta, _, _, _ = np.linalg.lstsq(J, -r, rcond=None)
-    
-    class Result:
-        def __init__(self, x): self.x = x
-    return Result(x + delta)
 
 # 类伽马变换函数
 def adjust_quasi_gamma(image):
     c = np.arange(256.0 / 255, step=1.0 / 255)
     table = np.log(30 * c + 1) * 65.5
-    table = np.uint8(table)
-    return cv2.LUT(image, table)
-
-
-# 备用类伽马参数
-def adjust_quasi_gamma_spare(image):
-    c = np.arange(256.0 / 255, step=1.0 / 255)
-    table = np.log(51) * 64.9
     table = np.uint8(table)
     return cv2.LUT(image, table)
 
@@ -60,15 +25,12 @@ def flex_pixel(image):
 
 
 # 预处理，返回切割后图片 6+2
-def preprocess(image, blur, spare=0):
+def preprocess(image, blur):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
-    if spare == 0:
-        gray = adjust_quasi_gamma(gray)
-    elif spare == 1:
-        gray = adjust_quasi_gamma_spare(gray)
+    ret, thresh = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
+    gray = adjust_quasi_gamma(gray)
 
-    _, width, _ = image.shape
+    height, width, _ = image.shape
 
     # 对不同分辨率的自适应
     size1 = (np.round(width * 0.0018) * 2 + 1).astype("int")
@@ -128,9 +90,9 @@ def find_big(crop, x_ratio, minR, maxR, width, p1=30, p2=35):
             for m in circles_big_bias:
                 j = np.append(m, x_ratio.index(i))
                 results.append(j)
-                logger.debug(f"big circle: {j}")
+                print(j)
         else:
-            logger.warning(f"section{x_ratio.index(i)} big circle not detected")
+            print(f"section{x_ratio.index(i)} circle not detected")
 
     results = np.array(results)
     return results
@@ -155,10 +117,10 @@ def find_small(crop_small, x_ratio_small, x_ratio, minR, maxR, width):
             for m in circles_small_bias:
                 j = np.append(m, x_ratio.index(i))
                 results.append(j)
-                logger.debug(f"small circle: {j}")
+                print(j)
 
         else:
-            logger.warning(f"section{x_ratio.index(i)} small circle not detected")
+            print(f"section{x_ratio.index(i)} circle not detected")
 
     results = np.array(results)
     return results
@@ -176,8 +138,7 @@ def detect_outliers(coords, threshold=0.1):
     coords = np.array(coords)
 
     # 计算所有点之间的距离矩阵
-    diff = coords[:, np.newaxis, :] - coords[np.newaxis, :, :]
-    distance_matrix = np.sqrt(np.sum(diff**2, axis=-1))
+    distance_matrix = squareform(pdist(coords))
 
     # 计算每个点的平均距离
     avg_distances = np.mean(distance_matrix, axis=1)
@@ -236,13 +197,25 @@ def create_frame(cx, cy, r, high_tol=False):
                                   [cx+(-nums_bias_inn+10*k+m)*r-r*t, cy+r*t, cx+(-nums_bias+12*k+m)*r+r*t, nums_y]])).astype("int")
         
         return avatar,nums
-        
-def filter(results_big, results_small, height):
+
+#框架切割（参数已封装）
+def cutFrame(image, high_tol=False):
+    height, width, _ = image.shape
+    crop_blur, crop_small, x_ratio, x_ratio_small = preprocess(image, blur=11)
+    # 找圆
+    R_sets = flex_pixel(image)
+
+    results_big = find_big(
+        crop_blur, x_ratio, minR=R_sets[0], maxR=R_sets[1], width=width, p1=21, p2=32
+    )
+    results_small = find_small(
+        crop_small, x_ratio_small, x_ratio, minR=R_sets[2], maxR=R_sets[3], width=width
+    )
     high_tol = 0
     big_key = 0
     # 开始清洗数据
     if results_big.shape == (0,):
-        logger.warning("未识别到大圆，自动进入高容差模式")
+        warnings.warn("未识别到大圆，自动进入高容差模式")
         high_tol = 1
         big_key = 1
     small_key = 0  # 0代表小圆正常
@@ -272,7 +245,7 @@ def filter(results_big, results_small, height):
     if small_key == 0:
         if big_key == 1:
             filtered_big = []
-            logger.warning("仅使用小圆进入最小二乘")
+            warnings.warn("仅使用小圆进入最小二乘")
         else:
             r_refer = np.abs(filtered_small[1, 0] - filtered_small[0, 0]) / 16.39  # 大圆的参考半径
             diff_r = np.abs(results_big[:, 2] - r_refer)
@@ -282,8 +255,9 @@ def filter(results_big, results_small, height):
             while std_y > 0.02 * r_refer:
                 # 如果数组为空，报错
                 if filtered_big.size == 0:
-                    logger.error(results_big)
-                    raise IndexError("std_y筛选出现问题，请检查以上数据输入是否合法")
+                    print(results_big)
+                    warnings.warn("筛选出现问题，请检查以上数据输入是否合法")
+                    break
 
                 mean_value = np.mean(filtered_big[:, 1])
                 abs_diff = np.abs(filtered_big[:, 1] - mean_value)
@@ -298,15 +272,16 @@ def filter(results_big, results_small, height):
                 if n in [0, 1, 2]:
                     p_cx.append(x - ((2 * n + 1) * k * r_refer))
                 elif n in [3, 4, 5]:
-                    p_cx.append(x - ((2 * n + 1) * k * r_refer + 4.710 * r_refer))
+                    p_cx.append(x - ((2 * n + 1) * k * r_refer + 4.7102526 * r_refer))
 
             filtered_big_p = np.column_stack((filtered_big, p_cx))
             std_x = np.std(filtered_big_p[:, -1])
             while std_x > 0.5 * r_refer:
                 # 如果数组为空，报错
                 if filtered_big_p.size == 0:
-                    logger.error(results_big)
-                    raise IndexError("std_x筛选出现问题，请检查以上数据输入是否合法")
+                    print(results_big)
+                    warnings.warn("筛选出现问题，请检查以上数据输入是否合法")
+                    break
 
                 mean_value = np.mean(filtered_big_p[:, -1])
                 abs_diff = np.abs(filtered_big_p[:, -1] - mean_value)
@@ -315,91 +290,32 @@ def filter(results_big, results_small, height):
                 std_x = np.std(filtered_big_p[:, -1])
 
             filtered_big = filtered_big_p[:, :-1]
-            logger.debug(filtered_big)
+            print(filtered_big)
 
     # 小圆识别错误的情况
     elif small_key == 3:
-        logger.warning("小圆识别异常，将进入高容差模式")
+        warnings.warn("小圆识别异常，将进入高容差模式")
         if big_key == 0:
             if results_big.shape[0] <= 2:  # 大圆数量不够筛选
-                logger.warning(
-                    "大圆数量不足，直接进入最小二乘"
-                )  # 这里最好是抛出一个Error然后回到范围选择
-                filtered_big = results_big
-                small_key = 4
-            else:
-                std = []
-                for x, y, radius, n in results_big:
-                    if n in [0, 1, 2]:
-                        a_cx = x - ((2 * n + 1) * k * r_refer)
-                    elif n in [3, 4, 5]:
-                        a_cx = x - ((2 * n + 1) * k * r_refer + 4.710 * r_refer)
-                    a_cy = y + radius
-                    std.append([a_cx, a_cy])
-                _, out_index = detect_outliers(std, threshold=0.02 * np.mean(results_big[:, 2]))
-                filtered_big = np.delete(results_big, out_index, axis=0)
-
-        high_tol = 1
-
-    elif small_key == 1:
-        if big_key == 0:
-            if results_big.shape[0] <= 2:  # 大圆数量不够筛选
-                logger.warning(
+                warnings.warn(
                     "警告：大圆数量不足，直接进入最小二乘"
                 )  # 这里最好是抛出一个Error然后回到范围选择
                 filtered_big = results_big
-                small_key = 4
             else:
+                r_refer = np.mean(results_big[:, 2])
+                k = 1.0401189
                 std = []
                 for x, y, radius, n in results_big:
                     if n in [0, 1, 2]:
                         a_cx = x - ((2 * n + 1) * k * r_refer)
                     elif n in [3, 4, 5]:
-                        a_cx = x - ((2 * n + 1) * k * r_refer + 4.710 * r_refer)
+                        a_cx = x - ((2 * n + 1) * k * r_refer + 4.7102526 * r_refer)
                     a_cy = y + radius
                     std.append([a_cx, a_cy])
                 _, out_index = detect_outliers(std, threshold=0.02 * np.mean(results_big[:, 2]))
                 filtered_big = np.delete(results_big, out_index, axis=0)
-        else:
-            filtered_big = []
-            logger.warning("警告：大圆数量不足，仅以唯一小圆进入框架创建")
-            small_key = 4
+
         high_tol = 1
-
-    if small_key == 4:
-        raise RuntimeError("捕捉效果差, 将启用备用参数进行捕捉")
-    return filtered_big, filtered_small, high_tol
-
-
-# 框架切割（参数已封装）
-def cutFrame(image, high_tol=False):
-    height, width, _ = image.shape
-
-    # 找圆
-    R_sets = flex_pixel(image)
-
-    try:
-        crop_blur, crop_small, x_ratio, x_ratio_small = preprocess(image, blur=11)
-        results_big = find_big(
-            crop_blur, x_ratio, minR=R_sets[0], maxR=R_sets[1], width=width, p1=21, p2=28
-        )
-        results_small = find_small(
-            crop_small, x_ratio_small, x_ratio, minR=R_sets[2], maxR=R_sets[3], width=width
-        )
-        filtered_big, filtered_small, high_tol = filter(results_big, results_small, height)
-
-    except IndexError:
-        try:
-            crop_blur, crop_small, x_ratio, x_ratio_small = preprocess(image, blur=7, spare=1)
-            results_big = find_big(
-                crop_blur, x_ratio, minR=R_sets[0], maxR=R_sets[1], width=width, p1=18, p2=24
-            )
-            results_small = find_small(
-                crop_small, x_ratio_small, x_ratio, minR=R_sets[2], maxR=R_sets[3], width=width
-            )
-            filtered_big, filtered_small, high_tol = filter(results_big, results_small, height)
-        except IndexError:
-            logger.error("备用参数捕捉失败！请重新框选试试")
 
     # 开始最小二乘筛选
     def residuals(params, large_circles, small_circles):  # 定义目标函数
@@ -434,7 +350,7 @@ def cutFrame(image, high_tol=False):
     initial_guess = [0, 200, 60]
 
     # 使用最小二乘法求解
-    result = custom_least_squares(residuals, initial_guess, args=(filtered_big, filtered_small))
+    result = least_squares(residuals, initial_guess, args=(filtered_big, filtered_small))
     avatar, nums = create_frame(result.x[0], result.x[1], result.x[2], high_tol)
 
     divisors = np.array([width, height, width, height])
@@ -469,6 +385,8 @@ if __name__ == "__main__":
         cv2.circle(image, (i[0], i[1]), i[2], (0, 255, 0), 2)
 
     d_avatar, d_nums = cutFrame(image)
+    print(f"d_avatar\n{d_avatar}")
+    print(f"d_nums\n{d_nums}")
     divisors = np.array([width, height, width, height])
     avatar = np.round(d_avatar * divisors).astype("int")
     nums = np.round(d_nums * divisors).astype("int")
