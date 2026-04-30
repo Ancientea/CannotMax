@@ -907,13 +907,24 @@ class ArknightsApp(QMainWindow):
                 screenshot = self.active_connector.capture_screenshot()
             if screenshot is None:
                 logger.error(f"{self.current_capture_mode} 截图失败")
+                return []
+        elif self.current_capture_mode == "WIN":
+            # WIN 模式：截图
+            try:
+                screenshot = self.recognizer._screenshot_helper.capture_screenshot(
+                    bbox=self.recognizer.main_roi, auto_detect_zone=True
+                )
+            except Exception as e:
+                logger.error(f"WIN 截图失败：{e}")
+                return []
+            if screenshot is None:
+                logger.error("WIN 截图失败")
+                return []
 
+        if screenshot is not None:
             results = self.recognizer.process_regions(screenshot)
-        else:
-            # WIN 模式，recognizer 内部处理 WinRT 或 PIL
-            results = self.recognizer.process_regions(None)
-
-        return results
+            return results
+        return []
 
     def update_monster(self, results):
         """

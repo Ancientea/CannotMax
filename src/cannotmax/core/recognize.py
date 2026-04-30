@@ -206,7 +206,7 @@ class RecognizeMonster:
 
     def process_regions(
         self,
-        image_adb: cv2.typing.MatLike | None = None,
+        image: cv2.typing.MatLike,
         matched_threshold=0.5,
         ocr_threshold=0.95,
     ):
@@ -214,7 +214,7 @@ class RecognizeMonster:
         Process all 6 regions for monster recognition.
         
         Args:
-            image_adb: ADB screenshot (required for ADB mode)
+            image: Screenshot image (required, must be cropped to monster bar region)
             matched_threshold: Template matching confidence threshold
             ocr_threshold: OCR confidence threshold
             
@@ -223,25 +223,11 @@ class RecognizeMonster:
         """
         results = []
         
-        # Get main screenshot
-        if self.method == "ADB":
-            if image_adb is None:
-                raise ValueError("ADB 模式下必须提供 image_adb")
-            logger.info("使用 ADB 图像")
-            x1 = int(self.ROI_RELATIVE[0][0] * image_adb.shape[1])
-            y1 = int(self.ROI_RELATIVE[0][1] * image_adb.shape[0])
-            x2 = int(self.ROI_RELATIVE[1][0] * image_adb.shape[1])
-            y2 = int(self.ROI_RELATIVE[1][1] * image_adb.shape[0])
-            screenshot = image_adb[y1:y2, x1:x2]
-        else:
-            logger.info(f"使用 {self.method} 手动截图")
-            ocr_threshold = 0.8
-            screenshot = self._screenshot_helper.capture_screenshot(
-                bbox=self.main_roi, auto_detect_zone=True
-            )
-        
-        if screenshot is None or screenshot.size == 0:
+        # Validate input image
+        if image is None or image.size == 0:
             raise ValueError("截图为空")
+        
+        screenshot = image
         
         # Resize to standard 975x119
         screenshot = cv2.resize(screenshot, (975, 119))
