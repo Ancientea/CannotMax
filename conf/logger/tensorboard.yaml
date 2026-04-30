@@ -1,5 +1,6 @@
 _target_: lightning.pytorch.loggers.TensorBoardLogger
-name: lightning_logs
+name: CannotMax
+save_dir: logs/tensorboard_logs
 version: null
 sub_dir: ""
 log_graph: false

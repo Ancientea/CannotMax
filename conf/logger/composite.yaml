@@ -1,10 +1,26 @@
 _target_: logger_utils.create_composite_logger
 loggers:
   - _target_: lightning.pytorch.loggers.TensorBoardLogger
-    name: lightning_logs
+    name: CannotMax
+    save_dir: logs/tensorboard_logs
     version: null
     sub_dir: ""
     log_graph: false
+
+  # - _target_: lightning.pytorch.loggers.WandbLogger
+  #   project: CannotMax
+  #   save_dir: logs/wandb_logs
+  #   entity: null
+  #   name: null
+  #   tags: null
+
+  # - _target_: swanlab.integration.pytorch_lightning.SwanLabLogger
+  #   project: CannotMax
+  #   save_dir: logs/swanlab_logs
+  #   experiment_name: null
+  #   description: null
+  #   tags: null
+
   - _target_: lightning.pytorch.loggers.CSVLogger
     name: csv_logs
     version: null

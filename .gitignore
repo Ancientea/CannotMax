@@ -32,6 +32,8 @@ __pycache__/
 # 模型文件
 models/lightning_logs/*
 models/*.png
+models/CannotMax/
+models/csv_logs/
 *.pth
 *.onnx
 *.onnx.data
@@ -39,7 +41,6 @@ models/*.png
 
 # 构建与输出目录
 build/
-output/
 
 # ===========================
 # 6. 数据集与媒体资源
@@ -60,10 +61,13 @@ screenshot.png
 # ===========================
 # 7. 日志与临时文件
 # ===========================
-# 日志
+# 日志输出目录（所有 logger 框架）
 log.txt
 *.log
-outputs
+outputs/
+logs/
+swanlog/
+wandb/
 
 # 临时目录
 tmp

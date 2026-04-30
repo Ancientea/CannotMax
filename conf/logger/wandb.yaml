@@ -1,5 +1,6 @@
 _target_: lightning.pytorch.loggers.WandbLogger
 project: CannotMax
+save_dir: logs/wandb_logs
 entity: null
 name: null
 tags: null

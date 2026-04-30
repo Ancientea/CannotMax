@@ -1,4 +1,7 @@
+from collections.abc import Mapping
+
 from hydra.utils import instantiate
+from omegaconf import DictConfig, OmegaConf
 
 
 def create_composite_logger(cfg, save_dir):
@@ -15,11 +18,19 @@ def create_composite_logger(cfg, save_dir):
     """
     loggers = []
     for logger_cfg in cfg.get("loggers", []):
-        if not isinstance(logger_cfg, dict) or "_target_" not in logger_cfg:
+        if isinstance(logger_cfg, DictConfig):
+            logger_cfg_copy = OmegaConf.to_container(logger_cfg, resolve=True)
+        elif isinstance(logger_cfg, Mapping):
+            logger_cfg_copy = dict(logger_cfg)
+        else:
             print(f"警告: logger 配置不完整，跳过: {logger_cfg}")
             continue
+
+        if not isinstance(logger_cfg_copy, dict) or "_target_" not in logger_cfg_copy:
+            print(f"警告: logger 配置不完整，跳过: {logger_cfg}")
+            continue
+
         try:
-            logger_cfg_copy = dict(logger_cfg)
             # 确保 save_dir 被传入
             logger_cfg_copy["save_dir"] = logger_cfg_copy.get("save_dir", save_dir)
             logger_instance = instantiate(logger_cfg_copy)
