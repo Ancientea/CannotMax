@@ -24,13 +24,13 @@ jobs:
         run: uv sync --group dev
 
       - name: Build with PyInstaller
-        run: uv run tools/package.py
+        run: uv run src/tools/package.py
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
           name: cannotmax-build
-          path: output/main/
+          path: build/dist/main/
           retention-days: 1
 
   release:

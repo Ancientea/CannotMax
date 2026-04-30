@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["onnx>=1.19.0", "onnxscript>=0.7.0", "pyinstaller>=6.15.0"]
+dev = ["onnx>=1.19.0", "onnxscript>=0.7.0", "types-toml", "pandas-stubs", "pyinstaller>=6.15.0"]
 
 [project.optional-dependencies]
 cpu = ["torch", "torchvision"]
