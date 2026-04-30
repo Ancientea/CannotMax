@@ -1,0 +1,5 @@
+_target_: swanlab.integration.pytorch_lightning.SwanLabLogger
+project: CannotMax
+experiment_name: null
+description: null
+tags: null

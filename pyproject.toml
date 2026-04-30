@@ -21,12 +21,23 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["onnx>=1.19.0", "onnxscript>=0.7.0", "pyinstaller>=6.15.0"]
+dev = [
+  "onnx>=1.19.0",
+  "onnxscript>=0.7.0",
+  "pyinstaller>=6.15.0",
+  "lightning",
+  "hydra-core",
+  "omegaconf",
+  "tensorboard",
+  "torch-tb-profiler",
+]
 
 [project.optional-dependencies]
 cpu = ["torch", "torchvision"]
 cu128 = ["torch>=2.7.0", "torchvision>=0.22.0"]
 cu130 = ["torch>=2.7.0", "torchvision>=0.22.0"]
+wandb = ["wandb"]
+swanlab = ["swanlab"]
 
 [tool.uv]
 python-install-mirror = "https://mirror.nju.edu.cn/github-release/astral-sh/python-build-standalone/"

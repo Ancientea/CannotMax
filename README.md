@@ -105,9 +105,15 @@ uv run main.py
 ### 5. 模型训练
 - 建议在训练模型前收集足够的数据
 1. **启动训练**：
-   ```bash
-   uv run train.py
-   ```
+  - 不使用Logger: 
+  ```bash
+  uv run train.py
+  ```
+  - 使用Logger: 参见 `logger` 参数说明，使用 `tensorboard` 以外的logger需要安装对应的包并在运行前进行配置，以下以 `swanlab` 为例：
+  ```bash
+  uv sync --extra swanlab
+  uv run train_new.py logger=swanlab
+  ```
 
 ## 开发说明
 

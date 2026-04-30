@@ -30,10 +30,12 @@ __pycache__/
 # 5. 模型权重与构建产物
 # ===========================
 # 模型文件
+models/lightning_logs/*
 models/*.png
 *.pth
 *.onnx
 *.onnx.data
+*.ckpt
 
 # 构建与输出目录
 build/
@@ -61,6 +63,7 @@ screenshot.png
 # 日志
 log.txt
 *.log
+outputs
 
 # 临时目录
 tmp

@@ -1,0 +1,5 @@
+_target_: lightning.pytorch.loggers.WandbLogger
+project: CannotMax
+entity: null
+name: null
+tags: null
