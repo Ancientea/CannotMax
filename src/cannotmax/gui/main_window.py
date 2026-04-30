@@ -92,15 +92,6 @@ class ArknightsApp(QMainWindow):
         # Single connector managed by factory
         self.connector_factory = ConnectorFactory()
         self.connector = None  # Current active connector
-        
-        # Pre-instantiate AdbConnector for device list (but don't set as active connector)
-        self._device_list_connector = None
-        try:
-            from ..core.connector.adb_connector import AdbConnector
-            self._device_list_connector = AdbConnector(adb_serial="127.0.0.1:5555")
-            logger.info("Pre-initialized AdbConnector for device detection")
-        except Exception as e:
-            logger.warning(f"Failed to pre-initialize AdbConnector: {e}")
 
         self.auto_fetch_running = False
         self.is_invest = False
@@ -1030,14 +1021,20 @@ class ArknightsApp(QMainWindow):
         self.stats_label.setText(stats_text)
 
     def _load_device_list_async(self):
-        """Load device list asynchronously (called via QTimer.singleShot)"""
+        """Load device list asynchronously (called via QTimer.singleShot)."""
         try:
-            if hasattr(self, '_device_list_connector') and self._device_list_connector:
-                devices = self._device_list_connector.get_device_list()
-                self._populate_serial_combo(devices)
+            # Only use AdbConnector for device list (doesn't require connection)
+            if self.connector is not None:
+                from ..core.connector.adb_connector import AdbConnector
+                if isinstance(self.connector, AdbConnector):
+                    devices = self.connector.get_device_list()
+                    self._populate_serial_combo(devices)
+                    return
         except Exception as e:
             logger.warning(f"Failed to load device list: {e}")
-            self._populate_serial_combo([])
+        
+        # Fallback to default
+        self._populate_serial_combo(["127.0.0.1:5555"])
 
     def _populate_serial_combo(self, devices):
         """Populate serial entry with device list"""
