@@ -501,8 +501,8 @@ class ArknightsApp(QMainWindow):
         conn_row1_layout.addWidget(self.serial_button)
 
         # MAA状态行
-        self.maa_status_label = QLabel("")
-        self.maa_status_label.setStyleSheet("color: #666666; font-size: 10px;")
+        self.maa_status_label = QLabel("未连接")
+        self.maa_status_label.setStyleSheet("color: #999999; font-size: 10px;")
         self.maa_status_label.setWordWrap(True)
 
         connection_layout.addWidget(conn_row1)
