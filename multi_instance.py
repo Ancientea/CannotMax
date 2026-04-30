@@ -21,11 +21,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QLineEdit,
 )
-<<<<<<< HEAD
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-=======
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, pyqtSlot
->>>>>>> origin/main
 from PyQt6.QtGui import QFont
 
 from src.data import load_data
@@ -78,6 +74,7 @@ logger.setLevel(logging.DEBUG)
 
 class SmartPortsLineEdit(QLineEdit):
     """智能端口输入框：支持延迟格式化、失去焦点格式化和粘贴立即格式化"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.format_timer = QTimer(self)
@@ -102,18 +99,25 @@ class SmartPortsLineEdit(QLineEdit):
         if self._formatting:
             return
         self._formatting = True
-        
+
         text = self.text()
-        parts = text.replace('\n', ',').replace('，', ',').replace(';', ',').replace(' ', ',').split(',')
+        parts = (
+            text.replace("\n", ",")
+            .replace("，", ",")
+            .replace(";", ",")
+            .replace(" ", ",")
+            .split(",")
+        )
         ports = [p.strip() for p in parts if p.strip().isdigit()]
         formatted = ", ".join(ports)
-        
+
         if text != formatted and ports:
             cursor_pos = self.cursorPosition()
             self.setText(formatted)
             self.setCursorPosition(min(cursor_pos, len(formatted)))
-        
+
         self._formatting = False
+
 
 # 用于共享资源密集型对象，减少多开时的内存占用
 _cannot_model = None
@@ -193,28 +197,20 @@ class DeviceInstance:
 
     def start(self, game_mode, is_invest):
         try:
-<<<<<<< HEAD
-            logger.info(
-                f"[{self.serial}] 开始启动实例，游戏模式: {game_mode}, 自动投资: {is_invest}"
-            )
-=======
             # 保存设置
             self.game_mode = game_mode
             self.is_invest = is_invest
-            
+
             # 重置停止事件和标志
->>>>>>> origin/main
             self.stop_event.clear()
             self.thread_running = True
             self.last_activity_time = time.time()
             self.status = "连接中"
-<<<<<<< HEAD
 
-=======
-            
-            logger.info(f"[{self.serial}] 开始启动实例，游戏模式: {game_mode}, 自动投资: {is_invest}")
-            
->>>>>>> origin/main
+            logger.info(
+                f"[{self.serial}] 开始启动实例，游戏模式: {game_mode}, 自动投资: {is_invest}"
+            )
+
             # 记录实例启动时间戳
             self.start_time = time.time()
 
@@ -281,11 +277,11 @@ class DeviceInstance:
             logger.error(f"[{self.serial}] 启动失败: {str(e)}")
             self.thread_running = False
             return False
-    
+
     def _update_activity_time(self, *args, **kwargs):
         """更新活动时间"""
         self.last_activity_time = time.time()
-        
+
     def _on_stop_callback(self):
         """当 auto_fetch 停止时的回调"""
         self.thread_running = False
@@ -295,12 +291,8 @@ class DeviceInstance:
         logger.info(f"[{self.serial}] 强制停止实例")
         # 设置停止事件，用于中断登录流程
         self.stop_event.set()
-<<<<<<< HEAD
-
-=======
         self.thread_running = False
-        
->>>>>>> origin/main
+
         if self.auto_fetch:
             # 强制设置停止标志，不等待线程退出
             self.auto_fetch.auto_fetch_running = False
@@ -358,16 +350,12 @@ class MultiInstanceManager(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_display)
         self.timer.start(1000)
-<<<<<<< HEAD
 
-=======
-        
         # 崩溃检测定时器（每 5 秒检查一次）
         self.crash_detection_timer = QTimer()
         self.crash_detection_timer.timeout.connect(self.check_instances_crash)
         self.crash_detection_timer.start(5000)
-    
->>>>>>> origin/main
+
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -704,58 +692,64 @@ class MultiInstanceManager(QMainWindow):
                     self.starting_ports.discard(port)
 
             threading.Thread(target=do_start, daemon=True).start()
-<<<<<<< HEAD
 
-=======
-    
     def check_instances_crash(self):
         """检查实例是否崩溃，并尝试自动恢复"""
         current_time = time.time()
-        
+
         # 遍历所有实例，检查崩溃情况
         for port, instance in list(self.instances.items()):
             # 如果已经设置了停止事件，就不进行崩溃检测
             if instance.stop_event.is_set():
                 continue
-                
+
             # 检查活动时间（崩溃检测）
             inactive_time = current_time - instance.last_activity_time
-            
+
             # 如果标记为运行但超过 3 分钟没有活动，视为崩溃
-            if instance.status in ["正在运行", "连接中", "登录中"] and inactive_time > 180:
-                logger.warning(f"[{instance.serial}] 检测到无活动超过 {inactive_time:.0f} 秒，可能已崩溃，尝试重启")
+            if (
+                instance.status in ["正在运行", "连接中", "登录中"]
+                and inactive_time > 180
+            ):
+                logger.warning(
+                    f"[{instance.serial}] 检测到无活动超过 {inactive_time:.0f} 秒，可能已崩溃，尝试重启"
+                )
                 self._restart_crashed_instance(port, instance)
             # 检查 auto_fetch 线程是否实际还在运行
             elif instance.status == "正在运行" and instance.auto_fetch:
                 if not instance.auto_fetch.auto_fetch_running:
-                    logger.warning(f"[{instance.serial}] auto_fetch_running 为 False，可能已意外停止")
+                    logger.warning(
+                        f"[{instance.serial}] auto_fetch_running 为 False，可能已意外停止"
+                    )
                     self._restart_crashed_instance(port, instance)
-    
+
     def _restart_crashed_instance(self, port, instance):
         """重启崩溃的实例"""
         try:
             # 保存设置
             game_mode = instance.game_mode if instance.game_mode else "30人"
-            is_invest = instance.is_invest if instance.is_invest is not None else False
-            
+            is_invest = (
+                instance.is_invest if instance.is_invest is not None else False
+            )
+
             # 先停止（强制）
             instance.stop()
-            
+
             # 从字典中清除
             if port in self.instances:
                 del self.instances[port]
-            
+
             # 延迟重新启动
             logger.info(f"[{instance.serial}] 准备重新启动...")
-            
+
             def restart_task():
                 if port in self.starting_ports:
                     logger.warning(f"端口 {port} 已在启动中，跳过重启")
                     return
-                
+
                 logger.info(f"[{instance.serial}] 正在重新启动...")
                 self.starting_ports.add(port)
-                
+
                 try:
                     new_instance = DeviceInstance(port)
                     self.instances[port] = new_instance
@@ -766,12 +760,11 @@ class MultiInstanceManager(QMainWindow):
                         logger.error(f"[{instance.serial}] 崩溃后重启失败")
                 finally:
                     self.starting_ports.discard(port)
-            
+
             threading.Thread(target=restart_task, daemon=True).start()
         except Exception as e:
             logger.error(f"重启崩溃实例时出错: {str(e)}")
-    
->>>>>>> origin/main
+
     def update_display(self):
         input_ports = self._parse_ports(self.ports_input.text())
 

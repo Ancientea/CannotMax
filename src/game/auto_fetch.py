@@ -674,11 +674,10 @@ class AutoFetch:
                 self.login_manager.reset_restart_count()
 
             self.state_start_time = time.time()  # 重置状态开始时间
-<<<<<<< HEAD:src/game/auto_fetch.py
 
-        # UNKNOWN 状态超时检测
-        # 非战斗状态：超过 36 秒触发重启（登录过程、主菜单、模式选择等）
-        # 战斗流程状态：超过 200 秒触发重启（防止战斗卡死）
+        # 全局超时检测：无论什么状态，只要超过时间都可能触发重启
+        # 非战斗状态：超过 50 秒触发重启
+        # 战斗流程状态：超过 120 秒触发重启（防止战斗卡死）
         elapsed_time = time.time() - self.state_start_time
         is_battle_state = self.last_state in [
             GameState.PRE_BATTLE,
@@ -686,38 +685,16 @@ class AutoFetch:
             GameState.SETTLEMENT,
             GameState.FINISHED,
         ]
-        timeout_threshold = 200.0 if is_battle_state else 36.0
-
-        if (
-            current_state == GameState.UNKNOWN
-            and elapsed_time > timeout_threshold
-        ):
-            if is_battle_state:
-                self._log(
-                    logging.WARNING,
-                    f"战斗流程中连续 {elapsed_time:.2f} 秒处于未知状态，超过200秒阈值，触发重启",
-                )
-            else:
-                self._log(
-                    logging.WARNING,
-                    f"连续 {elapsed_time:.2f} 秒处于未知状态，超过36秒阈值，触发重启",
-                )
-
-=======
-        
-        # 全局超时检测：无论什么状态，只要超过时间都可能触发重启
-        # 非战斗状态：超过 50 秒触发重启
-        # 战斗流程状态：超过 120 秒触发重启（防止战斗卡死）
-        elapsed_time = time.time() - self.state_start_time
-        is_battle_state = self.last_state in [GameState.PRE_BATTLE, GameState.IN_BATTLE, GameState.SETTLEMENT, GameState.FINISHED]
         timeout_threshold = 120.0 if is_battle_state else 50.0
-        
+
         # 检查是否超时
         if elapsed_time > timeout_threshold:
             state_name = self.last_state.name if self.last_state else "NONE"
-            self._log(logging.WARNING, f"在状态 '{state_name}' 停留超过 {elapsed_time:.2f} 秒（阈值: {timeout_threshold:.0f} 秒），触发重启")
-            
->>>>>>> origin/main:auto_fetch.py
+            self._log(
+                logging.WARNING,
+                f"在状态 '{state_name}' 停留超过 {elapsed_time:.2f} 秒（阈值: {timeout_threshold:.0f} 秒），触发重启",
+            )
+
             # 使用 LoginManager 的重启登录方法
             if not self.login_manager.can_restart():
                 self._log(
@@ -828,14 +805,10 @@ class AutoFetch:
                 # 每次循环开始时检查状态
                 if not self.auto_fetch_running:
                     break
-<<<<<<< HEAD:src/game/auto_fetch.py
 
-=======
-                
                 # 更新活动时间（心跳）
                 self.update_prediction_callback(0)
-                
->>>>>>> origin/main:auto_fetch.py
+
                 self.auto_fetch_data()
 
                 # 每次循环结束时检查状态

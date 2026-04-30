@@ -149,7 +149,9 @@ class AdbConnector:
                         return dev
 
             # 只使用指定的设备，不要自动选择其他设备
-            logger.error(f"未找到指定的设备: {serial}，当前在线设备: {devices}")
+            logger.error(
+                f"未找到指定的设备: {serial}，当前在线设备: {devices}"
+            )
             self.device_serial = ""
             return ""
 

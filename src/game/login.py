@@ -439,10 +439,6 @@ class LoginManager:
             # 每隔3秒进行一次检测，避免频繁截图和识别抢占CPU（特别是多开时）
             if not sleep_with_check(3):
                 return False
-<<<<<<< HEAD:src/game/login.py
-
-        # 寻找争锋频道页面，最多等待30秒
-=======
                 
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
@@ -459,7 +455,6 @@ class LoginManager:
                     break
         
         # 寻找争锋频道入口，最多等待30秒
->>>>>>> origin/main:login.py
         self._log(logging.INFO, "寻找争锋频道入口")
         start_time = time.time()
 
@@ -477,11 +472,7 @@ class LoginManager:
             self.connector.click((0.1, 0.1))
             if not sleep_with_check(2):
                 return False
-<<<<<<< HEAD:src/game/login.py
-
-=======
             
->>>>>>> origin/main:login.py
             # 点击右上角后，立即再次检查争锋频道入口
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
@@ -490,39 +481,12 @@ class LoginManager:
                 ):
                     return True
 
-<<<<<<< HEAD:src/game/login.py
-        # 识别失败后识别关闭按钮
-=======
         # 同时检测两种关闭按钮五次（每次间隔2秒）
         self._log(logging.INFO, "尝试检测并关闭公告/活动弹窗")
->>>>>>> origin/main:login.py
         close_buttons = ["announcement_close", "event_claim_close"]
         for i in range(5):
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
-<<<<<<< HEAD:src/game/login.py
-                matched, pos = self.match_template(
-                    screenshot, button, threshold=0.9
-                )
-                if matched:
-                    h, w = screenshot.shape[:2]
-                    rel_x = pos[0] / w
-                    rel_y = pos[1] / h
-                    self._log(
-                        logging.INFO,
-                        f"{button}位置: ({pos[0]}, {pos[1]}), 相对坐标: ({rel_x:.2f}, {rel_y:.2f})",
-                    )
-                    self.connector.click((rel_x, rel_y))
-                    self._log(logging.INFO, f"关闭{button}页面")
-                    close_button_found = True
-                    if not sleep_with_check(1):
-                        return False
-                    break
-
-        # 再次识别争锋频道入口
-        if close_button_found:
-            if not sleep_with_check(1):
-=======
                 for button in close_buttons:
                     matched, pos = self.match_template(screenshot, button, threshold=0.9)
                     if matched:
@@ -536,7 +500,6 @@ class LoginManager:
             
             # 每次检测完等待2秒
             if not sleep_with_check(2):
->>>>>>> origin/main:login.py
                 return False
 
         # 关闭完之后，20秒内重复检测争锋频道入口
@@ -552,13 +515,10 @@ class LoginManager:
                     screenshot, sleep_with_check, check_stop
                 ):
                     return True
-<<<<<<< HEAD:src/game/login.py
-=======
             
             # 每次轮询间隔2秒，避免频繁截图造成性能浪费
             if not sleep_with_check(2):
                 return False
->>>>>>> origin/main:login.py
 
         # 还是失败的话就重启
         self._log(logging.ERROR, "未找到争锋频道入口，登录流程失败")
