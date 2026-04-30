@@ -70,6 +70,7 @@ def resolve_data_file(csv_file: str) -> Path:
     # 默认回退候选（兼容重构后目录）
     candidates.extend(
         [
+            PROJECT_ROOT / "arknights.csv",
             PROJECT_ROOT / "data" / "train" / "arknights.csv",
             PROJECT_ROOT / "data" / "arknights.csv",
             PROJECT_ROOT / "src" / "simulation" / "arknights.csv",
@@ -460,7 +461,7 @@ def main():
         "lion_lr": 3e-4 / 10,  # 论文指出 Lion 优化器需要更小的学习率
         "epochs": 50,
         "seed": 42,  # 随机数种子
-        "save_dir": "models",  # 存到哪里
+        "save_dir": PROJECT_ROOT / "models",  # 存到哪里
         "max_feature_value": 100,  # 限制特征最大值，防止极端值造成不稳定
         "num_workers": (
             0 if torch.cuda.is_available() else 0
