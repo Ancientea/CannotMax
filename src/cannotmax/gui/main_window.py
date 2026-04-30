@@ -139,6 +139,9 @@ class ArknightsApp(QMainWindow):
             self.recognize_button.setToolTip("模型未加载，无法使用此功能")
             self.input_panel.predict_button.setEnabled(False)
             self.input_panel.predict_button.setToolTip("模型未加载，无法使用此功能")
+        
+        # Auto-connect to default ADB mode on startup (silent mode to avoid blocking dialog)
+        self.on_mode_changed("ADB", silent=True)
 
     def _get_connector_kwargs(self, mode: str) -> dict:
         """Get constructor kwargs for connector based on mode."""
@@ -153,8 +156,13 @@ class ArknightsApp(QMainWindow):
             return {"window_name": getattr(self, "_win_window_name", "")}
         return {}
 
-    def on_mode_changed(self, mode: str):
-        """Switch capture mode."""
+    def on_mode_changed(self, mode: str, silent: bool = False):
+        """Switch capture mode.
+        
+        Args:
+            mode: Capture mode (ADB/PC/WIN)
+            silent: If True, suppress error dialogs for failed connections
+        """
         if getattr(self, "_switching_mode", False):
             logger.warning("Mode switching in progress, ignoring")
             return
@@ -187,7 +195,7 @@ class ArknightsApp(QMainWindow):
                 self._on_connector_ready(mode)
             else:
                 self.connector = None
-                self._on_connector_failed(mode)
+                self._on_connector_failed(mode, silent=silent)
                 
         finally:
             self._switching_mode = False
@@ -208,17 +216,20 @@ class ArknightsApp(QMainWindow):
         
         logger.info(f"Switched to {mode} mode")
     
-    def _on_connector_failed(self, mode: str):
+    def _on_connector_failed(self, mode: str, silent: bool = False):
         """Called when connector failed to connect."""
         self.recognize_button.setEnabled(False)
         self.auto_fetch_button.setEnabled(False)
         self.maa_status_label.setText(f"{mode} 连接失败")
         self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
         
-        QMessageBox.warning(
-            self, "连接失败", 
-            f"无法连接到 {mode}，请检查设备/窗口是否可用"
-        )
+        if not silent:
+            QMessageBox.warning(
+                self, "连接失败", 
+                f"无法连接到 {mode}，请检查设备/窗口是否可用"
+            )
+        else:
+            logger.warning(f"Connection to {mode} failed (silent mode)")
 
     def init_ui(self):
         try:
