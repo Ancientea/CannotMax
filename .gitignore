@@ -39,6 +39,7 @@ build/
 # 6. 数据集与媒体资源
 # ===========================
 # 基础数据目录
+src/resources/assets/images/nums/
 data/
 
 # 单独的截图文件
