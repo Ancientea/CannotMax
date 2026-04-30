@@ -124,6 +124,10 @@ class ArknightsApp(QMainWindow):
         self.init_ui()
 
         # Initialize to ADB mode (lazy connection, no blocking)
+        # Set default serial before getting connector to avoid empty string
+        default_serial = "127.0.0.1:5555"
+        self.serial_entry.addItem(default_serial)
+        self.serial_entry.setCurrentText(default_serial)
         kwargs = {"adb_serial": self.serial_entry.currentText()}
         self.connector = self.connector_factory.get_connector("ADB", **kwargs)
 
