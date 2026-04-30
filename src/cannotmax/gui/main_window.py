@@ -28,7 +28,7 @@ from ..core.connector.maa_registry import (
     InputMethodRegistry,
     MaaFrameworkDetector,
 )
-from ..core.connector.factory import ConnectorFactory
+from ..core.connector.factory import ConnectorFactory, ConnectorState
 from ..core.connector.winrt_capture import WinRTScreenCapture, WindowPickerDialog
 from .dark_mode_style_fix import DarkModeStyleFix
 from ..analytics import similar_history_match
@@ -203,11 +203,11 @@ class ArknightsApp(QMainWindow):
         
         _, _, state = self.connector_factory._pool[mode]
         
-        if state == self.connector_factory.ConnectorState.IDLE:
+        if state == ConnectorState.IDLE:
             # 首次使用或已归还，未验证
             self.maa_status_label.setText("未连接")
             self.maa_status_label.setStyleSheet("color: #999999; font-size: 10px;")
-        elif state == self.connector_factory.ConnectorState.VALID:
+        elif state == ConnectorState.VALID:
             # 已验证可用，显示绿色
             self._update_connector_ready_ui()
         else:  # INVALID
@@ -928,11 +928,11 @@ class ArknightsApp(QMainWindow):
             
             # 3. Success: mark VALID and update UI
             # Only mark VALID if not already VALID (transition IDLE→VALID on success)
-            if current_state != self.connector_factory.ConnectorState.VALID:
+            if current_state != ConnectorState.VALID:
                 self.connector_factory._pool[self.current_capture_mode] = (
                     self.connector,
                     self._get_connector_kwargs(self.current_capture_mode),
-                    self.connector_factory.ConnectorState.VALID
+                    ConnectorState.VALID
                 )
             self._update_connector_ready_ui()
             self.update_monster(results)
@@ -1125,7 +1125,7 @@ class ArknightsApp(QMainWindow):
         # Check if currently VALID (connected)
         if self.connector and self.current_capture_mode in self.connector_factory._pool:
             _, _, state = self.connector_factory._pool[self.current_capture_mode]
-            if state == self.connector_factory.ConnectorState.VALID:
+            if state == ConnectorState.VALID:
                 QMessageBox.information(self, '提示', '输入方式已更改，请重新连接以生效')
 
 
