@@ -25,8 +25,9 @@ from typing import Literal
 import cv2
 import numpy as np
 # loadData removed - use core.connector.AdbConnector/PcConnector
-from .recognize import intelligent_workers_debug
+from ..config import DEBUG_MODE
 from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config.paths import DATA_DIR
 from collections.abc import Callable
 from collections import deque
 from ..gui import LoginManager
@@ -81,7 +82,7 @@ class AutoFetch:
         self.auto_fetch_thread = None  # 线程引用
         self.start_time = time.time()  # 记录开始时间
         self.training_duration = training_duration  # 训练时长
-        self.data_folder = Path(f"data")  # 数据文件夹路径
+        self.data_folder = DATA_DIR  # 数据文件夹路径
         self.image_buffer = deque(
             maxlen=5
         )  # 图片缓存队列，设置队列长短来保存结算前的图片
@@ -102,7 +103,7 @@ class AutoFetch:
         # 根据 FIELD_FEATURE_COUNT 决定是否启用场地识别器（使用传入的实例）
         if FIELD_FEATURE_COUNT > 0:
             if self.field_recognizer is not None:
-                logger.info(f"场地识别已启用，特征数量: {FIELD_FEATURE_COUNT}")
+                logger.info("场地识别已启用，特征数量：%d", FIELD_FEATURE_COUNT)
             else:
                 logger.warning(
                     f"FIELD_FEATURE_COUNT={FIELD_FEATURE_COUNT} > 0 但未传入 field_recognizer，场地识别将被禁用"
@@ -182,11 +183,11 @@ class AutoFetch:
         images_folder = self.data_folder / "images"
         try:
             images_folder.mkdir(parents=True, exist_ok=True)
-            # logger.info(f"确保images文件夹存在: {images_folder}")
+            # logger.info("确保images文件夹存在: %s", images_folder)
         except Exception as e:
-            logger.error(f"创建images文件夹失败: {e}")
+            logger.error("创建images文件夹失败: %s", e)
 
-        if intelligent_workers_debug:  # 如果处于debug模式，保存人工审核图片到本地
+        if DEBUG_MODE:  # 如果处于debug模式，保存人工审核图片到本地
             if monster_image is not None:
                 try:
                     resized_monster_img = cv2.resize(
@@ -198,9 +199,9 @@ class AutoFetch:
                         resized_monster_img,
                         [int(cv2.IMWRITE_JPEG_QUALITY), 80],
                     )
-                    # logger.info(f"保存怪物图片到 {image_path}")
+                    # logger.info("保存怪物图片到 %s", image_path))
                 except Exception as e:
-                    logger.error(f"保存怪物图片失败: {e}")
+                    logger.error("保存怪物图片失败: %s", e)
 
             # 新增保存结果图片逻辑
             if image_name:
@@ -214,9 +215,9 @@ class AutoFetch:
                     )
                     image_path = images_folder / result_image_name
                     cv2.imwrite(image_path, resized_image)
-                    logger.info(f"保存结果图片到 {image_path}")
+                    logger.info("保存结果图片到 %s", image_path)
                 except Exception as e:
-                    logger.error(f"保存结果图片失败: {e}")
+                    logger.error("保存结果图片失败: %s", e)
 
         # 原始怪物数据
         left_monster_data = np.zeros(MONSTER_COUNT)
@@ -238,7 +239,7 @@ class AutoFetch:
                     else:  # 右侧怪物
                         right_monster_data[matched_id - 1] = number
             else:
-                logger.error(f"存在错误，本次不填写")
+                logger.error("存在错误，本次不填写")
                 return
 
         # 组织数据格式
@@ -248,8 +249,8 @@ class AutoFetch:
             field_feature_columns = self.field_recognizer.get_feature_columns()
             field_data_values = []
             for col in field_feature_columns:
-                if col in field_recoginze_result:
-                    field_data_values.append(field_recoginze_result[col])
+                if col in field_recognize_result:
+                    field_data_values.append(field_recognize_result[col])
                 else:
                     field_data_values.append(0)  # 默认值
 
@@ -258,7 +259,7 @@ class AutoFetch:
             for i, col in enumerate(field_feature_columns):
                 value = field_data_values[i]
                 field_summary.append(f"{col}={value}")
-            logger.info(f"当次场地特征: {', '.join(field_summary)}")
+            logger.info("当次场地特征: %s", ', '.join(field_summary))
 
             # 按照data_cleaning_with_field_recognize_gpu.py的格式组织数据
             data_row.extend(left_monster_data.tolist())  # 1L-77L
@@ -283,13 +284,13 @@ class AutoFetch:
             r"%Y_%m_%d__%H_%M_%S"
         )
 
-        if intelligent_workers_debug:  # 如果处于debug模式，保存人工审核图片到本地
+        if DEBUG_MODE:  # 如果处于debug模式，保存人工审核图片到本地
             data_row.append(image_name)
 
         with open(self.data_folder / "arknights.csv", "a", newline="") as file:
             writer = csv.writer(file)
             writer.writerow(data_row)
-        logger.info(f"写入csv完成")
+        logger.info("写入csv完成")
 
     def build_terrain_features(self, left_counts, right_counts):
         """构建包含地形的完整特征向量"""
@@ -507,7 +508,7 @@ class AutoFetch:
                     if value == -1
                 ]
                 if detected_elements:
-                    logger.info(f"场地识别检测到元素: {', '.join(detected_elements)}")
+                    logger.info("场地识别检测到元素: %s", ', '.join(detected_elements))
                 if partial_detected:
                     logger.info(
                         f"场地识别部分检测到元素: {', '.join(partial_detected)}"
@@ -561,7 +562,7 @@ class AutoFetch:
             logger.warning("模型未加载，无法进行预测")
 
         # 人工审核保存测试用截图
-        if intelligent_workers_debug:  # 如果处于debug模式且处于自动模式
+        if DEBUG_MODE:  # 如果处于debug模式且处于自动模式
             self.monster_image = screenshot
 
     def battle_result(self, result_image):
@@ -637,7 +638,7 @@ class AutoFetch:
         # 先进行状态识别
         results = self.match_images(screenshot)
         results = sorted(results, key=lambda x: x[1], reverse=True)
-        # logger.debug(f"处理图片总用时：{time.time()-timea:.3f}s")
+        # logger.debug("处理图片总用时：%.3fs", time.time()-timea)
         # logger.info("匹配结果：", results[0])
 
         # 状态判断：取匹配度最高的一个
@@ -665,7 +666,7 @@ class AutoFetch:
                         f"匹配到状态: {self.last_state.name} -> {current_state.name}, score:{best_score:.4f}"
                     )
             else:
-                # logger.info(f"状态机匹配置信度过低: idx:{best_idx}, score:{best_score:.4f}")
+                # logger.info("状态机匹配置信度过低: idx:%d, score:%.4f", best_idx, best_score)
                 pass
 
         # 处理状态发生变化时的逻辑
