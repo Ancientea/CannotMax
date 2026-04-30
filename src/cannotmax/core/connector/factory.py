@@ -54,19 +54,16 @@ class ConnectorFactory:
                         logger.warning(f"Disconnect failed: {e}")
                     del self._pool[mode]
         
-        # Create new
-        logger.info(f"Creating new {mode} connector")
+        # Create new (lazy connection, no blocking)
+        logger.info(f"Creating new {mode} connector (not connected)")
         try:
             connector: BaseConnector = self._create_connector(mode, **kwargs)
-            success = connector.connect()
-            
-            if success:
-                self._pool[mode] = (connector, kwargs)
-                logger.info(f"{mode} connected successfully")
-                return connector
-            else:
-                logger.warning(f"{mode} connection failed")
-                return None
+            self._pool[mode] = (connector, kwargs)
+            logger.debug(f"{mode} connector created, awaiting connection")
+            return connector
+        except Exception as e:
+            logger.exception(f"{mode} creation exception: {e}")
+            return None
                 
         except Exception as e:
             logger.exception(f"{mode} connection exception: {e}")

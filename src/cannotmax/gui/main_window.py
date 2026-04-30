@@ -173,11 +173,17 @@ class ArknightsApp(QMainWindow):
         self.input_method_label.setEnabled(is_adb_mode)
         self.input_method_combo.setEnabled(is_adb_mode)
         
-        # Get connector (reuse or create)
+        # Get connector (reuse or create, lazy connection)
         kwargs = self._get_connector_kwargs(mode)
         new_connector = self.connector_factory.get_connector(mode, **kwargs)
         
-        self.connector = new_connector  # Update current connector reference
+        self.connector = new_connector
+        
+        # Set initial UI state: "未连接" (gray)
+        self.recognize_button.setEnabled(True)
+        self.auto_fetch_button.setEnabled(True)
+        self.maa_status_label.setText("未连接")
+        self.maa_status_label.setStyleSheet("color: #999999; font-size: 10px;")
 
     def _update_connector_ready_ui(self):
         """Update UI after successful connection (called from get_recognize)."""
