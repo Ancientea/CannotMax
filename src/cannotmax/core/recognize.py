@@ -22,13 +22,12 @@ from ..config import (
     MONSTER_DATA, 
     MONSTER_IMAGES, 
     MONSTER_COUNT,
+    DEBUG_MODE,
 )
+from ..config.paths import TMP_IMAGES_DIR
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-# 是否启用 debug 模式
-intelligent_workers_debug = True
 def get_rapidocr_engine(prefer_gpu=False):
     """Get RapidOCR engine with optional GPU support."""
     try:
@@ -59,7 +58,7 @@ def load_ref_images():
             img = MONSTER_IMAGES.get(MONSTER_DATA["原始名称"][i])
         
         if img is None:
-            logger.error(f"无法加载参考图片 i={i}")
+            logger.error("无法加载参考图片 i=%d", i)
             continue
         
         # Crop and resize template
@@ -70,9 +69,9 @@ def load_ref_images():
         ref_resized = cv2.resize(img_crop, (74, 74))
         ref_resized = ref_resized[0:70, :]
         
-        if intelligent_workers_debug:
-            Path("images/tmp").mkdir(parents=True, exist_ok=True)
-            cv2.imwrite(f"images/tmp/xref_{i}.png", ref_resized)
+        if DEBUG_MODE:
+            TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(f"{TMP_IMAGES_DIR}/xref_{i}.png", ref_resized)
         
         ref_images[i] = ref_resized
     return ref_images
@@ -169,8 +168,17 @@ class RecognizeMonster:
         
         try:
             monster_roi, cropped = find_monster_zone.cutFrame(screenshot)
+            # Save debug images of monster bar detection
+            if DEBUG_MODE:
+                TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(f"{TMP_IMAGES_DIR}/original_screenshot.png", screenshot)
+                cv2.imwrite(f"{TMP_IMAGES_DIR}/cropped_monster_bar.png", cropped)
         except Exception as e:
-            logger.error(f"Monster bar detection failed: {e}")
+            logger.exception("Monster bar detection failed: %s", e)
+            # Save original screenshot for debugging
+            if DEBUG_MODE:
+                TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(f"{TMP_IMAGES_DIR}/failed_screenshot.png", screenshot)
             return []
         
         if monster_roi is None or cropped is None:
@@ -181,7 +189,7 @@ class RecognizeMonster:
         try:
             monster_bar = cv2.resize(cropped, (975, 119))
         except Exception as e:
-            logger.error(f"Crop failed: {e}")
+            logger.error("Crop failed: %s", e)
             return []
         
         # 3. Split into 6 regions and recognize
@@ -219,7 +227,7 @@ class RecognizeMonster:
         # Template matching
         try:
             matched_id, confidence = find_best_match(region_img, self.ref_images)
-            logger.info(f"target: {region_id} matched_id: {matched_id}, confidence: {confidence:.4f}")
+            logger.info("target: %d matched_id: %d, confidence: %.4f", region_id, matched_id, confidence)
             
             if matched_id != 0 and confidence < matched_threshold:
                 raise ValueError(f"模板匹配置信度过低：{confidence}")
@@ -244,10 +252,10 @@ class RecognizeMonster:
             if number != "" and ocr_confidence < ocr_threshold:
                 raise ValueError(f"OCR 置信度过低：{ocr_confidence}")
             
-            if intelligent_workers_debug:
-                Path("images/tmp").mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(f"images/tmp/target_{region_id}.png", region_img)
-                cv2.imwrite(f"images/tmp/number_{region_id}.png", processed)
+            if DEBUG_MODE:
+                TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(f"{TMP_IMAGES_DIR}/target_{region_id}.png", region_img)
+                cv2.imwrite(f"{TMP_IMAGES_DIR}/number_{region_id}.png", processed)
             
             if number == "" and matched_id != 0:
                 raise ValueError("发现有怪物但无数量异常数据！")
@@ -272,7 +280,7 @@ class RecognizeMonster:
     def do_num_ocr(self, img: cv2.typing.MatLike):
         """Perform OCR on number region."""
         result = self.ocr(img, use_det=False, use_cls=False, use_rec=True)
-        logger.info(f"OCR: text: '{result.txts[0]}', score: {result.scores[0]}")
+        logger.info("OCR: text: '%s', score: %s", result.txts[0], result.scores[0])
         if result.txts[0] != "" and not result.txts[0].isdigit():
             raise ValueError(f"OCR 识别结果不是数字：'{result.txts[0]}'")
         return result.txts[0], result.scores[0]
@@ -280,7 +288,7 @@ class RecognizeMonster:
 
 if __name__ == "__main__":
     # Example usage with test image
-    test_img = "images/tmp/zone1.png"
+    test_img = f"{TMP_IMAGES_DIR}/zone1.png"
     if Path(test_img).exists():
         screenshot = cv2.imread(test_img)
         recognizer = RecognizeMonster()
