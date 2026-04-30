@@ -604,22 +604,9 @@ class ArknightsApp(QMainWindow):
         self.update_prediction_signal.connect(self.update_prediction)
         self.update_statistics_signal.connect(self.update_statistics)
         
-        # Refresh device list in background to avoid blocking UI
-        from PyQt6.QtCore import QThread, pyqtSignal
-        class DeviceListThread(QThread):
-            finished = pyqtSignal(list)
-        def run_thread():
-            thread = DeviceListThread()
-            def run():
-                try:
-                    devices = self._device_list_connector.get_device_list() if self._device_list_connector else []
-                except:
-                    devices = []
-                self.finished.emit(devices)
-            thread.run = run
-            thread.finished.connect(lambda devs: self._populate_serial_combo(devs))
-            thread.start()
-        run_thread()
+        # Refresh device list asynchronously using QTimer to avoid blocking UI
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(0, self._load_device_list_async)
         
         DarkModeStyleFix.apply(QApplication.instance())
 
@@ -1027,8 +1014,18 @@ class ArknightsApp(QMainWindow):
         )
         self.stats_label.setText(stats_text)
 
+    def _load_device_list_async(self):
+        """Load device list asynchronously (called via QTimer.singleShot)"""
+        try:
+            if hasattr(self, '_device_list_connector') and self._device_list_connector:
+                devices = self._device_list_connector.get_device_list()
+                self._populate_serial_combo(devices)
+        except Exception as e:
+            logger.warning(f"Failed to load device list: {e}")
+            self._populate_serial_combo([])
+
     def _populate_serial_combo(self, devices):
-        """Populate serial entry with device list (called from thread)"""
+        """Populate serial entry with device list"""
         current_text = self.serial_entry.currentText()
         self.serial_entry.clear()
         if devices:
