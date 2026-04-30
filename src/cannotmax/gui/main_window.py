@@ -975,7 +975,10 @@ class ArknightsApp(QMainWindow):
         self.animate_size_change(target_width)
 
     def reselect_roi(self):
-        self.recognizer.select_roi()
+        roi = self.recognizer.select_roi()
+        if roi:
+            self.recognizer.main_roi = roi
+            logger.info(f"已设置自定义 ROI: {roi}")
 
     def toggle_auto_fetch(self):
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
