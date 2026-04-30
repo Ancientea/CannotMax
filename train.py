@@ -1,4 +1,5 @@
 from datetime import datetime
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 import importlib
@@ -129,6 +130,50 @@ def _plot_from_dict(metrics: dict, save_path: Path, output_name: str | None = No
     print(f"学习曲线已保存: {output_path}")
 
 
+def _flatten_params(data, prefix: str = "") -> dict[str, object]:
+    flattened: dict[str, object] = {}
+
+    if isinstance(data, Mapping):
+        for key, value in data.items():
+            full_key = f"{prefix}.{key}" if prefix else str(key)
+            flattened.update(_flatten_params(value, full_key))
+    else:
+        flattened[prefix] = data
+
+    return flattened
+
+
+def log_config_to_loggers(logger_instance, cfg: DictConfig):
+    """将训练配置写入所有 logger，方便在面板中查看超参数。"""
+    if logger_instance is None:
+        return
+
+    config_payload: dict[str, object] = {}
+    for section_name in ("model", "data", "trainer"):
+        section_cfg = cfg.get(section_name)
+        if section_cfg is None:
+            continue
+
+        section_container = OmegaConf.to_container(section_cfg, resolve=True)
+        if isinstance(section_container, Mapping):
+            section_payload = _flatten_params(section_container, section_name)
+            config_payload.update(section_payload)
+        else:
+            config_payload[section_name] = section_container
+
+    if not config_payload:
+        return
+
+    loggers = logger_instance if isinstance(logger_instance, list) else [logger_instance]
+    for single_logger in loggers:
+        if single_logger is None or not hasattr(single_logger, "log_hyperparams"):
+            continue
+        try:
+            single_logger.log_hyperparams(config_payload)
+        except Exception as e:
+            print(f"警告: 写入 logger 超参数失败: {e}")
+
+
 @hydra.main(config_path="conf", config_name="config", version_base="1.3")
 def main(cfg: DictConfig | None = None):
     if cfg is None:
@@ -176,6 +221,8 @@ def main(cfg: DictConfig | None = None):
             logger_instance = instantiate(logger_cfg_copy)
     else:
         logger_instance = None
+
+    log_config_to_loggers(logger_instance, cfg)
 
     compat_checkpoint = CompatibilityCheckpoint(save_dir=save_dir)
     training_log_callback = TrainingLogCallback(total_epochs=cfg.trainer.epochs)
