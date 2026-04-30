@@ -69,14 +69,17 @@ Implement **Lazy Connection**: connectors initialize without connecting, and est
 
 **New Method**:
 ```python
-@abstractmethod
-def ensure_connected(self) -> bool:
-    """Ensure connection is active. Auto-connect if needed.
-    
-    Returns:
-        bool: True if connected or successfully connected, False if connection failed.
-    """
-    pass
+    @abstractmethod
+    def ensure_connected(self, max_retries: int = 3) -> bool:
+        """Ensure connection is active. Auto-connect if needed with retry.
+        
+        Args:
+            max_retries: Maximum connection attempts before giving up (default: 3)
+        
+        Returns:
+            bool: True if connected after call, False if all retries failed.
+        """
+        pass
 ```
 
 **Modified Methods** (Template Method Pattern):
@@ -118,10 +121,24 @@ def _click_internal(self, point: tuple[float, float]) -> None:
 3. Rename `click()` logic to `_click_internal()`
 4. Implement `ensure_connected()`:
    ```python
-   def ensure_connected(self) -> bool:
-       if not self._is_connected:
-           return self.connect()
-       return True
+    def ensure_connected(self, max_retries: int = 3) -> bool:
+        """Ensure connection with retry logic."""
+        if self._is_connected:
+            return True
+        
+        for attempt in range(max_retries):
+            try:
+                if self.connect():
+                    return True
+                if attempt < max_retries - 1:
+                    time.sleep(0.5)  # 500ms delay between retries
+            except Exception as e:
+                logger.warning(f"Connection attempt {attempt+1}/{max_retries} failed: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(0.5)
+        
+        logger.error(f"Failed to connect after {max_retries} attempts")
+        return False
    ```
 
 #### 2.2.3 `PcConnector` and `WinRTConnector`
@@ -196,8 +213,9 @@ def get_recognize(self):
 ### 3.3 Thread Safety
 
 - **Single-threaded**: All operations remain in main thread (Qt GUI thread)
-- **Blocking**: `connect()` still blocks (1-2s), but only when user initiates action
+- **Blocking**: `connect()` blocks (1-2s) with up to 3 retries (total ~6s worst case), but only when user initiates action
 - **No race conditions**: `ensure_connected()` is called synchronously before each operation
+- **Retry delay**: 500ms between connection attempts to allow emulator startup
 
 ---
 
@@ -331,16 +349,13 @@ def test_capture_screenshot_auto_connect():
 
 ---
 
-## 9. Open Questions
+## 9. Decisions
 
-1. **Should `click()` return `bool`?** Currently `None`, but returning `bool` allows caller to check if auto-connect succeeded. 
-   - *Decision*: Yes, return `bool` for consistency with `ensure_connected()`.
+1. **`click()` return type**: Changed from `None` to `bool` to indicate success/failure, consistent with `ensure_connected()`.
 
-2. **Auto-reconnect on failure?** If `ensure_connected()` fails, should we retry on next call, or require manual mode switch?
-   - *Decision*: Retry on next call (simplest, no state to manage).
+2. **Retry logic**: `ensure_connected()` implements default 3 retries with 500ms delay between attempts. Total worst-case blocking time ~6s (3 × 2s connect timeout).
 
-3. **Connection status indicator?** Should we add a label showing "Connected/Disconnected"?
-   - *Decision*: Out of scope for this PR. Can be added later using `is_connected` property.
+3. **Connection status UI**: Out of scope for this PR. No visual indicator added; users infer status from operation success/failure.
 
 ---
 
