@@ -173,6 +173,11 @@ class ArknightsApp(QMainWindow):
         self.current_capture_mode = mode
         logger.info(f"Switching mode: {old_mode} → {mode}")
         
+        # Reset recognizer custom settings (mode defaults kick in via process_regions)
+        self.recognizer.crop_ratio = None
+        self.recognizer.avatar_regions = None
+        self.recognizer.number_regions = None
+        
         # Update UI controls visibility
         is_win_mode = mode == "WIN"
         is_adb_mode = mode == "ADB"
