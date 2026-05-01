@@ -3,6 +3,8 @@
 import pytest
 import cv2
 import numpy as np
+from pathlib import Path
+
 from src.cannotmax.core.recognize import RecognizeMonster, ROINotSelectedError
 
 _DEFAULT_CROP_RATIO = ((0.2464, 0.8410), (0.7542, 0.9510))
@@ -67,7 +69,6 @@ class TestProcessRegions:
     """Test process_regions with auto_fallback flag."""
 
     def test_process_regions_with_fallback_no_crash(self):
-        """ADB/PC: auto_fallback=True, should not crash with black image."""
         recognizer = RecognizeMonster()
         img = np.zeros((1080, 1920, 3), dtype=np.uint8)
         results = recognizer.process_regions(img, auto_fallback=True)
@@ -75,14 +76,12 @@ class TestProcessRegions:
         assert 0 <= len(results) <= 6
 
     def test_process_regions_no_fallback_raises_without_roi(self):
-        """WIN: auto_fallback=False, crop_ratio=None should raise."""
         recognizer = RecognizeMonster()
         img = np.zeros((1080, 1920, 3), dtype=np.uint8)
         with pytest.raises(ROINotSelectedError):
             recognizer.process_regions(img, auto_fallback=False)
 
     def test_process_regions_no_fallback_with_roi_no_crash(self):
-        """WIN: auto_fallback=False with crop_ratio set should not crash."""
         recognizer = RecognizeMonster(crop_ratio=((0.25, 0.80), (0.75, 0.95)))
         img = np.zeros((1080, 1920, 3), dtype=np.uint8)
         results = recognizer.process_regions(img, auto_fallback=False)
@@ -90,36 +89,30 @@ class TestProcessRegions:
         assert 0 <= len(results) <= 6
 
 
-class TestRecognitionAccuracy:
-    """Test recognition accuracy against known screenshots."""
+class TestAdbRecognitionAccuracy:
+    """Test ADB mode recognition against known screenshots."""
 
-    @pytest.mark.parametrize("index", [3, 4, 5])
+    @pytest.mark.parametrize("index", [1, 2, 3])
     def test_process_regions_returns_six_results(self, index):
-        """process_regions must not raise on test images."""
-        from pathlib import Path
-
-        path = Path("images/process", f"{index}.png")
+        path = Path("images/tests", f"adb_original_screenshort_{index}.png")
         if not path.exists():
-            pytest.skip(f"images/process/{index}.png not found")
+            pytest.skip(f"adb_original_screenshort_{index}.png not found")
         img = cv2.imread(str(path))
         if img is None:
-            pytest.skip(f"Cannot read images/process/{index}.png")
+            pytest.skip(f"Cannot read adb_original_screenshort_{index}.png")
         recognizer = RecognizeMonster()
-        results = recognizer.process_regions(img, auto_fallback=True)
+        results = recognizer.process_regions(img, auto_fallback=True, mode="ADB")
         assert isinstance(results, list)
-        assert len(results) == 6, f"Expected 6 results, got {len(results)}"
+        assert len(results) == 6
 
-    @pytest.mark.parametrize("index", [3, 4, 5])
+    @pytest.mark.parametrize("index", [1, 2, 3])
     def test_correct_numbers_detected(self, index):
-        """Verify correct (monster_type, number) pairs are detected (ADB mode)."""
-        from pathlib import Path
-
-        path = Path("images/process", f"{index}.png")
+        path = Path("images/tests", f"adb_original_screenshort_{index}.png")
         if not path.exists():
-            pytest.skip(f"images/process/{index}.png not found")
+            pytest.skip(f"adb_original_screenshort_{index}.png not found")
         img = cv2.imread(str(path))
         if img is None:
-            pytest.skip(f"Cannot read images/process/{index}.png")
+            pytest.skip(f"Cannot read adb_original_screenshort_{index}.png")
         recognizer = RecognizeMonster()
         results = recognizer.process_regions(img, auto_fallback=True, mode="ADB")
 
@@ -128,16 +121,13 @@ class TestRecognitionAccuracy:
             if "error" not in r and r["number"] != "N/A":
                 detected.add((r["matched_id"], r["number"]))
 
-        # monster ID → name: 沉沙=49, 高能源石虫=31, 终曲合声=43,
-        # 风情街"星术师"=32, 炮击组长=40, "妒"=53, 暴走食人花=24,
-        # 狙击步兵=44, 灼热源石虫=10, 杰斯顿·威廉姆斯=37, 温顺的武装驮兽=30
         expected = {
-            3: {(49, "4"), (31, "18")},
-            4: {(43, "9"), (32, "9"), (40, "3")},
-            5: {(53, "5"), (24, "3"), (44, "22"), (10, "29"), (37, "2"), (30, "2")},
+            1: {(49, "4"), (31, "18")},
+            2: {(43, "9"), (32, "9"), (40, "3")},
+            3: {(53, "5"), (24, "3"), (44, "22"), (10, "29"), (37, "2"), (30, "2")},
         }
         exp = expected[index]
-        assert detected == exp, f"Image {index}: expected {exp}, got {detected}"
+        assert detected == exp, f"ADB {index}: expected {exp}, got {detected}"
 
 
 class TestPcRecognitionAccuracy:
@@ -145,11 +135,9 @@ class TestPcRecognitionAccuracy:
 
     @pytest.mark.parametrize("index", [1, 2])
     def test_pc_process_regions_returns_six_results(self, index):
-        from pathlib import Path
-
-        path = Path("images/process", f"pc_original_screenshot_{index}.png")
+        path = Path("images/tests", f"pc_original_screenshot_{index}.png")
         if not path.exists():
-            pytest.skip(f"images/process/pc_original_screenshot_{index}.png not found")
+            pytest.skip(f"pc_original_screenshot_{index}.png not found")
         img = cv2.imread(str(path))
         if img is None:
             pytest.skip(f"Cannot read pc_original_screenshot_{index}.png")
@@ -160,12 +148,9 @@ class TestPcRecognitionAccuracy:
 
     @pytest.mark.parametrize("index", [1, 2])
     def test_pc_correct_numbers_detected(self, index):
-        """Verify (monster_type, number) pairs in PC mode."""
-        from pathlib import Path
-
-        path = Path("images/process", f"pc_original_screenshot_{index}.png")
+        path = Path("images/tests", f"pc_original_screenshot_{index}.png")
         if not path.exists():
-            pytest.skip(f"images/process/pc_original_screenshot_{index}.png not found")
+            pytest.skip(f"pc_original_screenshot_{index}.png not found")
         img = cv2.imread(str(path))
         if img is None:
             pytest.skip(f"Cannot read pc_original_screenshot_{index}.png")
@@ -177,11 +162,9 @@ class TestPcRecognitionAccuracy:
             if "error" not in r and r["number"] != "N/A":
                 detected.add((r["matched_id"], r["number"]))
 
-        # 杰斯顿·威廉姆斯=37, 反装甲步兵=18, 高塔术师=12,
-        # 诡核集养者=8, 温顺的武装驮兽=30, "投石机"=36, 瘴=56, 狂暴宿主组长=5
         expected = {
             1: {(37, "1"), (18, "5")},
             2: {(12, "4"), (8, "14"), (30, "3"), (36, "5"), (56, "6"), (5, "4")},
         }
         exp = expected[index]
-        assert detected == exp, f"PC image {index}: expected {exp}, got {detected}"
+        assert detected == exp, f"PC {index}: expected {exp}, got {detected}"
