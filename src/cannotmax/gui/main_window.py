@@ -953,6 +953,15 @@ class ArknightsApp(QMainWindow):
             # 2. Recognizer handles: detect → crop → split → recognize
             mode = self.current_capture_mode
             auto_fb = mode in ("ADB", "PC")
+
+            # Show captured screenshot in display
+            h, w = screenshot.shape[:2]
+            rgb = cv2.cvtColor(screenshot, cv2.COLOR_BGR2RGB)
+            from PyQt6.QtGui import QImage
+
+            qimg = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888)
+            self.update_image_display(qimg)
+
             results = self.recognizer.process_regions(
                 screenshot, auto_fallback=auto_fb, mode=mode
             )
