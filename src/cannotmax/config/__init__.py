@@ -23,6 +23,8 @@ FIELD_FEATURE_COUNT = constants.FIELD_FEATURE_COUNT
 UNIT_CONFIG = constants.UNIT_CONFIG
 DEBUG_MODE = constants.DEBUG_MODE
 DEFAULT_CROP_RATIO = constants.DEFAULT_CROP_RATIO
+DEFAULT_AVATAR_REGIONS = constants.DEFAULT_AVATAR_REGIONS
+DEFAULT_NUMBER_REGIONS = constants.DEFAULT_NUMBER_REGIONS
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,8 @@ __all__ = [
     "UNIT_CONFIG",
     "DEBUG_MODE",
     "DEFAULT_CROP_RATIO",
+    "DEFAULT_AVATAR_REGIONS",
+    "DEFAULT_NUMBER_REGIONS",
     "load_images",
     "load_monster_data",
     "load_recognition_zones",

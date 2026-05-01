@@ -23,7 +23,10 @@ from ..config import (
     MONSTER_IMAGES, 
     MONSTER_COUNT,
     DEBUG_MODE,
+    DEFAULT_AVATAR_REGIONS,
+    DEFAULT_NUMBER_REGIONS,
 )
+from ..config.constants import DEFAULT_CROP_RATIO
 from ..config.paths import TMP_IMAGES_DIR
 
 logger = logging.getLogger(__name__)
@@ -152,15 +155,19 @@ class ROINotSelectedError(Exception):
 class RecognizeMonster:
     """Monster recognition via template matching and OCR."""
 
-    def __init__(self, crop_ratio: tuple | None = None):
+    def __init__(self, crop_ratio=None, avatar_regions=None, number_regions=None):
         """Initialize recognizer.
         
         Args:
             crop_ratio: 怪物条裁剪比例 [(x1,y1), (x2,y2)] 或 None（ADB/PC 用默认值）
+            avatar_regions: 6个头像区域在 975x119 内的相对坐标，None 用默认值
+            number_regions: 6个数字区域在 975x119 内的相对坐标，None 用默认值
         """
         self.ref_images = load_ref_images()
         self.ocr = get_rapidocr_engine()
         self.crop_ratio = crop_ratio
+        self.avatar_regions = avatar_regions
+        self.number_regions = number_regions
     
     def _resolve_crop_ratio(self, auto_fallback: bool) -> tuple:
         """解析裁剪比例。
@@ -177,7 +184,6 @@ class RecognizeMonster:
         if self.crop_ratio is not None:
             return self.crop_ratio
         if auto_fallback:
-            from ..config.constants import DEFAULT_CROP_RATIO
             return DEFAULT_CROP_RATIO
         raise ROINotSelectedError("请先选择怪物条范围")
     
@@ -209,6 +215,9 @@ class RecognizeMonster:
         """
         from ..utils import find_monster_zone
         
+        avatar_regs = self.avatar_regions if self.avatar_regions is not None else DEFAULT_AVATAR_REGIONS
+        number_regs = self.number_regions if self.number_regions is not None else DEFAULT_NUMBER_REGIONS
+        
         # Save original screenshot for debugging
         if DEBUG_MODE:
             TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
@@ -222,8 +231,6 @@ class RecognizeMonster:
         if self.crop_ratio is not None and auto_fallback is False:
             try:
                 d_avatar, d_nums = find_monster_zone.find_monster_zone(cropped)
-                if DEBUG_MODE and d_avatar is not None:
-                    cv2.imwrite(f"{TMP_IMAGES_DIR}/cropped_monster_bar.png", cropped)
                 if d_avatar is not None:
                     h, w = cropped.shape[:2]
                     avatar_px = np.round(d_avatar * [w, h, w, h]).astype(int)
@@ -235,9 +242,6 @@ class RecognizeMonster:
             except Exception as e:
                 logger.exception("Monster bar detection failed: %s", e)
                 return []
-        else:
-            if DEBUG_MODE:
-                cv2.imwrite(f"{TMP_IMAGES_DIR}/cropped_monster_bar.png", cropped)
         
         # 3. Resize to standard 975x119
         if cropped is None or cropped.size == 0:
@@ -250,41 +254,44 @@ class RecognizeMonster:
             logger.error("Crop failed: %s", e)
             return []
         
-        # 4. Split into 6 regions and recognize
-        results = []
-        region_width = 975 // 6
+        if DEBUG_MODE:
+            cv2.imwrite(f"{TMP_IMAGES_DIR}/monster_bar_975x119.png", monster_bar)
         
-        for i in range(6):
-            x1 = i * region_width
-            x2 = (i + 1) * region_width if i < 5 else 975
-            region_img = monster_bar[:, x1:x2]
-            
-            result = self._recognize_region(region_img, i)
+        # 4. Split into 6 regions using precise coordinates and recognize
+        results = []
+        for idx in range(6):
+            ax1, ay1, ax2, ay2 = avatar_regs[idx]
+            avatar_img = monster_bar[
+                int(ay1 * 119):int(ay2 * 119),
+                int(ax1 * 975):int(ax2 * 975),
+            ]
+            nx1, ny1, nx2, ny2 = number_regs[idx]
+            num_img = monster_bar[
+                int(ny1 * 119):int(ny2 * 119),
+                int(nx1 * 975):int(nx2 * 975),
+            ]
+            result = self._recognize_region(avatar_img, num_img, idx)
             results.append(result)
         
         return results
 
-    def _recognize_region(self, region_img: np.ndarray, region_id: int, matched_threshold=0.5, ocr_threshold=0.95) -> dict:
-        """
-        Recognize a single monster region (template matching + OCR).
-        
-        Expects a pre-cropped monster region image (approx 162x119),
-        not a full screenshot. The region contains one monster type
-        and its count.
-        
+    def _recognize_region(self, avatar_img: np.ndarray, num_img: np.ndarray, region_id: int,
+                          matched_threshold=0.5, ocr_threshold=0.95) -> dict:
+        """Recognize a single monster region (template matching + OCR).
+
         Args:
-            region_img: Pre-cropped monster region (approx 162x119)
+            avatar_img: Pre-cropped avatar sub-region from 975x119 bar
+            num_img: Pre-cropped number sub-region from 975x119 bar
             region_id: Region index (0-5)
             matched_threshold: Template matching confidence threshold
             ocr_threshold: OCR confidence threshold
-            
+
         Returns:
-            Recognition result dict with keys: region_id, matched_id, 
-            number, confidence (and optionally error)
+            Recognition result dict
         """
         # Template matching
         try:
-            matched_id, confidence = find_best_match(region_img, self.ref_images)
+            matched_id, confidence = find_best_match(avatar_img, self.ref_images)
             logger.info("target: %d matched_id: %d, confidence: %.4f", region_id, matched_id, confidence)
             
             if matched_id != 0 and confidence < matched_threshold:
@@ -295,14 +302,9 @@ class RecognizeMonster:
                 "region_id": region_id, "matched_id": 0, "number": "N/A", "error": str(e)
             }
         
-        # OCR on the number area (right side of region)
+        # OCR on the number area
         try:
-            # Number is typically on the right ~30% of the region
-            h, w = region_img.shape[:2]
-            num_x1 = int(w * 0.6)
-            sub_roi_num = region_img[:, num_x1:]
-            
-            processed = preprocess(sub_roi_num)
+            processed = preprocess(num_img)
             processed = crop_to_min_bounding_rect(processed)
             processed = add_black_border(processed, border_size=3)
             
@@ -312,7 +314,7 @@ class RecognizeMonster:
             
             if DEBUG_MODE:
                 TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(f"{TMP_IMAGES_DIR}/target_{region_id}.png", region_img)
+                cv2.imwrite(f"{TMP_IMAGES_DIR}/target_{region_id}.png", avatar_img)
                 cv2.imwrite(f"{TMP_IMAGES_DIR}/number_{region_id}.png", processed)
             
             if number == "" and matched_id != 0:
