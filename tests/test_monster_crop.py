@@ -108,7 +108,7 @@ class TestRecognitionAccuracy:
 
     @pytest.mark.parametrize("index", [3, 4, 5])
     def test_correct_numbers_detected(self, index):
-        """Verify correct numbers are detected (region position may shift)."""
+        """Verify correct (monster_type, number) pairs are detected."""
         from pathlib import Path
         path = Path("images/process", f"{index}.png")
         if not path.exists():
@@ -119,19 +119,22 @@ class TestRecognitionAccuracy:
         recognizer = RecognizeMonster()
         results = recognizer.process_regions(img, auto_fallback=True)
 
-        # Collect all detected numbers (ignoring position)
-        detected = []
+        # Collect all detected (matched_id, number) pairs
+        detected = set()
         for r in results:
             if "error" not in r and r["number"] != "N/A":
-                detected.append(r["number"])
+                detected.add((r["matched_id"], r["number"]))
 
-        # Expected numbers regardless of position
-        expected_nums = {
-            3: ["4", "18"],
-            4: ["9", "9", "3"],
-            5: ["5", "3", "22", "29", "2", "2"],
+        # monster ID → name mapping from monster_greenvine.csv
+        # 沉沙=49, 高能源石虫=31, 终曲合声=43, 风情街"星术师"=32,
+        # 炮击组长=40, "妒"=53, 暴走食人花=24, 狙击步兵=44,
+        # 灼热源石虫=10, 杰斯顿·威廉姆斯=37, 温顺的武装驮兽=30
+        expected = {
+            3: {(49, "4"), (31, "18")},
+            4: {(43, "9"), (32, "9"), (40, "3")},
+            5: {(53, "5"), (24, "3"), (44, "22"), (10, "29"), (37, "2"), (30, "2")},
         }
-        exp = expected_nums[index]
-        assert sorted(detected) == sorted(exp), (
-            f"Image {index}: expected numbers {exp}, got {detected}"
+        exp = expected[index]
+        assert detected == exp, (
+            f"Image {index}: expected {exp}, got {detected}"
         )
