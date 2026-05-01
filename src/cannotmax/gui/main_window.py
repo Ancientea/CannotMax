@@ -700,6 +700,8 @@ class ArknightsApp(QMainWindow):
                     hint = f"已切换至整屏：显示器 {sel['monitor_index']}"
 
                 self.connector_factory.mark_invalid("WIN")
+                kwargs = self._get_connector_kwargs("WIN")
+                self.connector = self.connector_factory.get_connector("WIN", **kwargs)
                 self.no_region = True
                 QMessageBox.information(self, "成功", hint + "\n建议重新选择范围。")
         except Exception as e:
