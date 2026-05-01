@@ -141,6 +141,7 @@ dev = [
     { name = "onnxscript" },
     { name = "pyinstaller" },
     { name = "pytest" },
+    { name = "pytest-qt" },
 ]
 
 [package.metadata]
@@ -171,6 +172,7 @@ dev = [
     { name = "onnxscript", specifier = ">=0.7.0" },
     { name = "pyinstaller", specifier = ">=6.15.0" },
     { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-qt", specifier = ">=4.5.0" },
 ]
 
 [[package]]
@@ -1651,6 +1653,20 @@ dependencies = [
 sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/7d/0d/549bd94f1a0a402dc8cf64563a117c0f3765662e2e668477624baeec44d5/pytest-9.0.3.tar.gz", hash = "sha256:b86ada508af81d19edeb213c681b1d48246c1a91d304c6c81a427674c17eb91c" }
 wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl", hash = "sha256:2c5efc453d45394fdd706ade797c0a81091eccd1d6e4bccfcd476e2b8e0ab5d9" },
+]
+
+[[package]]
+name = "pytest-qt"
+version = "4.5.0"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+dependencies = [
+    { name = "pluggy" },
+    { name = "pytest" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/d3/61/8bdec02663c18bf5016709b909411dce04a868710477dc9b9844ffcf8dd2/pytest_qt-4.5.0.tar.gz", hash = "sha256:51620e01c488f065d2036425cbc1cbcf8a6972295105fd285321eb47e66a319f" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/cc/d0/8339b888ad64a3d4e508fed8245a402b503846e1972c10ad60955883dcbb/pytest_qt-4.5.0-py3-none-any.whl", hash = "sha256:ed21ea9b861247f7d18090a26bfbda8fb51d7a8a7b6f776157426ff2ccf26eff" },
 ]
 
 [[package]]
