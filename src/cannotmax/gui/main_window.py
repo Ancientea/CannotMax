@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtWidgets import QGroupBox, QMessageBox, QGraphicsDropShadowEffect, QFrame
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
+from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor, QImage
 import PyQt6.QtCore as QtCore
 
 from ..core import auto_fetch
@@ -956,9 +956,7 @@ class ArknightsApp(QMainWindow):
 
             # Show captured screenshot in display
             h, w = screenshot.shape[:2]
-            rgb = cv2.cvtColor(screenshot, cv2.COLOR_BGR2RGB)
-            from PyQt6.QtGui import QImage
-
+            rgb = screenshot[..., ::-1].copy()  # BGR to RGB, contiguous copy
             qimg = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888)
             self.update_image_display(qimg)
 
