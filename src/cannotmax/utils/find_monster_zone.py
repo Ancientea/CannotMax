@@ -522,7 +522,7 @@ def _run_detection(image, blur, spare=0, p1=21, p2=28):
 # 公开主接口
 # ──────────────────────────────────────────────────────────
 
-def cutFrame(image):
+def find_monster_zone(image):
     """
     从图像中提取头像框与数字框的归一化坐标。
 
@@ -592,7 +592,7 @@ if __name__ == "__main__":
     for i in np.round(results_small).astype("int"):
         cv2.circle(image, (i[0], i[1]), i[2], (0, 255, 0), 2)
 
-    d_avatar, d_nums = cutFrame(image)
+    d_avatar, d_nums = find_monster_zone(image)
     if d_avatar is not None:
         divisors = np.array([width, height, width, height])
         for x1, y1, x2, y2 in np.round(d_avatar * divisors).astype("int"):
