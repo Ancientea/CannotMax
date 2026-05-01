@@ -23,6 +23,7 @@ import torch
 import logging
 
 from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config.paths import MODELS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ def get_device(prefer_gpu=True):
 
 
 class CannotModel:
-    def __init__(self, model_path: Path = Path("models")):
+    def __init__(self, model_path: Path = MODELS_DIR / "predictor"):
         self.device = get_device()
         self.is_model_loaded = False
         self.model_path = self._resolve_model_path(model_path)
@@ -74,11 +75,7 @@ class CannotModel:
             self.load_model()  # 初始化时加载模型
             self.is_model_loaded = True
         except Exception as e:
-            logger.error(f"模型加载失败：{e}")
-            # 允许程序继续运行，但预测会失败
-            import sys
-
-            sys.exit(1)  # 模型加载失败无法继续，退出
+            logger.error("模型加载失败：%s", e)
 
     def _resolve_model_path(self, path: Path) -> Optional[Path]:
         """

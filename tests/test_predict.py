@@ -5,16 +5,18 @@ import numpy as np
 from pathlib import Path
 from src.cannotmax.core.predict import CannotModel
 from src.cannotmax.config import MONSTER_COUNT
+from src.cannotmax.config.paths import MODELS_DIR
 
 
 @pytest.fixture(scope="module")
 def model():
-    if not list(Path("models/predictor").glob("*.pth")):
+    if not list((MODELS_DIR / "predictor").glob("*.pth")):
         pytest.skip("No model checkpoint found in models/predictor/")
     try:
-        return CannotModel(model_path=Path("models/predictor"))
+        return CannotModel(model_path=MODELS_DIR / "predictor")
     except SystemExit:
         pytest.skip("CannotModel exited (no model checkpoint)")
+
 
 class TestCannotModel:
     def test_model_loads(self, model):
