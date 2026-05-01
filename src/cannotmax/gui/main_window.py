@@ -94,7 +94,10 @@ class ArknightsApp(QMainWindow):
 
         # Single connector managed by factory
         self.connector_factory = ConnectorFactory()
-        self._mode_switch_mutex = QtCore.QMutex()  # Qt thread-safe mutex
+        self._auto_fetch_mutex = QtCore.QMutex()
+        self._mode_switch_mutex = (
+            QtCore.QMutex()
+        )  # Qt thread-safe mutex  # Qt thread-safe mutex
 
         self.auto_fetch_running = False
         self.is_invest = False
@@ -1053,6 +1056,7 @@ class ArknightsApp(QMainWindow):
             QMessageBox.warning(self, "错误", f"无法获取截图进行 ROI 选择：{e}")
 
     def toggle_auto_fetch(self):
+        _ = QtCore.QMutexLocker(self._auto_fetch_mutex)
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
             self.auto_fetch = auto_fetch.AutoFetch(
                 self.connector,
@@ -1063,8 +1067,7 @@ class ArknightsApp(QMainWindow):
                 updater=self.update_statistics_callback,
                 start_callback=self.start_callback,
                 stop_callback=self.stop_callback,
-                training_duration=float(self.duration_entry.text())
-                * 3600,  # 获取训练时长
+                training_duration=float(self.duration_entry.text()) * 3600,
                 recognizer=self.recognizer,
                 cannot_model=self.cannot_model,
                 capture_mode=self.current_capture_mode,
