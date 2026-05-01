@@ -144,54 +144,113 @@ def add_black_border(img: cv2.typing.MatLike, border_size=3):
     )
 
 
+class ROINotSelectedError(Exception):
+    """WIN 模式下用户未选择 ROI 时抛出"""
+    pass
+
+
 class RecognizeMonster:
     """Monster recognition via template matching and OCR."""
 
-    def __init__(self):
-        """Initialize recognizer."""
+    def __init__(self, crop_ratio: tuple | None = None):
+        """Initialize recognizer.
+        
+        Args:
+            crop_ratio: 怪物条裁剪比例 [(x1,y1), (x2,y2)] 或 None（ADB/PC 用默认值）
+        """
         self.ref_images = load_ref_images()
         self.ocr = get_rapidocr_engine()
-        self.main_roi = None  # Optional custom ROI
+        self.crop_ratio = crop_ratio
+    
+    def _resolve_crop_ratio(self, auto_fallback: bool) -> tuple:
+        """解析裁剪比例。
 
-    def process_regions(self, screenshot: np.ndarray) -> list[dict]:
+        Args:
+            auto_fallback: True 时 crop_ratio=None 回退到 DEFAULT_CROP_RATIO
+
+        Returns:
+            ((x1, y1), (x2, y2)) 相对坐标
+
+        Raises:
+            ROINotSelectedError: WIN 模式且 crop_ratio=None 时
         """
-        Process full-screen screenshot to identify monsters.
+        if self.crop_ratio is not None:
+            return self.crop_ratio
+        if auto_fallback:
+            from ..config.constants import DEFAULT_CROP_RATIO
+            return DEFAULT_CROP_RATIO
+        raise ROINotSelectedError("请先选择怪物条范围")
+    
+    def _crop_by_ratio(self, screenshot: np.ndarray, ratio: tuple) -> np.ndarray:
+        """按相对坐标裁切图像。
+
+        Args:
+            screenshot: BGR 图像
+            ratio: ((x1, y1), (x2, y2)) 相对坐标
+
+        Returns:
+            裁切后的 BGR 图像
+        """
+        h, w = screenshot.shape[:2]
+        (x1, y1), (x2, y2) = ratio
+        px1, py1 = int(x1 * w), int(y1 * h)
+        px2, py2 = int(x2 * w), int(y2 * h)
+        return screenshot[py1:py2, px1:px2]
+
+    def process_regions(self, screenshot: np.ndarray, auto_fallback: bool = True) -> list[dict]:
+        """Process full-screen screenshot to identify monsters.
         
         Args:
             screenshot: Full-screen BGR image (any resolution)
+            auto_fallback: True 时 crop_ratio=None 回退默认值 (ADB/PC)；False 时抛异常 (WIN)
         
         Returns:
             List of 6 recognition results
         """
-        # 1. Detect monster bar (auto-detect via find_monster_zone)
         from ..utils import find_monster_zone
         
-        # Save original screenshot for debugging before processing
+        # Save original screenshot for debugging
         if DEBUG_MODE:
             TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
             cv2.imwrite(f"{TMP_IMAGES_DIR}/original_screenshot.png", screenshot)
         
-        try:
-            monster_roi, cropped = find_monster_zone.find_monster_zone(screenshot)
-            # Save debug images of monster bar detection
+        # 1. Resolve crop ratio and crop
+        ratio = self._resolve_crop_ratio(auto_fallback)
+        cropped = self._crop_by_ratio(screenshot, ratio)
+        
+        # 2. WIN mode: find_monster_zone secondary refinement
+        if self.crop_ratio is not None and auto_fallback is False:
+            try:
+                d_avatar, d_nums = find_monster_zone.find_monster_zone(cropped)
+                if DEBUG_MODE and d_avatar is not None:
+                    cv2.imwrite(f"{TMP_IMAGES_DIR}/cropped_monster_bar.png", cropped)
+                if d_avatar is not None:
+                    h, w = cropped.shape[:2]
+                    avatar_px = np.round(d_avatar * [w, h, w, h]).astype(int)
+                    x_min = max(0, int(avatar_px[:, 0].min()))
+                    y_min = max(0, int(avatar_px[:, 1].min()))
+                    x_max = min(w, int(avatar_px[:, 2].max()))
+                    y_max = min(h, int(avatar_px[:, 3].max()))
+                    cropped = cropped[y_min:y_max, x_min:x_max]
+            except Exception as e:
+                logger.exception("Monster bar detection failed: %s", e)
+                return []
+        else:
             if DEBUG_MODE:
                 cv2.imwrite(f"{TMP_IMAGES_DIR}/cropped_monster_bar.png", cropped)
-        except Exception as e:
-            logger.exception("Monster bar detection failed: %s", e)
-            return []
         
-        if monster_roi is None or cropped is None:
+        # 3. Resize to standard 975x119
+        if cropped is None or cropped.size == 0:
             logger.error("Could not detect monster bar")
             return []
         
-        # 2. Crop to standard 975x119
         try:
             monster_bar = cv2.resize(cropped, (975, 119))
         except Exception as e:
             logger.error("Crop failed: %s", e)
             return []
         
-        # 3. Split into 6 regions and recognize
+        # 4. Split into 6 regions and recognize
         results = []
         region_width = 975 // 6
         
