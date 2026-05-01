@@ -100,7 +100,7 @@ def find_best_match(
                 confidence = max_val
                 best_id = img_id
         except Exception as e:
-            logger.exception(f"处理参考图像 {img_id} 时出错:", e)
+            logger.exception("处理参考图像 %d 时出错", img_id)
             continue
     
     return best_id, confidence
