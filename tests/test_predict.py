@@ -10,10 +10,10 @@ from src.cannotmax.config.paths import MODELS_DIR
 
 @pytest.fixture(scope="module")
 def model():
-    if not list(Path("models").glob("*.pth")):
-        pytest.skip("No model checkpoint found in models/")
+    if not list(Path("models/predictor").glob("*.pth")):
+        pytest.skip("No model checkpoint found in models/predictor/")
     try:
-        return CannotModel()
+        return CannotModel(model_path=Path("models/predictor"))
     except SystemExit:
         pytest.skip("CannotModel exited (no model checkpoint)")
 
