@@ -91,41 +91,8 @@ class TestProcessRegions:
 class TestRecognitionAccuracy:
     """Test recognition accuracy against known screenshots."""
 
-    EXPECTED = {
-        3: {
-            "regions": {
-                0: {"matched_name": "沉沙", "number": "4"},
-                1: {"number": None},   # no left monster in slot 1
-                2: {"number": None},   # no left monster in slot 2
-                3: {"matched_name": "高能源石虫", "number": "18"},
-                4: {"number": None},
-                5: {"number": None},
-            }
-        },
-        4: {
-            "regions": {
-                0: {"number": None},
-                1: {"matched_name": "终曲合声", "number": "9"},
-                2: {"number": None},
-                3: {"number": None},
-                4: {"matched_name": "风情街\"星术师\"", "number": "9"},
-                5: {"matched_name": "炮击组长", "number": "3"},
-            }
-        },
-        5: {
-            "regions": {
-                0: {"matched_name": "\"妒\"", "number": "5"},
-                1: {"matched_name": "暴走食人花", "number": "3"},
-                2: {"matched_name": "狙击步兵", "number": "22"},
-                3: {"matched_name": "灼热源石虫", "number": "29"},
-                4: {"matched_name": "杰斯顿·威廉姆斯", "number": "2"},
-                5: {"matched_name": "温顺的武装驮兽", "number": "2"},
-            }
-        },
-    }
-
     @pytest.mark.parametrize("index", [3, 4, 5])
-    def test_process_regions_does_not_crash(self, index):
+    def test_process_regions_returns_six_results(self, index):
         """process_regions must not raise on test images."""
         from pathlib import Path
         path = Path("images/process", f"{index}.png")
