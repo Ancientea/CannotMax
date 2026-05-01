@@ -64,6 +64,7 @@ class AutoFetch:
         recognizer=None,
         cannot_model=None,
         field_recognizer=None,
+        capture_mode="ADB",
     ):
         self.connector = connector
         self.game_mode = game_mode  # 游戏模式（30人或自娱自乐）
@@ -89,7 +90,8 @@ class AutoFetch:
             maxlen=5
         )  # 图片缓存队列，设置队列长短来保存结算前的图片
         self.recognizer = recognizer  # 使用传入的识别器
-        self.cannot_model = cannot_model  # 使用传入的模型
+        self.cannot_model = cannot_model
+        self.capture_mode = capture_mode  # 使用传入的模型
         self.last_state = GameState.UNKNOWN
         self.login_manager = LoginManager(connector)
         self.state_start_time = time.time()  # 记录当前状态的开始时间
@@ -489,7 +491,7 @@ class AutoFetch:
     def recognize_and_predict(self, screenshot=None):
         if screenshot is None:
             screenshot = self.connector.capture_screenshot()
-        self.recognize_results = self.recognizer.process_regions(screenshot)
+        self.recognize_results = self.recognizer.process_regions(screenshot, auto_fallback=True, mode=self.capture_mode)
 
         # 场地识别
         if self.field_recognizer is not None:

@@ -1058,6 +1058,7 @@ class ArknightsApp(QMainWindow):
                 * 3600,  # 获取训练时长
                 recognizer=self.recognizer,
                 cannot_model=self.cannot_model,
+                capture_mode=self.current_capture_mode,
             )
             self.auto_fetch.start_auto_fetch()
         else:
