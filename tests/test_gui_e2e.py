@@ -38,7 +38,7 @@ class TestGuiRecognize:
         assert btn.text() in ("识别并预测", "识别")
 
     def test_mode_switch_blocks_auto_fetch(self, main_window, qtbot):
-        main_window.change_capture_mode("PC")
+        main_window.on_mode_changed("PC")
         qtbot.mouseClick(main_window.auto_fetch_button, Qt.MouseButton.LeftButton)
         qtbot.wait(500)
         # Verify popup appeared
