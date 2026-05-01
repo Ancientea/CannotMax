@@ -29,6 +29,7 @@ from ..core.connector.maa_registry import (
     MaaFrameworkDetector,
 )
 from ..core.connector.factory import ConnectorFactory, ConnectorState
+from ..core.recognize import ROINotSelectedError
 from ..core.connector.winrt_capture import WinRTScreenCapture, WindowPickerDialog
 from ..core.roi_selector import ROISelector
 from .dark_mode_style_fix import DarkModeStyleFix
@@ -686,15 +687,9 @@ class ArknightsApp(QMainWindow):
                     return
                 hint = ""
                 if "window_name" in sel:
-                    self.recognizer = recognize.RecognizeMonster(
-                        method="WIN", window_name=sel["window_name"], monitor_index=None
-                    )
                     hint = f"已切换至窗口：{sel['window_name']}"
                 else:
                     idx = max(1, sel["monitor_index"])
-                    self.recognizer = recognize.RecognizeMonster(
-                        method="WIN", window_name=None, monitor_index=idx
-                    )
                     hint = f"已切换至整屏：显示器 {sel['monitor_index']}"
 
                 self.no_region = True
@@ -917,8 +912,6 @@ class ArknightsApp(QMainWindow):
             QMessageBox.warning(self, "未连接", "请先切换模式并连接设备/窗口")
             return
         
-        current_state = self._get_current_state()
-        
         try:
             # 1. Get full-screen screenshot (lazy connection happens here if IDLE)
             screenshot = self.connector.capture_screenshot()
@@ -929,7 +922,8 @@ class ArknightsApp(QMainWindow):
                 raise Exception("截图失败，请检查设备连接")
             
             # 2. Recognizer handles: detect → crop → split → recognize
-            results = self.recognizer.process_regions(screenshot)
+            auto_fb = self.current_capture_mode in ("ADB", "PC")
+            results = self.recognizer.process_regions(screenshot, auto_fallback=auto_fb)
             
             if not results:
                 raise Exception("未检测到怪物条")
@@ -939,6 +933,8 @@ class ArknightsApp(QMainWindow):
             self._update_connector_ready_ui()
             self.update_monster(results)
             
+        except ROINotSelectedError:
+            QMessageBox.warning(self, "错误", "请先选择怪物条范围")
         except Exception as e:
             logger.exception(f"Recognition failed: {e}")
             # Check if it's a connection error
@@ -1007,15 +1003,19 @@ class ArknightsApp(QMainWindow):
 
     def reselect_roi(self):
         """Re-select ROI interactively."""
-        # Get current screenshot to display in ROI selector
         try:
             screenshot = self.connector.capture_screenshot()
             roi = self.roi_selector.select_roi(screenshot)
             if roi:
-                self.recognizer.main_roi = roi
-                logger.info(f"已设置自定义 ROI: {roi}")
+                (px1, py1), (px2, py2) = roi
+                h, w = screenshot.shape[:2]
+                self.recognizer.crop_ratio = (
+                    (px1 / w, py1 / h),
+                    (px2 / w, py2 / h),
+                )
+                logger.info("已设置自定义 ROI: %s", roi)
         except Exception as e:
-            logger.exception(f"ROI 选择失败：{e}")
+            logger.exception("ROI 选择失败：%s", e)
             QMessageBox.warning(self, "错误", f"无法获取截图进行 ROI 选择：{e}")
 
     def toggle_auto_fetch(self):
