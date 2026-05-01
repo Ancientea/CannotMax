@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtWidgets import QGroupBox, QMessageBox, QGraphicsDropShadowEffect, QFrame
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor, QImage
+from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
 import PyQt6.QtCore as QtCore
 
 from ..core import auto_fetch
@@ -953,13 +953,6 @@ class ArknightsApp(QMainWindow):
             # 2. Recognizer handles: detect → crop → split → recognize
             mode = self.current_capture_mode
             auto_fb = mode in ("ADB", "PC")
-
-            # Show captured screenshot in display
-            h, w = screenshot.shape[:2]
-            rgb = screenshot[..., ::-1].copy()  # BGR to RGB, contiguous copy
-            qimg = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888)
-            self.update_image_display(qimg)
-
             results = self.recognizer.process_regions(
                 screenshot, auto_fallback=auto_fb, mode=mode
             )
@@ -1320,15 +1313,6 @@ class ArknightsApp(QMainWindow):
     def update_stats(self, total, incorrect, duration):
         stats_text = f"总共: {total}, 错误: {incorrect}, 时长: {duration}"
         self.stats_label.setText(stats_text)
-
-    def update_image_display(self, qimage):
-        self.image_display.setPixmap(
-            QPixmap.fromImage(qimage).scaled(
-                self.image_display.width(),
-                self.image_display.height(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-            )
-        )
 
     def package_data_and_show(self):
         try:
