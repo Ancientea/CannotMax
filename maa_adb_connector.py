@@ -131,36 +131,47 @@ class MaaAdbConnector:
             return self._devices[self._selected_device_index]
         return None
 
-    def find_devices(self) -> list[AdbDeviceInfo]:
+    def _ensure_toolkit(self):
+        binary_path = resolve_maafw_path()
+        if binary_path:
+            os.environ["MAAFW_BINARY_PATH"] = binary_path
+        from maa.toolkit import Toolkit
+        Toolkit.init_option(str(Path.cwd()))
+        return Toolkit
+
+    def find_devices(self, adb_path: str = "") -> list[AdbDeviceInfo]:
         if not MaaFrameworkDetector.is_available():
             logger.warning("MAA Framework不可用，无法发现设备")
             return []
 
         try:
-            binary_path = resolve_maafw_path()
-            if binary_path:
-                os.environ["MAAFW_BINARY_PATH"] = binary_path
-
-            from maa.toolkit import Toolkit
-            Toolkit.init_option(str(Path.cwd()))
-
-            raw_devices = Toolkit.find_adb_devices()
-            self._devices = []
+            Toolkit = self._ensure_toolkit()
+            raw_devices = Toolkit.find_adb_devices(specified_adb=adb_path) if adb_path else Toolkit.find_adb_devices()
+            seen = {d.address for d in self._devices}
+            new_devices = []
             for d in raw_devices:
-                self._devices.append(AdbDeviceInfo(
+                info = AdbDeviceInfo(
                     name=d.name,
                     adb_path=str(d.adb_path),
                     address=d.address,
                     screencap_methods=d.screencap_methods,
                     input_methods=d.input_methods,
                     config=d.config if isinstance(d.config, dict) else {},
-                ))
-            logger.info(f"发现 {len(self._devices)} 个ADB设备")
+                )
+                if info.address not in seen:
+                    new_devices.append(info)
+                    self._devices.append(info)
+                    seen.add(info.address)
+            if new_devices:
+                logger.info(f"发现 {len(new_devices)} 个新ADB设备（总计 {len(self._devices)} 个）")
+            elif not adb_path:
+                logger.info(f"发现 {len(self._devices)} 个ADB设备")
             return self._devices
         except Exception as e:
             logger.error(f"发现ADB设备失败: {e}")
-            self._devices = []
-            return []
+            if not self._devices:
+                return []
+            return self._devices
 
     def connect(self, device_index: int = 0) -> bool:
         if not MaaFrameworkDetector.is_available():
@@ -216,6 +227,52 @@ class MaaAdbConnector:
         except Exception as e:
             self.is_connected = False
             logger.error(f"MAA Framework ADB连接失败: {e}")
+            return False
+
+    def connect_custom(self, address: str, adb_path: str = "") -> bool:
+        if not MaaFrameworkDetector.is_available():
+            self.is_connected = False
+            logger.warning("MAA Framework不可用，无法连接")
+            return False
+
+        try:
+            Toolkit = self._ensure_toolkit()
+            from maa.controller import AdbController
+            from maa.define import MaaAdbScreencapMethodEnum, MaaAdbInputMethodEnum
+
+            if not adb_path:
+                if self._devices:
+                    adb_path = self._devices[0].adb_path
+                else:
+                    adb_path = str(Path.cwd() / "platform-tools" / "adb.exe")
+
+            self._ctrl = AdbController(
+                adb_path,
+                address,
+                MaaAdbScreencapMethodEnum.Default,
+                MaaAdbInputMethodEnum.Default,
+                {},
+            )
+
+            self._ctrl.post_connection().wait()
+            self._ctrl.set_screenshot_use_raw_size(True)
+
+            self._ctrl.post_screencap().wait()
+            image = self._ctrl.cached_image
+            if image is not None:
+                self.screen_height, self.screen_width = image.shape[:2]
+            else:
+                self.screen_width, self.screen_height = 1920, 1080
+
+            self.device_serial = address
+            self.is_connected = True
+            self._selected_device_index = -1
+            logger.info(f"MAA Framework自定义连接成功: {address}, 分辨率: {self.screen_width}x{self.screen_height}")
+            return True
+
+        except Exception as e:
+            self.is_connected = False
+            logger.error(f"MAA Framework自定义连接失败: {e}")
             return False
 
     def _get_window_size_fallback(self) -> tuple[int, int]:

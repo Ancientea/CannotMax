@@ -59,13 +59,19 @@ class ADBConnectorThread(QThread):
 
     connect_finished = pyqtSignal()
 
-    def __init__(self, app: "ArknightsApp", device_index: int = 0):
+    def __init__(self, app: "ArknightsApp", device_index: int = -1, custom_address: str = ""):
         super().__init__()
         self.app = app
         self.device_index = device_index
+        self.custom_address = custom_address
 
     def run(self):
-        self.app.adb_connector.connect(self.device_index)
+        if self.custom_address:
+            self.app.adb_connector.connect_custom(self.custom_address)
+        elif self.device_index >= 0:
+            self.app.adb_connector.connect(self.device_index)
+        else:
+            self.app.adb_connector.connect(0)
         self.connect_finished.emit()
 
 class ArknightsApp(QMainWindow):
@@ -399,15 +405,19 @@ class ArknightsApp(QMainWindow):
         self.serial_entry = QComboBox()
         self.serial_entry.setEditable(True)
         self.serial_entry.setFixedWidth(200)
-        self.serial_entry.lineEdit().setPlaceholderText("选择或输入设备地址")
+        self.serial_entry.lineEdit().setPlaceholderText("选择设备或输入地址")
         self.serial_entry.currentIndexChanged.connect(self.on_device_selected)
 
         self.serial_button = QPushButton("刷新")
         self.serial_button.clicked.connect(self.refresh_and_connect)
 
+        self.connect_button = QPushButton("连接")
+        self.connect_button.clicked.connect(self.connect_custom_address)
+
         conn_row1_layout.addWidget(self.serial_label)
         conn_row1_layout.addWidget(self.serial_entry)
         conn_row1_layout.addWidget(self.serial_button)
+        conn_row1_layout.addWidget(self.connect_button)
 
         # MAA状态行
         self.maa_status_label = QLabel("")
@@ -551,6 +561,7 @@ class ArknightsApp(QMainWindow):
         self.serial_label.setEnabled(is_adb_mode)
         self.serial_entry.setEnabled(is_adb_mode)
         self.serial_button.setEnabled(is_adb_mode)
+        self.connect_button.setEnabled(is_adb_mode)
 
         if mode == "ADB":
             self.refresh_device_list()
@@ -939,9 +950,19 @@ class ArknightsApp(QMainWindow):
         if index < 0 or not self.adb_connector.devices:
             return
         if index < len(self.adb_connector.devices):
-            self.adb_connector_thread = ADBConnectorThread(self, index)
+            self.adb_connector_thread = ADBConnectorThread(self, device_index=index)
             self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
             self.adb_connector_thread.start()
+
+    def connect_custom_address(self):
+        """手动输入地址后连接（支持未知模拟器）"""
+        address = self.serial_entry.currentText().strip()
+        if not address:
+            QMessageBox.warning(self, "提示", "请输入设备地址，如 127.0.0.1:5555")
+            return
+        self.adb_connector_thread = ADBConnectorThread(self, custom_address=address)
+        self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
+        self.adb_connector_thread.start()
 
     def start_callback(self):
         self.update_button_signal.emit("停止自动获取数据")
