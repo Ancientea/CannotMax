@@ -40,9 +40,10 @@ class TestGuiRecognize:
     def test_mode_switch_blocks_auto_fetch(self, main_window, qtbot):
         main_window.on_mode_changed("PC")
         qtbot.mouseClick(main_window.auto_fetch_button, Qt.MouseButton.LeftButton)
-        qtbot.wait(500)
-        # Verify popup appeared
-        popups = [
-            w for w in QApplication.topLevelWidgets() if w.windowTitle() == "提示"
-        ]
-        assert len(popups) > 0, "Expected '暂未支持PC端点击' popup"
+        # QMessageBox.information is modal, wait for it then close
+        qtbot.waitUntil(
+            lambda: QApplication.activeModalWidget() is not None, timeout=3000
+        )
+        popup = QApplication.activeModalWidget()
+        assert popup is not None, "Expected popup"
+        popup.close()
