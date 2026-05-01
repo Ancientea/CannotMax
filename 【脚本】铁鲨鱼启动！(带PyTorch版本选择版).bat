@@ -59,7 +59,7 @@ if "%torch_choice%"=="cpu" (
 echo.
 
 :: ===================================
-uv run main.py
+uv run cannotmax
 
 echo 主程序已退出，感谢您的使用！
 pause >nul
