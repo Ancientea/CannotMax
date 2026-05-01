@@ -83,7 +83,7 @@ class PcConnector(BaseConnector):
             logger.error("QApplication not available for window selection")
             return None
 
-        from .winrt_capture import WindowPickerDialog
+        from ...gui.dialogs.window_picker import WindowPickerDialog
         parent = app.activeWindow() if hasattr(app, 'activeWindow') else None
         dlg = WindowPickerDialog(parent, filter_hwnds=hwnds)
 

@@ -4,10 +4,11 @@ import re
 from datetime import datetime
 import shutil
 
+from ..config.paths import DATA_DIR
 
 def create_zip_package(output_zip_path):
     # 定义文件和文件夹路径
-    data_folder = Path("data")
+    data_folder = DATA_DIR
 
     # 获取所有符合日期格式的目录
     date_pattern = re.compile(r"^\d{4}_\d{2}_\d{2}__\d{2}_\d{2}_\d{2}$")

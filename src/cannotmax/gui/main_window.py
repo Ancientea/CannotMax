@@ -30,7 +30,8 @@ from ..core.connector.maa_registry import (
 )
 from ..core.connector.factory import ConnectorFactory, ConnectorState
 from ..core.recognize import ROINotSelectedError
-from ..core.connector.winrt_capture import WinRTScreenCapture, WindowPickerDialog
+from ..core.connector.winrt_capture import WinRTScreenCapture
+from .dialogs.window_picker import WindowPickerDialog
 from ..core.roi_selector import ROISelector
 from .dark_mode_style_fix import DarkModeStyleFix
 from ..analytics import similar_history_match
