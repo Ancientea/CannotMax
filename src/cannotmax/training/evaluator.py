@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from ..models import UnitAwareTransformer, ArknightsDataset
+from ..config.paths import DATA_DIR, MODELS_DIR
 
 
 def evaluate(model, data_loader, criterion, device):
@@ -66,7 +67,7 @@ def evaluate(model, data_loader, criterion, device):
 
 def main():
     config = {
-        "data_file": "arknights_clean.csv",
+        "data_file": DATA_DIR / "arknights_clean.csv",
         "batch_size": 256,
         "max_feature_value": 200,  # 限制特征最大值，防止极端值造成不稳定
     }
@@ -109,10 +110,10 @@ def main():
     # 加载模型权重
     try:
         model = torch.load(
-            "models/best_model_full.pth", map_location=device, weights_only=False
+            MODELS_DIR / "predictor" / "best_model_full.pth", map_location=device, weights_only=False
         )
     except TypeError:  # 如果旧版本 PyTorch 不认识 weights_only
-        model = torch.load("models/best_model_full.pth", map_location=device)
+        model = torch.load(MODELS_DIR / "predictor" / "best_model_full.pth", map_location=device)
     model.eval()
     criterion = nn.BCELoss()
     val_loss, val_acc = evaluate(model, val_loader, criterion, device)

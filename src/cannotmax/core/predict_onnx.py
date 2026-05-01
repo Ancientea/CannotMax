@@ -15,12 +15,13 @@ import numpy as np
 import logging
 
 from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config.paths import MODELS_DIR
 
 logger = logging.getLogger(__name__)
 
 
 class CannotModel:
-    def __init__(self, model_path="models"):
+    def __init__(self, model_path=MODELS_DIR / "predictor"):
         self.model_path = self._resolve_model_path(model_path)
         self.is_model_loaded = False
         try:

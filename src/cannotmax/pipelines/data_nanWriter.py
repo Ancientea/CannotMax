@@ -8,7 +8,7 @@ from ..config.paths import DATA_DIR, MODELS_DIR
 # 配置参数（需要与训练时一致）
 CONFIG = {
     "csv_path": DATA_DIR / "arknights.csv",
-    "model_path": MODELS_DIR / "best_model_full.pth",
+    "model_path": MODELS_DIR / "predictor" / "best_model_full.pth",
     "max_feature_value": 300,
     "embed_dim": 128,
     "num_heads": 8,

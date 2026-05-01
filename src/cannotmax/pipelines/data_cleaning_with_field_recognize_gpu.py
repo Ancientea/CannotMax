@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 
-from ..config.paths import DATA_DIR, MONSTER_IMAGES_DIR
+from ..config.paths import DATA_DIR, MODELS_DIR, CONFIG_DIR
 
 # ==============================================================================
 # SECTION 1: 游戏画面元素识别模块 (已修改为PyTorch+GPU)
@@ -308,11 +308,10 @@ if __name__ == "__main__":
     # 路径配置与之前保持一致
     input_file = DATA_DIR / "arknights.csv"
     output_file = DATA_DIR / "arknights_with_field_recognize_v2.csv"
-    screenshots_base_path = MONSTER_IMAGES_DIR
+    screenshots_base_path = DATA_DIR / "images"
 
-    model_dir = Path("battlefield_recognize")
-    onnx_model_path = model_dir / "field_recognize.onnx"
-    class_map_path = model_dir / "class_to_idx.json"
+    onnx_model_path = MODELS_DIR / "battlefield_recognizer" / "field_recognize.onnx"
+    class_map_path = CONFIG_DIR / "battlefield_recognize" / "class_to_idx.json"
 
     # 自动检查PTH文件是否存在
     pth_model_path = Path(str(onnx_model_path).replace(".onnx", ".pth"))

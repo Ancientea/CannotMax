@@ -7,7 +7,7 @@ from ..core import predict, predict_onnx
 from ..config import MONSTER_COUNT
 from ..config.paths import MODELS_DIR
 
-model_path = MODELS_DIR / "best_model_full.pth"
+model_path = MODELS_DIR / "predictor" / "best_model_full.pth"
 
 
 def replace_suffix(s):

@@ -8,7 +8,7 @@ import toml  # 导入toml库
 # 配置区（用户可根据需要修改这些参数）
 CONFIG = {
     "venv_dir": ".venv",  # 虚拟环境目录
-    "source_script": "main.py",  # 主程序文件路径
+    "source_script": "src/cannotmax/console.py",  # 主程序文件路径
     "icon_file": r"ico/icon_64x64.ico",  # 图标文件路径
     "output_dir": "output",  # 输出目录
     "console": True,
@@ -30,7 +30,6 @@ CONFIG = {
         "pyproject.toml",
         "monster.csv",
         "monster_greenvine.csv",
-        "3rdparty/maafw",
     ],
 }
 

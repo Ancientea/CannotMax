@@ -12,6 +12,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
 
 from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config.paths import DATA_DIR, MODELS_DIR
 from ..models import UnitAwareTransformer, ArknightsDataset, TOTAL_FEATURE_COUNT
 
 
@@ -253,7 +254,7 @@ def stratified_random_split(dataset, test_size=0.1, seed=42):
 def main():
     # 配置参数
     config = {
-        "data_file": "data/arknights.csv",
+        "data_file": DATA_DIR / "arknights.csv",
         "batch_size": 1024,  # 512
         "test_size": 0.1,
         "embed_dim": 128,  # 512
@@ -262,7 +263,7 @@ def main():
         "lr": 3e-4,  # 3e-4
         "epochs": 200,  # 推荐500+
         "seed": 42,  # 随机数种子
-        "save_dir": "models",  # 存到哪里
+        "save_dir": MODELS_DIR / "predictor",  # 存到哪里
         "max_feature_value": 100,  # 限制特征最大值，防止极端值造成不稳定
         "num_workers": 0
         if torch.cuda.is_available()

@@ -22,7 +22,7 @@ import numpy as np
 import logging
 
 from ..config import MONSTER_COUNT, MONSTER_DATA, FIELD_FEATURE_COUNT
-from ..config.paths import PROJECT_ROOT
+from ..config.paths import CONFIG_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +58,8 @@ class InputPanelUI(QFrame):
         try:
             # 加载类别映射
             class_map_path = (
-                PROJECT_ROOT
-                / "src/cannotmax/tools/battlefield_recognize/class_to_idx.json"
+                CONFIG_DIR
+                / "battlefield_recognize/class_to_idx.json"
             )
             with open(class_map_path, "r", encoding="utf-8") as f:
                 class_to_idx = json.load(f)

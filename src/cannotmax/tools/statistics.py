@@ -5,6 +5,7 @@ from math import sqrt
 import csv
 from collections import defaultdict
 from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT, MONSTER_DATA
+from ..config.paths import CONFIG_DIR
 
 FIELD_FEATURE_COUNT = 0
 
@@ -397,7 +398,7 @@ def get_terrain_feature_columns():
 
     try:
         # 加载类别映射
-        class_map_path = "tools/battlefield_recognize/class_to_idx.json"
+        class_map_path = CONFIG_DIR / "battlefield_recognize/class_to_idx.json"
         with open(class_map_path, "r", encoding="utf-8") as f:
             class_to_idx = json.load(f)
 
