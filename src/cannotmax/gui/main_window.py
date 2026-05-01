@@ -177,6 +177,14 @@ class ArknightsApp(QMainWindow):
         self.current_capture_mode = mode
         logger.info(f"Switching mode: {old_mode} → {mode}")
 
+        # Block mode switch during auto-fetch
+        if hasattr(self, "auto_fetch") and getattr(
+            self.auto_fetch, "auto_fetch_running", False
+        ):
+            self.current_capture_mode = old_mode
+            QMessageBox.warning(self, "提示", "自动获取数据运行中，请先停止再切换模式")
+            return
+
         # Reset recognizer custom settings (mode defaults kick in via process_regions)
         self.recognizer.crop_ratio = None
         self.recognizer.avatar_regions = None
@@ -195,6 +203,7 @@ class ArknightsApp(QMainWindow):
         self.connection_type_combo.setEnabled(is_adb_mode)
         self.input_method_label.setEnabled(is_adb_mode)
         self.input_method_combo.setEnabled(is_adb_mode)
+        self.auto_fetch_button.setEnabled(not is_win_mode)
 
         # Get connector (state-based lazy pooling, no connection test)
         kwargs = self._get_connector_kwargs(mode)
@@ -240,7 +249,7 @@ class ArknightsApp(QMainWindow):
     def _update_connector_ready_ui(self):
         """Update UI after successful connection (called from get_recognize)."""
         self.recognize_button.setEnabled(True)
-        self.auto_fetch_button.setEnabled(True)
+        self.auto_fetch_button.setEnabled(self.current_capture_mode != "WIN")
 
         # Update MAA status
         if hasattr(self.connector, "is_maa_available"):
