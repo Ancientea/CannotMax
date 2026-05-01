@@ -138,36 +138,129 @@ self.recognizer = recognize.RecognizeMonster(
 但 `RecognizeMonster.__init__(self)` 不接受任何参数（`recognize.py:150`）。
 
 
-## 修复方案
+## 修复方案（修订版）
 
-### 1. 恢复模式区分逻辑
+### 设计原则
 
-在 `process_regions` 中区分 ADB/PC 和 WIN：
+**不引入 mode 字段**。用裁剪策略标识符替代 mode 区分：
+- `crop_ratio` 作为构造参数，是可选的 fallback
+- `use_crop_ratio` 作为 process_regions 的参数，控制裁剪策略
 
-- **ADB/PC**：直接用 `ROI_RELATIVE` 硬编码裁切
-- **WIN**：使用 `find_monster_zone` 获取坐标 → 裁切原图
-
-### 2. 正确使用 `find_monster_zone` 的返回值
+### 1. `RecognizeMonster.__init__` — 构造函数加入裁剪比例参数
 
 ```python
-# 获取坐标
-d_avatar, d_nums = find_monster_zone.find_monster_zone(screenshot)
+class RecognizeMonster:
+    # 拷贝自 main 分支的硬编码比例常数
+    ROI_RELATIVE = [(0.2464, 0.8410), (0.7542, 0.9510)]
 
-# 用坐标实际裁切原图（像素级）
-avatar_px = np.round(d_avatar * [w, h, w, h]).astype(int)
-x_min, y_min = avatar_px[:, 0].min(), avatar_px[:, 1].min()
-x_max, y_max = avatar_px[:, 2].max(), avatar_px[:, 3].max()
-monster_bar = screenshot[y_min:y_max, x_min:x_max]  # 这是真正的图像
+    def __init__(self, crop_ratio: tuple | None = None):
+        """
+        crop_ratio: ((x1_rel, y1_rel), (x2_rel, y2_rel)) 怪物条在
+                    全屏中的归一化位置，如 None 则默认使用 ROI_RELATIVE
+        """
+        self.crop_ratio = crop_ratio or self.ROI_RELATIVE
+        self.ref_images = load_ref_images()
+        self.ocr = get_rapidocr_engine()
+        self.main_roi = None  # WIN 模式用户自定义区域（暂留）
 ```
 
-### 3. 修复 `choose_capture_window` 或 `__init__`
+**调用方**：
+- ADB/PC：`recognize.RecognizeMonster()` — 使用默认 `ROI_RELATIVE`
+- WIN：同样，但调用 process_regions 时传 `use_crop_ratio=False`
 
-选项 A：删除 `choose_capture_window` 中对 `RecognizeMonster` 的传参（WIN 模式已统一流程）。
-
-选项 B：给 `__init__` 恢复可选参数。
-
-### 4. 恢复 `ROI_RELATIVE` 常量
+### 2. `process_regions` — 加入 `use_crop_ratio` 标识符
 
 ```python
-ROI_RELATIVE = [(0.2464, 0.8410), (0.7542, 0.9510)]
+def process_regions(self, screenshot: np.ndarray, use_crop_ratio: bool = True) -> list[dict]:
+    """
+    screenshot: 全屏 BGR 图像
+    use_crop_ratio: True → 直接用 crop_ratio 比例裁切
+                    False → 用 find_monster_zone 自动检测（失败 fallback 到比例）
+    """
+
+    # ── 策略 A：固定比例裁切 ──────────────────────────
+    if use_crop_ratio:
+        monstbar = self._crop_by_ratio(screenshot)
+        if monstbar is None:
+            return []
+
+    # ── 策略 B：自动检测 + fallback ──────────────────
+    else:
+        monstbar = self._crop_by_detection(screenshot)
+        if monstbar is None:
+            logger.warning("find_monster_zone 失败，fallback 到固定比例")
+            monstbar = self._crop_by_ratio(screenshot)
+        if monstbar is None:
+            return []
+
+    # ── 后续流程（统一）─────────────────────────────
+    monstbar = cv2.resize(monstbar, (975, 119))
+    # 6区分割 + 模板匹配 + OCR ...
+```
+
+### 3. 两个内部裁剪方法
+
+```python
+def _crop_by_ratio(self, screenshot: np.ndarray) -> np.ndarray | None:
+    """硬编码比例裁切怪物条区域。"""
+    h, w = screenshot.shape[:2]
+    (x1_rel, y1_rel), (x2_rel, y2_rel) = self.crop_ratio
+    x1, y1 = int(x1_rel * w), int(y1_rel * h)
+    x2, y2 = int(x2_rel * w), int(y2_rel * h)
+    return screenshot[y1:y2, x1:x2]
+
+def _crop_by_detection(self, screenshot: np.ndarray) -> np.ndarray | None:
+    """使用 find_monster_zone 自动检测后裁切怪物条区域。"""
+    from ..utils import find_monster_zone
+
+    d_avatar, d_nums = find_monster_zone.find_monster_zone(screenshot)
+    if d_avatar is None:
+        return None
+
+    h, w = screenshot.shape[:2]
+    divisors = np.array([w, h, w, h])
+    avatar_px = np.round(d_avatar * divisors).astype(int)
+
+    x_min, y_min = avatar_px[:, 0].min(), avatar_px[:, 1].min()
+    x_max, y_max = avatar_px[:, 2].max(), avatar_px[:, 3].max()
+
+    return screenshot[y_min:y_max, x_min:x_max]
+```
+
+### 4. 调用方（main_window.py）
+
+```python
+# ADB / PC 模式
+def get_recognize(self):
+    screenshot = self.connector.capture_screenshot()
+    # ADB/PC: use_crop_ratio=True（固定比例裁切）
+    use_crop_ratio = self.current_capture_mode in ("ADB", "PC")
+    results = self.recognizer.process_regions(screenshot, use_crop_ratio=use_crop_ratio)
+    ...
+
+# WIN 模式：use_crop_ratio=False（自动检测），失败自动 fallback
+```
+
+### 5. 清除 `choose_capture_window` 中的错误传参
+
+```python
+# 修改前（错误）：
+self.recognizer = recognize.RecognizeMonster(method="WIN", ...)
+
+# 修改后：
+self.recognizer = recognize.RecognizeMonster()  # 无参数构造
+```
+
+### 数据流总览
+
+```
+get_recognize()
+    │
+    ├─ ADB/PC: use_crop_ratio=True
+    │      → _crop_by_ratio(screenshot)  → 直接按比例裁切
+    │
+    └─ WIN: use_crop_ratio=False
+           → _crop_by_detection(screenshot)
+              ├─ find_monster_zone() 成功 → 坐标裁切
+              └─ 失败 → fallback _crop_by_ratio(screenshot)
 ```
