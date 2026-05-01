@@ -11,6 +11,7 @@ Windows 10+ 上基于 **Windows.Graphics.Capture** 的屏幕捕获轻量封装�
 - 运行时可调用 `recreate()` **切换捕获目标**（重新创建底层会话）；
 - 通过锁保护 start/stop/recreate 的并发安全。
 """
+
 from __future__ import annotations
 import threading
 import time
@@ -23,6 +24,7 @@ import numpy as np
 from windows_capture import WindowsCapture, Frame, InternalCaptureControl
 
 logger = logging.getLogger(__name__)
+
 
 class WinRTScreenCapture:
     """Windows.Graphics.Capture 适配器。
@@ -59,7 +61,9 @@ class WinRTScreenCapture:
 
         # 控制状态
         self._started = False
-        self._control: Optional[InternalCaptureControl] = None  # 保存 CaptureControl，用于停止
+        self._control: Optional[InternalCaptureControl] = (
+            None  # 保存 CaptureControl，用于停止
+        )
         # 保护 start/stop/recreate 的可重入锁
         self._ctl_lock = threading.RLock()
 
@@ -116,7 +120,9 @@ class WinRTScreenCapture:
                     cursor_capture=self._init_kwargs["cursor_capture"],
                     draw_border=self._init_kwargs["draw_border"],
                     secondary_window=None,
-                    minimum_update_interval=self._init_kwargs["minimum_update_interval"],
+                    minimum_update_interval=self._init_kwargs[
+                        "minimum_update_interval"
+                    ],
                     dirty_region=None,
                     monitor_index=1,
                     window_name=None,
@@ -143,7 +149,9 @@ class WinRTScreenCapture:
                 with self._lock:
                     self._latest = None
 
-    def recreate(self, window_name: Optional[str] = None, monitor_index: Optional[int] = None) -> None:
+    def recreate(
+        self, window_name: Optional[str] = None, monitor_index: Optional[int] = None
+    ) -> None:
         """运行时切换捕获目标并立即启动。
 
         同步步骤：stop → 以新参数创建 → 重新绑定事件 → 启动。
@@ -200,7 +208,7 @@ class WinRTScreenCapture:
         with self._lock:
             if self._latest is None:
                 raise RuntimeError("WinRT capture 尚未产生首帧")
-            
+
             frame = self._latest.copy()
             if bbox:
                 x1, y1, x2, y2 = bbox
@@ -212,7 +220,9 @@ class WinRTScreenCapture:
                 return frame[y1:y2, x1:x2]
             return frame
 
-    def snapshot_once(self, bbox: Optional[tuple[int, int, int, int]] = None, timeout_sec: float = 2.0) -> np.ndarray:
+    def snapshot_once(
+        self, bbox: Optional[tuple[int, int, int, int]] = None, timeout_sec: float = 2.0
+    ) -> np.ndarray:
         """返回最近一帧的 **BGR** 拷贝图像，可选裁剪到指定 bbox。
 
         若当前未启动，则会临时启动捕获，获取一帧后立即停止。
@@ -221,7 +231,7 @@ class WinRTScreenCapture:
             was_started = self._started
             if not was_started:
                 self.start()
-            
+
             frame = None
             t0 = time.time()
             while time.time() - t0 < timeout_sec:
@@ -230,8 +240,8 @@ class WinRTScreenCapture:
                         frame = self._latest.copy()
                         break
                 time.sleep(0.01)
-            
-            if frame is None: # 超时
+
+            if frame is None:  # 超时
                 if not was_started:
                     self.stop()
                 raise RuntimeError("WinRT capture 尚未产生首帧")
@@ -249,7 +259,9 @@ class WinRTScreenCapture:
                 self.stop()
             return frame
 
-    def set_capture_target(self, window_name: Optional[str] = None, monitor_index: Optional[int] = None) -> None:
+    def set_capture_target(
+        self, window_name: Optional[str] = None, monitor_index: Optional[int] = None
+    ) -> None:
         """
         设置 WinRT 截屏目标（窗口标题或整屏），并启动捕获，等待首帧。
         若初始化失败，将抛出异常。

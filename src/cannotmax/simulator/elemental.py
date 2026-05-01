@@ -8,6 +8,7 @@ from .utils import DamageType, ElementType, debug_print, lerp
 
 class ElementAccumulator:
     """多元素损伤容器"""
+
     def __init__(self, owner):
         self.accumulators = {et: 0.0 for et in ElementType}
         self.active_burst = None
@@ -18,15 +19,17 @@ class ElementAccumulator:
         """累积元素损伤"""
         if self.active_burst:
             return  # 爆条期间暂停累积
-            
+
         self.accumulators[element] += value
         limits = 2000 if self.owner.boss else 1000
         if self.accumulators[element] >= limits:
             self.accumulators[element] = 0
             self.active_burst = ElementBurst(element, self.owner)
 
+
 class ElementBurst:
     """爆条效果控制器"""
+
     def __init__(self, trigger_element: ElementType, owner):
         self.owner = owner
         self.start_time = owner.battlefield.gameTime
@@ -58,7 +61,9 @@ class ElementBurst:
     @property
     def progress(self):
         """效果进度百分比"""
-        return min(1.0, (self.owner.battlefield.gameTime - self.start_time) / self.duration)
+        return min(
+            1.0, (self.owner.battlefield.gameTime - self.start_time) / self.duration
+        )
 
     def on_clear(self):
         if self.trigger_element == ElementType.FIRE:
@@ -69,19 +74,23 @@ class ElementBurst:
         if self.trigger_element == ElementType.NECRO_RIGHT:
             # 虚弱效果衰减
             self.owner.attack_multiplier = lerp(0.5, 1, self.progress)
-            
+
             # 持续伤害应用
             self.dot_timer += deltaTime
             self.owner.take_damage(self.dot_damage * deltaTime, DamageType.TRUE)
             if self.dot_timer >= 1.0:
-                debug_print(f"{self.owner.name}{self.owner.id} 凋亡损伤爆发期间受到{self.dot_damage}伤害")
+                debug_print(
+                    f"{self.owner.name}{self.owner.id} 凋亡损伤爆发期间受到{self.dot_damage}伤害"
+                )
                 self.dot_timer = 0
         elif self.trigger_element == ElementType.NECRO_LEFT:
             # 持续伤害应用
             self.dot_timer += deltaTime
             self.owner.take_damage(self.dot_damage * deltaTime, DamageType.TRUE)
             if self.dot_timer >= 1.0:
-                debug_print(f"{self.owner.name}{self.owner.id} 凋亡损伤爆发期间受到{self.dot_damage}伤害")
+                debug_print(
+                    f"{self.owner.name}{self.owner.id} 凋亡损伤爆发期间受到{self.dot_damage}伤害"
+                )
                 self.dot_timer = 0
 
 
@@ -91,25 +100,25 @@ class ElementBurst:
 #         self.resistances = {et: 0.0 for et in ElementType}
 #         self.active_effects = []
 #         self.hp = max_hp
-        
+
 #     def take_element_damage(self, element: ElementType, base_damage: float):
 #         # 计算实际伤害（考虑抗性）
 #         resistance = self.resistances.get(element, 0)
 #         actual_damage = base_damage * (1 - resistance)
 #         self.hp -= actual_damage
-        
+
 #         # 累积30%基础伤害作为元素损伤
 #         self.element_system.accumulate(element, base_damage * 0.3)
-        
+
 #     def set_element_resistance(self, element: ElementType, value: float):
 #         """设置元素抗性（0.0-1.0）"""
 #         self.resistances[element] = max(0, min(1.0, value))
-        
+
 #     def update(self):
 #         """每帧更新状态"""
 #         # 处理爆条队列
 #         self.element_system.process_burst()
-        
+
 #         # 更新激活中的爆条效果
 #         if burst := self.element_system.active_burst:
 #             if time.time() - burst.start_time > burst.duration:

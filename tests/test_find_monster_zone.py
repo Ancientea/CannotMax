@@ -2,6 +2,7 @@
 
 Tests using images/process/{3,4,5}.png as full screenshot inputs.
 """
+
 import pytest
 import cv2
 import numpy as np
@@ -46,12 +47,20 @@ class TestMonsterBarDetection:
         """cutFrame must return two arrays with shape (N, 4) where N >= 1."""
         avatar_roi, nums_roi = find_monster_zone(screenshot)
 
-        assert isinstance(avatar_roi, np.ndarray), f"Expected ndarray, got {type(avatar_roi)}"
-        assert isinstance(nums_roi, np.ndarray), f"Expected ndarray, got {type(nums_roi)}"
+        assert isinstance(avatar_roi, np.ndarray), (
+            f"Expected ndarray, got {type(avatar_roi)}"
+        )
+        assert isinstance(nums_roi, np.ndarray), (
+            f"Expected ndarray, got {type(nums_roi)}"
+        )
         assert avatar_roi.ndim == 2, f"avatar_roi should be 2D, got {avatar_roi.ndim}D"
         assert nums_roi.ndim == 2, f"nums_roi should be 2D, got {nums_roi.ndim}D"
-        assert avatar_roi.shape[1] == 4, f"avatar_roi cols should be 4, got {avatar_roi.shape[1]}"
-        assert nums_roi.shape[1] == 4, f"nums_roi cols should be 4, got {nums_roi.shape[1]}"
+        assert avatar_roi.shape[1] == 4, (
+            f"avatar_roi cols should be 4, got {avatar_roi.shape[1]}"
+        )
+        assert nums_roi.shape[1] == 4, (
+            f"nums_roi cols should be 4, got {nums_roi.shape[1]}"
+        )
         assert len(avatar_roi) >= 1, "Must detect at least 1 zone"
         assert len(nums_roi) >= 1, "Must detect at least 1 zone"
 
@@ -62,7 +71,12 @@ class TestMonsterBarDetection:
 
         for name, zones in [("avatar_roi", avatar_roi), ("nums_roi", nums_roi)]:
             for i, zone in enumerate(zones):
-                x1, y1, x2, y2 = float(zone[0]), float(zone[1]), float(zone[2]), float(zone[3])
+                x1, y1, x2, y2 = (
+                    float(zone[0]),
+                    float(zone[1]),
+                    float(zone[2]),
+                    float(zone[3]),
+                )
                 # Allow small tolerance for outlier coords (typical: 0.025 beyond bounds)
                 assert -0.05 <= x1 <= 1.05, f"{name}[{i}] x1={x1:.4f} out of range"
                 assert -0.05 <= y1 <= 1.05, f"{name}[{i}] y1={y1:.4f} out of range"
@@ -109,9 +123,15 @@ class TestMonsterRecognition:
             assert "number" in res, f"Missing number in {res}"
             if "error" not in res:
                 # Successful recognition must have valid values
-                assert res["matched_id"] >= 0, f"Invalid matched_id: {res['matched_id']}"
-                assert isinstance(res["region_id"], int), f"region_id must be int: {res['region_id']}"
-                assert 0 <= res["region_id"] <= 5, f"region_id out of range: {res['region_id']}"
+                assert res["matched_id"] >= 0, (
+                    f"Invalid matched_id: {res['matched_id']}"
+                )
+                assert isinstance(res["region_id"], int), (
+                    f"region_id must be int: {res['region_id']}"
+                )
+                assert 0 <= res["region_id"] <= 5, (
+                    f"region_id out of range: {res['region_id']}"
+                )
 
 
 class TestRecognitionRegression:

@@ -7,6 +7,7 @@ Usage:
     predictor = ONNXPredictor(model_path)
     prob = predictor.get_prediction(left_counts, right_counts)
 """
+
 from pathlib import Path
 
 import onnxruntime as ort

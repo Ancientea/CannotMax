@@ -17,7 +17,7 @@ UNIT_CONFIG = {
         "move_speed": 1 / 2,
         "attack_radius": 2.75,
         "effect": "破甲 15",
-        "icon": "images/1.png"
+        "icon": "images/1.png",
     },
     # ... 其他单位配置保留在原 constants.py 或根据需要添加
 }

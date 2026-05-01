@@ -9,6 +9,7 @@ Usage:
     fetcher = AutoFetch(connector, game_mode, is_invest, callbacks...)
     fetcher.start_auto_fetch()
 """
+
 import os
 
 # 设置 OpenCV 日志级别为 ERROR，减少 libpng 警告
@@ -24,6 +25,7 @@ import time
 from typing import Literal
 import cv2
 import numpy as np
+
 # loadData removed - use core.connector.AdbConnector/PcConnector
 from ..config import DEBUG_MODE
 from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
@@ -259,7 +261,7 @@ class AutoFetch:
             for i, col in enumerate(field_feature_columns):
                 value = field_data_values[i]
                 field_summary.append(f"{col}={value}")
-            logger.info("当次场地特征: %s", ', '.join(field_summary))
+            logger.info("当次场地特征: %s", ", ".join(field_summary))
 
             # 按照data_cleaning_with_field_recognize_gpu.py的格式组织数据
             data_row.extend(left_monster_data.tolist())  # 1L-77L
@@ -508,7 +510,7 @@ class AutoFetch:
                     if value == -1
                 ]
                 if detected_elements:
-                    logger.info("场地识别检测到元素: %s", ', '.join(detected_elements))
+                    logger.info("场地识别检测到元素: %s", ", ".join(detected_elements))
                 if partial_detected:
                     logger.info(
                         f"场地识别部分检测到元素: {', '.join(partial_detected)}"

@@ -9,6 +9,7 @@ Components:
 - ROISelector: Interactive region selection tool
 - ScreenshotHelper: Screenshot capture utilities
 """
+
 from .recognize import RecognizeMonster
 from .predict import CannotModel
 from .auto_fetch import AutoFetch

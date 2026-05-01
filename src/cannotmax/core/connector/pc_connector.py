@@ -10,6 +10,7 @@ Usage:
     img = conn.capture_screenshot()  # MAA or WinRT
     conn.click((0.5, 0.5))  # MAA click or SendInput
 """
+
 import time
 import logging
 from pathlib import Path
@@ -27,13 +28,13 @@ logger = logging.getLogger(__name__)
 
 class PcConnector(BaseConnector):
     """Windows PC connector for Arknights client.
-    
+
     Features:
     - Auto-detects MAA Framework availability
     - MAA mode: FramePool screencap + SendMessageWithCursorPos (background)
     - Legacy mode: WinRT capture + SendInput (foreground required)
     """
-    
+
     def __init__(self, window_name: str = "明日方舟"):
         self._window_name = window_name
         self._hwnd = None
@@ -78,13 +79,15 @@ class PcConnector(BaseConnector):
     def _select_window(self, hwnds: list[int]) -> Optional[int]:
         """Show window picker dialog limited to given hwnds."""
         from PyQt6.QtWidgets import QApplication
+
         app = QApplication.instance()
         if not app:
             logger.error("QApplication not available for window selection")
             return None
 
         from ...gui.dialogs.window_picker import WindowPickerDialog
-        parent = app.activeWindow() if hasattr(app, 'activeWindow') else None
+
+        parent = app.activeWindow() if hasattr(app, "activeWindow") else None
         dlg = WindowPickerDialog(parent, filter_hwnds=hwnds)
 
         if dlg.exec():
@@ -136,7 +139,7 @@ class PcConnector(BaseConnector):
         """Ensure connection with retry logic."""
         if self._is_connected:
             return True
-        
+
         for attempt in range(max_retries):
             try:
                 if self.connect():
@@ -144,10 +147,12 @@ class PcConnector(BaseConnector):
                 if attempt < max_retries - 1:
                     time.sleep(0.5)  # 500ms delay between retries
             except Exception as e:
-                logger.warning(f"Connection attempt {attempt+1}/{max_retries} failed: {e}")
+                logger.warning(
+                    f"Connection attempt {attempt + 1}/{max_retries} failed: {e}"
+                )
                 if attempt < max_retries - 1:
                     time.sleep(0.5)
-        
+
         logger.error(f"Failed to connect after {max_retries} attempts")
         return False
 
@@ -173,7 +178,7 @@ class PcConnector(BaseConnector):
             )
             maa_controller.post_connection().wait()
             maa_controller.set_screenshot_use_raw_size(True)
-            
+
             # Only set instance variable after successful initialization
             self._maa_controller = maa_controller
             maa_controller = None  # Prevent __del__ from running on temporary object
@@ -208,7 +213,7 @@ class PcConnector(BaseConnector):
             img = self._capture_maa()
         else:
             img = self._capture_winrt()
-        
+
         return img
 
     def _capture_maa(self) -> Optional[np.ndarray]:
@@ -266,7 +271,9 @@ class PcConnector(BaseConnector):
             screen_x = client_left + x
             screen_y = client_top + y
 
-            logger.info(f"SendInput click: window({x}, {y}) -> screen({screen_x}, {screen_y})")
+            logger.info(
+                f"SendInput click: window({x}, {y}) -> screen({screen_x}, {screen_y})"
+            )
 
             # Try to bring to foreground
             try:
@@ -329,19 +336,40 @@ class PcConnector(BaseConnector):
         ii_ = Input_I()
 
         # Move
-        ii_.mi = MouseInput(dx, dy, 0, MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, 0, ctypes.pointer(extra))
+        ii_.mi = MouseInput(
+            dx,
+            dy,
+            0,
+            MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+            0,
+            ctypes.pointer(extra),
+        )
         cmd = Input(ctypes.c_ulong(0), ii_)
         ctypes.windll.user32.SendInput(1, ctypes.pointer(cmd), ctypes.sizeof(cmd))
         time.sleep(0.05)
 
         # Down
-        ii_.mi = MouseInput(dx, dy, 0, MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, 0, ctypes.pointer(extra))
+        ii_.mi = MouseInput(
+            dx,
+            dy,
+            0,
+            MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+            0,
+            ctypes.pointer(extra),
+        )
         cmd = Input(ctypes.c_ulong(0), ii_)
         ctypes.windll.user32.SendInput(1, ctypes.pointer(cmd), ctypes.sizeof(cmd))
         time.sleep(0.05)
 
         # Up
-        ii_.mi = MouseInput(dx, dy, 0, MOUSEEVENTF_LEFTUP | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, 0, ctypes.pointer(extra))
+        ii_.mi = MouseInput(
+            dx,
+            dy,
+            0,
+            MOUSEEVENTF_LEFTUP | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+            0,
+            ctypes.pointer(extra),
+        )
         cmd = Input(ctypes.c_ulong(0), ii_)
         ctypes.windll.user32.SendInput(1, ctypes.pointer(cmd), ctypes.sizeof(cmd))
 
@@ -363,11 +391,11 @@ class PcConnector(BaseConnector):
                 del self._maa_controller
                 self._maa_controller = None
             self._maa_available = False
-            
+
             if self._winrt_capture is not None:
                 self._winrt_capture.stop()
                 self._winrt_capture = None
-            
+
             self._is_connected = False
             self._hwnd = None
             logger.info(f"PC disconnected: {self._window_name}")

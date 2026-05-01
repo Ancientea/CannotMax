@@ -54,10 +54,11 @@ def preprocess_data(csv_file):
     if data.shape[1] != expected_columns:
         print(f"数据列数不符！期望 {expected_columns} 列，实际 {data.shape[1]} 列")
         print(
-            f"期望格式: {MONSTER_COUNT}(怪物L) + {FIELD_FEATURE_COUNT}(场地L) + {MONSTER_COUNT}(怪物R) + {FIELD_FEATURE_COUNT}(场地R) + 1(Result) + 1(ImgPath)")
+            f"期望格式: {MONSTER_COUNT}(怪物L) + {FIELD_FEATURE_COUNT}(场地L) + {MONSTER_COUNT}(怪物R) + {FIELD_FEATURE_COUNT}(场地R) + 1(Result) + 1(ImgPath)"
+        )
         raise Exception("数据格式不符")
 
-    data = data.iloc[:, 0: TOTAL_FEATURE_COUNT + 1]  # 保留特征和结果列，去掉ImgPath
+    data = data.iloc[:, 0 : TOTAL_FEATURE_COUNT + 1]  # 保留特征和结果列，去掉ImgPath
 
     # 检查特征范围
     features = data.iloc[:, :-1]
@@ -103,19 +104,19 @@ def train_one_epoch(model, train_loader, criterion, optimizer, scaler=None):
 
         # 检查输入值范围
         if (
-                torch.isnan(ls).any()
-                or torch.isnan(lc).any()
-                or torch.isnan(rs).any()
-                or torch.isnan(rc).any()
+            torch.isnan(ls).any()
+            or torch.isnan(lc).any()
+            or torch.isnan(rs).any()
+            or torch.isnan(rc).any()
         ):
             print("警告: 输入数据包含NaN，跳过该批次")
             continue
 
         if (
-                torch.isinf(ls).any()
-                or torch.isinf(lc).any()
-                or torch.isinf(rs).any()
-                or torch.isinf(rc).any()
+            torch.isinf(ls).any()
+            or torch.isinf(lc).any()
+            or torch.isinf(rs).any()
+            or torch.isinf(rc).any()
         ):
             print("警告: 输入数据包含Inf，跳过该批次")
             continue
@@ -127,7 +128,7 @@ def train_one_epoch(model, train_loader, criterion, optimizer, scaler=None):
 
         try:
             with torch.amp.autocast_mode.autocast(
-                    device_type=device.type, enabled=(scaler is not None)
+                device_type=device.type, enabled=(scaler is not None)
             ):
                 outputs = model(ls, lc, rs, rc).squeeze()
                 # 确保输出在合理范围内
@@ -185,14 +186,14 @@ def evaluate(model, data_loader, criterion):
 
             # 检查输入值范围
             if (
-                    torch.isnan(ls).any()
-                    or torch.isnan(lc).any()
-                    or torch.isnan(rs).any()
-                    or torch.isnan(rc).any()
-                    or torch.isinf(ls).any()
-                    or torch.isinf(lc).any()
-                    or torch.isinf(rs).any()
-                    or torch.isinf(rc).any()
+                torch.isnan(ls).any()
+                or torch.isnan(lc).any()
+                or torch.isnan(rs).any()
+                or torch.isnan(rc).any()
+                or torch.isinf(ls).any()
+                or torch.isinf(lc).any()
+                or torch.isinf(rs).any()
+                or torch.isinf(rc).any()
             ):
                 print("警告: 评估时输入数据包含NaN或Inf，跳过该批次")
                 continue
@@ -203,7 +204,7 @@ def evaluate(model, data_loader, criterion):
 
             try:
                 with torch.amp.autocast_mode.autocast(
-                        device_type=device.type, enabled=(device.type == "cuda")
+                    device_type=device.type, enabled=(device.type == "cuda")
                 ):
                     outputs = model(ls, lc, rs, rc).squeeze()
                     # 确保输出在合理范围内
@@ -343,7 +344,9 @@ def main():
         num_layers=config["n_layers"],
     ).to(device)
 
-    print(f"模型使用特征数: 怪物({MONSTER_COUNT}) + 场地({FIELD_FEATURE_COUNT}) = {total_units}")
+    print(
+        f"模型使用特征数: 怪物({MONSTER_COUNT}) + 场地({FIELD_FEATURE_COUNT}) = {total_units}"
+    )
 
     print(
         f"模型参数数量: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"

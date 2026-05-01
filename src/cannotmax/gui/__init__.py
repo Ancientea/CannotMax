@@ -1,6 +1,7 @@
 """
 GUI module.
 """
+
 from .login import LoginManager
 from .simular_history_match_ui import HistoryMatchUI
 from .input_panel_ui import InputPanelUI

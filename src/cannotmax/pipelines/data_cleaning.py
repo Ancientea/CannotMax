@@ -9,7 +9,7 @@ def clean_data(file_path, output_path):
 
     # 读取CSV文件，不设置表头，并添加原始行号列（从1开始）
     data = pd.read_csv(file_path, header=None)
-    data['original_index'] = data.index + 1  # 保存原始行号（从1开始）
+    data["original_index"] = data.index + 1  # 保存原始行号（从1开始）
     original_rows = len(data)
     print(f"原始数据行数: {original_rows}")
 
@@ -69,17 +69,23 @@ def clean_data(file_path, output_path):
     # 添加替换行
     replacement_count = len(rows_to_remove)
     for _ in range(replacement_count):
-        cleaned_data = pd.concat([cleaned_data, pd.DataFrame([last_row])], ignore_index=True)
+        cleaned_data = pd.concat(
+            [cleaned_data, pd.DataFrame([last_row])], ignore_index=True
+        )
 
     print(f"清洗后的数据行数: {len(cleaned_data)}")
     print(f"替换了 {replacement_count} 行数据")
 
     # 去重操作
-    duplicated_count_before = cleaned_data.duplicated(subset=cleaned_data.columns[:-1]).sum()  # 不包含原始行号列
+    duplicated_count_before = cleaned_data.duplicated(
+        subset=cleaned_data.columns[:-1]
+    ).sum()  # 不包含原始行号列
     print(f"去重前的重复行数: {duplicated_count_before}")
 
     # 对特征列进行去重，保留标签和原始行号
-    duplicate_indices = cleaned_data.iloc[:, :-2].duplicated(keep='first')  # 只比较特征列
+    duplicate_indices = cleaned_data.iloc[:, :-2].duplicated(
+        keep="first"
+    )  # 只比较特征列
     duplicate_count = duplicate_indices.sum()
 
     # 如果有重复行，去除重复行
@@ -116,7 +122,9 @@ def clean_data(file_path, output_path):
         # 获取实际数值列
         column_values = column_data
 
-        original = sorted([float(x) for x in column_values[column_values != 0].unique()])
+        original = sorted(
+            [float(x) for x in column_values[column_values != 0].unique()]
+        )
         if not original:
             return set(), []
 
@@ -141,11 +149,13 @@ def clean_data(file_path, output_path):
 
             # 执行切割
             a, b = current_values[best_idx], current_values[best_idx + 1]
-            left = current_values[:best_idx + 1]
-            right = current_values[best_idx + 1:]
+            left = current_values[: best_idx + 1]
+            right = current_values[best_idx + 1 :]
 
             # 智能选择保留区间
-            if len(left) < len(right) or (len(left) == len(right) and sum(left) < sum(right)):
+            if len(left) < len(right) or (
+                len(left) == len(right) and sum(left) < sum(right)
+            ):
                 removed = left
                 current_values = right
             else:
@@ -167,12 +177,18 @@ def clean_data(file_path, output_path):
     for col in features_cleaned.columns:
         # 获取当前列数据和对应的原始行号
         col_data = features_cleaned[col].astype(float)
-        anomaly_vals, removed_indices = enhanced_clean(col_data, original_indices_cleaned, col)
+        anomaly_vals, removed_indices = enhanced_clean(
+            col_data, original_indices_cleaned, col
+        )
 
         if anomaly_vals:  # 仅处理有异常的列
             has_anomaly = True
             # 记录处理前分布
-            pre_counts = {float(k): v for k, v in col_data.value_counts().to_dict().items() if v > 0}
+            pre_counts = {
+                float(k): v
+                for k, v in col_data.value_counts().to_dict().items()
+                if v > 0
+            }
 
             # 筛选异常行
             mask = ~col_data.isin(anomaly_vals)
@@ -181,14 +197,18 @@ def clean_data(file_path, output_path):
             original_indices_cleaned = original_indices_cleaned[mask].copy()
 
             # 记录处理后分布
-            post_counts = {float(k): v for k, v in features_cleaned[col].value_counts().to_dict().items() if v > 0}
+            post_counts = {
+                float(k): v
+                for k, v in features_cleaned[col].value_counts().to_dict().items()
+                if v > 0
+            }
 
             # 生成报告
             anomaly_report[col] = {
-                'pre': sorted(pre_counts.keys()),
-                'post': sorted(post_counts.keys()),
-                'anomalies': sorted(anomaly_vals),
-                'removed_rows': removed_indices
+                "pre": sorted(pre_counts.keys()),
+                "post": sorted(post_counts.keys()),
+                "anomalies": sorted(anomaly_vals),
+                "removed_rows": removed_indices,
             }
 
     # 仅当有异常时才输出总结报告

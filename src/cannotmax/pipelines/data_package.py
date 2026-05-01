@@ -6,6 +6,7 @@ import shutil
 
 from ..config.paths import DATA_DIR
 
+
 def create_zip_package(output_zip_path):
     # 定义文件和文件夹路径
     data_folder = DATA_DIR
@@ -37,9 +38,10 @@ def create_zip_package(output_zip_path):
             shutil.rmtree(folder)
             print(f"已删除文件夹：{folder}")
         except Exception as e:
-            print(f"删除文件夹 {folder} 时出错：{e}")    
+            print(f"删除文件夹 {folder} 时出错：{e}")
 
     print(f"压缩包已创建：{output_zip_path}")
+
 
 def package_data():
     # 使用当前时间生成输出文件名
@@ -49,6 +51,7 @@ def package_data():
     # 调用函数创建压缩包
     create_zip_package(output_zip)
     return output_zip
+
 
 if __name__ == "__main__":
     package_data()

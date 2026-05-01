@@ -11,6 +11,7 @@ Usage:
     predictor.load_model("models/best_model.pth")
     prob = predictor.get_prediction(left_counts, right_counts)
 """
+
 import re
 from datetime import datetime
 from functools import cache
@@ -36,35 +37,39 @@ def get_device(prefer_gpu=True):
             try:
                 # Test CUDA initialization by creating a simple tensor
                 torch.cuda.mem_get_info()
-                logger.info(f"Use torch with cuda (GPU: {torch.cuda.get_device_name(0)})")
+                logger.info(
+                    f"Use torch with cuda (GPU: {torch.cuda.get_device_name(0)})"
+                )
                 return torch.device("cuda")
             except RuntimeError as e:
                 if "CUBLAS" in str(e) or "CUDA" in str(e):
-                    logger.warning(f"CUDA initialization failed: {e}, falling back to CPU")
+                    logger.warning(
+                        f"CUDA initialization failed: {e}, falling back to CPU"
+                    )
                 else:
                     raise
-        
+
         # Try MPS (Apple Silicon)
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             logger.info("Use torch with mps")
             return torch.device("mps")
-        
+
         # Try XPU (Intel GPU)
         if hasattr(torch, "xpu") and torch.xpu.is_available():
             logger.info("Use torch with xpu")
             return torch.device("xpu")
-    
+
     logger.info("Use torch with cpu")
     return torch.device("cpu")
 
 
 class CannotModel:
-    def __init__(self, model_path: Path=Path("models")):
+    def __init__(self, model_path: Path = Path("models")):
         self.device = get_device()
         self.is_model_loaded = False
         self.model_path = self._resolve_model_path(model_path)
         self.model = None
-        
+
         try:
             self.load_model()  # 初始化时加载模型
             self.is_model_loaded = True
@@ -72,6 +77,7 @@ class CannotModel:
             logger.error(f"模型加载失败：{e}")
             # 允许程序继续运行，但预测会失败
             import sys
+
             sys.exit(1)  # 模型加载失败无法继续，退出
 
     def _resolve_model_path(self, path: Path) -> Optional[Path]:
@@ -129,8 +135,10 @@ class CannotModel:
     def load_model(self):
         """初始化时加载模型"""
         import sys
+
         # 将 UnitAwareTransformer 导入到 __main__ 模块，解决 torch.load 反序列化问题
         from ..models import UnitAwareTransformer
+
         sys.modules["__main__"].UnitAwareTransformer = UnitAwareTransformer
 
         try:
@@ -156,7 +164,7 @@ class CannotModel:
                     model = torch.load(self.model_path, map_location="cpu")
                 else:
                     raise
-            
+
             model.eval()
             self.model = model.to(self.device)
 

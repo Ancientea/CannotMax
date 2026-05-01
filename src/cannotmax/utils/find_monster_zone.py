@@ -17,21 +17,24 @@ logger.setLevel(logging.INFO)
 # 全局几何常数
 # ──────────────────────────────────────────────────────────
 
-_K        = 1.0401189   # 圆心间距比例系数
-_M        = 4.7102526   # 左右两组之间的中部 padding（单位：r）
-_SMALL_DX = 16.39       # 小圆 x 间距与大圆半径的比值（用于估算参考半径）
+_K = 1.0401189  # 圆心间距比例系数
+_M = 4.7102526  # 左右两组之间的中部 padding（单位：r）
+_SMALL_DX = 16.39  # 小圆 x 间距与大圆半径的比值（用于估算参考半径）
 
 # ──────────────────────────────────────────────────────────
 # 内部工具函数
 # ──────────────────────────────────────────────────────────
+
 
 def _solve_least_squares(fun, x0, args=()):
     """
     单步数值线性最小二乘求解器（替代 scipy.optimize.least_squares）。
     构造数值雅可比矩阵后调用 numpy.linalg.lstsq 求解。
     """
+
     class _Result:
-        def __init__(self, x): self.x = x
+        def __init__(self, x):
+            self.x = x
 
     x = np.array(x0, dtype=float)
     r = np.array(fun(x, *args))
@@ -39,15 +42,15 @@ def _solve_least_squares(fun, x0, args=()):
     if r.size == 0:
         return _Result(x)
 
-    n   = len(x)
-    J   = np.zeros((len(r), n))
+    n = len(x)
+    J = np.zeros((len(r), n))
     eps = 1e-6
 
     for i in range(n):
-        x_eps      = x.copy()
-        x_eps[i]  += eps
-        r_eps      = np.array(fun(x_eps, *args))
-        J[:, i]    = (r_eps - r) / eps
+        x_eps = x.copy()
+        x_eps[i] += eps
+        r_eps = np.array(fun(x_eps, *args))
+        J[:, i] = (r_eps - r) / eps
 
     delta, _, _, _ = np.linalg.lstsq(J, -r, rcond=None)
 
@@ -68,13 +71,13 @@ def _detect_outliers(coords, threshold=0.1):
     filtered_coords : np.ndarray  剔除离群点后的坐标
     outlier_indices : np.ndarray  被剔除点的索引
     """
-    coords          = np.array(coords)
-    diff            = coords[:, np.newaxis, :] - coords[np.newaxis, :, :]
-    distance_matrix = np.sqrt(np.sum(diff ** 2, axis=-1))
-    avg_distances   = np.mean(distance_matrix, axis=1)
+    coords = np.array(coords)
+    diff = coords[:, np.newaxis, :] - coords[np.newaxis, :, :]
+    distance_matrix = np.sqrt(np.sum(diff**2, axis=-1))
+    avg_distances = np.mean(distance_matrix, axis=1)
 
-    mean_d  = np.mean(avg_distances)
-    std_d   = np.std(avg_distances)
+    mean_d = np.mean(avg_distances)
+    std_d = np.std(avg_distances)
     outliers = np.where(avg_distances > mean_d + threshold * std_d)[0]
 
     return np.delete(coords, outliers, axis=0), outliers
@@ -84,16 +87,17 @@ def _detect_outliers(coords, threshold=0.1):
 # 图像预处理
 # ──────────────────────────────────────────────────────────
 
+
 def _apply_quasi_gamma(gray):
     """主用类伽马变换（log 曲线映射）。"""
-    c     = np.arange(256.0 / 255, step=1.0 / 255)
+    c = np.arange(256.0 / 255, step=1.0 / 255)
     table = np.uint8(np.log(30 * c + 1) * 65.5)
     return cv2.LUT(gray, table)
 
 
 def _apply_quasi_gamma_spare(gray):
     """备用类伽马变换（常数映射）。"""
-    c     = np.arange(256.0 / 255, step=1.0 / 255)
+    c = np.arange(256.0 / 255, step=1.0 / 255)
     table = np.uint8(np.log(51) * 64.9)
     return cv2.LUT(gray, table)
 
@@ -107,8 +111,8 @@ def _get_resolution_radius_range(image):
     (big_min, big_max, small_min, small_max) : tuple[int]
     """
     _, width, _ = image.shape
-    big_min   = int(np.round(width * 0.048))
-    big_max   = int(np.round(width * 0.064))
+    big_min = int(np.round(width * 0.048))
+    big_max = int(np.round(width * 0.064))
     small_min = int(np.round(width * 0.016))
     small_max = int(np.round(width * 0.032))
     return big_min, big_max, small_min, small_max
@@ -143,27 +147,27 @@ def _preprocess(image, blur, spare=0):
     # 分辨率自适应核大小
     k1 = int(np.round(width * 0.0018)) * 2 + 1
 
-    gray_blur = cv2.GaussianBlur(gray,   (k1,     k1    ), blur)
-    thresh    = cv2.GaussianBlur(thresh, (k1 + 2, k1 + 2), 6   )
+    gray_blur = cv2.GaussianBlur(gray, (k1, k1), blur)
+    thresh = cv2.GaussianBlur(thresh, (k1 + 2, k1 + 2), 6)
 
     # 分割边界（按宽度比例）
     d1, d2, d3, d4 = [int(width * r) for r in (0.1, 0.2, 0.3, 0.4)]
     d5, d6, d7, d8 = [int(width * r) for r in (0.6, 0.7, 0.8, 0.9)]
 
-    x_ratio       = [0, 0.1, 0.2, 0.6, 0.7, 0.8]
+    x_ratio = [0, 0.1, 0.2, 0.6, 0.7, 0.8]
     x_ratio_small = [0, 0.8]
 
     crop_blur = [
-        gray_blur[:,    :d2],
+        gray_blur[:, :d2],
         gray_blur[:, d1:d3],
         gray_blur[:, d2:d4],
         gray_blur[:, d5:d7],
         gray_blur[:, d6:d8],
-        gray_blur[:, d7:  ],
+        gray_blur[:, d7:],
     ]
     crop_thresh = [
-        thresh[:,    :d2],
-        thresh[:, d7:   ],
+        thresh[:, :d2],
+        thresh[:, d7:],
     ]
 
     return crop_blur, crop_thresh, x_ratio, x_ratio_small
@@ -172,6 +176,7 @@ def _preprocess(image, blur, spare=0):
 # ──────────────────────────────────────────────────────────
 # Hough 圆检测
 # ──────────────────────────────────────────────────────────
+
 
 def _detect_big_circles(crop_list, x_ratio, min_r, max_r, width, p1=30, p2=35):
     """
@@ -239,6 +244,7 @@ def _detect_small_circles(crop_list, x_ratio_small, x_ratio, min_r, max_r, width
 # 圆点数据清洗
 # ──────────────────────────────────────────────────────────
 
+
 def _filter_big_circles_by_radius_and_position(results_big, r_refer):
     """
     按参考半径和 y/x 坐标标准差迭代剔除大圆异常点。
@@ -253,7 +259,7 @@ def _filter_big_circles_by_radius_and_position(results_big, r_refer):
     filtered : np.ndarray
     """
     # 半径筛选
-    diff_r   = np.abs(results_big[:, 2] - r_refer)
+    diff_r = np.abs(results_big[:, 2] - r_refer)
     filtered = results_big[diff_r <= 0.05 * r_refer]
 
     # y 坐标迭代筛选
@@ -262,14 +268,15 @@ def _filter_big_circles_by_radius_and_position(results_big, r_refer):
         if filtered.size == 0:
             logger.error(results_big)
             raise IndexError("std_y 筛选出现问题，请检查以上数据输入是否合法")
-        mean_y       = np.mean(filtered[:, 1])
-        outlier_idx  = np.argmax(np.abs(filtered[:, 1] - mean_y))
-        filtered     = np.delete(filtered, outlier_idx, axis=0)
-        std_y        = np.std(filtered[:, 1])
+        mean_y = np.mean(filtered[:, 1])
+        outlier_idx = np.argmax(np.abs(filtered[:, 1] - mean_y))
+        filtered = np.delete(filtered, outlier_idx, axis=0)
+        std_y = np.std(filtered[:, 1])
 
     # x 坐标（回溯 cx）迭代筛选
     p_cx = [
-        x - ((2 * n + 1) * _K * r_refer) if n in [0, 1, 2]
+        x - ((2 * n + 1) * _K * r_refer)
+        if n in [0, 1, 2]
         else x - ((2 * n + 1) * _K * r_refer + 4.710 * r_refer)
         for x, y, radius, n in filtered
     ]
@@ -280,10 +287,10 @@ def _filter_big_circles_by_radius_and_position(results_big, r_refer):
         if filtered_p.size == 0:
             logger.error(results_big)
             raise IndexError("std_x 筛选出现问题，请检查以上数据输入是否合法")
-        mean_x      = np.mean(filtered_p[:, -1])
+        mean_x = np.mean(filtered_p[:, -1])
         outlier_idx = np.argmax(np.abs(filtered_p[:, -1] - mean_x))
-        filtered_p  = np.delete(filtered_p, outlier_idx, axis=0)
-        std_x       = np.std(filtered_p[:, -1])
+        filtered_p = np.delete(filtered_p, outlier_idx, axis=0)
+        std_x = np.std(filtered_p[:, -1])
 
     return filtered_p[:, :-1]  # 去掉辅助列
 
@@ -294,9 +301,11 @@ def _filter_big_circles_by_outlier(results_big):
     """
     std = []
     for x, y, radius, n in results_big:
-        a_cx = (x - ((2 * n + 1) * _K * radius)
-                if n in [0, 1, 2]
-                else x - ((2 * n + 1) * _K * radius + 4.710 * radius))
+        a_cx = (
+            x - ((2 * n + 1) * _K * radius)
+            if n in [0, 1, 2]
+            else x - ((2 * n + 1) * _K * radius + 4.710 * radius)
+        )
         std.append([a_cx, y + radius])
 
     _, out_index = _detect_outliers(std, threshold=0.02 * np.mean(results_big[:, 2]))
@@ -328,9 +337,9 @@ def _classify_small_circles(results_small, height):
         return filtered, 1
 
     # 超过 2 个：按 y 取最近两点
-    mean_y         = np.mean(filtered[:, 1])
+    mean_y = np.mean(filtered[:, 1])
     min_two_indices = np.argsort(np.abs(filtered[:, 1] - mean_y))[:2]
-    filtered       = filtered[min_two_indices]
+    filtered = filtered[min_two_indices]
 
     # 检查两侧是否各有一个
     if np.count_nonzero(filtered[:, -1] == 0) in (0, 2):
@@ -349,7 +358,7 @@ def _filter_detections(results_big, results_small, height):
     high_tol       : int         0 → 正常容差；1 → 高容差
     """
     high_tol = 0
-    big_key  = int(results_big.shape == (0,))  # 1 → 大圆完全未检测到
+    big_key = int(results_big.shape == (0,))  # 1 → 大圆完全未检测到
 
     if big_key:
         logger.warning("未识别到大圆，自动进入高容差模式")
@@ -363,7 +372,9 @@ def _filter_detections(results_big, results_small, height):
             logger.warning("仅使用小圆进入最小二乘")
             filtered_big = []
         else:
-            filtered_big = _filter_big_circles_by_radius_and_position(results_big, r_refer)
+            filtered_big = _filter_big_circles_by_radius_and_position(
+                results_big, r_refer
+            )
         return filtered_big, filtered_small, high_tol
 
     # ── 小圆完全失效 ──────────────────────────────────────
@@ -395,6 +406,7 @@ def _filter_detections(results_big, results_small, height):
 # 最小二乘拟合
 # ──────────────────────────────────────────────────────────
 
+
 def _residuals(params, large_circles, small_circles):
     """
     目标函数：返回大圆与小圆检测坐标相对于几何模型的残差向量。
@@ -421,7 +433,7 @@ def _residuals(params, large_circles, small_circles):
         if n == 0:
             pred_x, pred_y = 0.44576523 * r + cx, -0.14858841 * r + cy
         else:  # n == 5
-            pred_x, pred_y = 16.745914  * r + cx, -0.14858841 * r + cy
+            pred_x, pred_y = 16.745914 * r + cx, -0.14858841 * r + cy
         res += [x - pred_x, y - pred_y]
 
     return res
@@ -447,6 +459,7 @@ def _fit_frame_params(filtered_big, filtered_small):
 # 框架坐标生成
 # ──────────────────────────────────────────────────────────
 
+
 def _build_frame_boxes(cx, cy, r, high_tol=False):
     """
     根据拟合参数生成头像框（avatar）与数字框（nums）的像素坐标。
@@ -462,29 +475,97 @@ def _build_frame_boxes(cx, cy, r, high_tol=False):
     nums   : np.ndarray, shape (6, 4)  [x1, y1, x2, y2]
     """
     k, m = _K, _M
-    t    = 0.17 if high_tol else 0.025
+    t = 0.17 if high_tol else 0.025
 
-    nb  = 0.9   # nums outer bias
-    nbi = 0.3   # nums inner bias
-    ny  = cy - 0.5 * r
+    nb = 0.9  # nums outer bias
+    nbi = 0.3  # nums inner bias
+    ny = cy - 0.5 * r
 
-    avatar = np.round(np.array([
-        [cx           - r*t, cy           + r*t, cx + 2*k*r           + r*t, cy - 2*k*r - r*t],
-        [cx + 2*k*r   - r*t, cy - 2*k*r   - r*t, cx + 4*k*r           + r*t, cy           + r*t],
-        [cx + 4*k*r   - r*t, cy           + r*t, cx + 6*k*r           + r*t, cy - 2*k*r - r*t],
-        [cx+(6*k+m)*r - r*t, cy           + r*t, cx+(8 *k+m)*r        + r*t, cy - 2*k*r - r*t],
-        [cx+(8*k+m)*r - r*t, cy - 2*k*r   - r*t, cx+(10*k+m)*r        + r*t, cy           + r*t],
-        [cx+(10*k+m)*r- r*t, cy           + r*t, cx+(12*k+m)*r        + r*t, cy - 2*k*r - r*t],
-    ])).astype("int")
+    avatar = np.round(
+        np.array(
+            [
+                [
+                    cx - r * t,
+                    cy + r * t,
+                    cx + 2 * k * r + r * t,
+                    cy - 2 * k * r - r * t,
+                ],
+                [
+                    cx + 2 * k * r - r * t,
+                    cy - 2 * k * r - r * t,
+                    cx + 4 * k * r + r * t,
+                    cy + r * t,
+                ],
+                [
+                    cx + 4 * k * r - r * t,
+                    cy + r * t,
+                    cx + 6 * k * r + r * t,
+                    cy - 2 * k * r - r * t,
+                ],
+                [
+                    cx + (6 * k + m) * r - r * t,
+                    cy + r * t,
+                    cx + (8 * k + m) * r + r * t,
+                    cy - 2 * k * r - r * t,
+                ],
+                [
+                    cx + (8 * k + m) * r - r * t,
+                    cy - 2 * k * r - r * t,
+                    cx + (10 * k + m) * r + r * t,
+                    cy + r * t,
+                ],
+                [
+                    cx + (10 * k + m) * r - r * t,
+                    cy + r * t,
+                    cx + (12 * k + m) * r + r * t,
+                    cy - 2 * k * r - r * t,
+                ],
+            ]
+        )
+    ).astype("int")
 
-    nums = np.round(np.array([
-        [cx+(nb+ 0*k)*r  - r*t, cy + r*t, cx+(nbi+ 2*k)*r  + r*t, ny],
-        [cx+(nb+ 2*k)*r  - r*t, ny,        cx+(nbi+ 4*k)*r  + r*t, cy + r*t],
-        [cx+(nb+ 4*k)*r  - r*t, cy + r*t, cx+(nbi+ 6*k)*r  + r*t, ny],
-        [cx+(-nbi+6*k+m)*r-r*t, cy + r*t, cx+(-nb+8 *k+m)*r+r*t,  ny],
-        [cx+(-nbi+8*k+m)*r-r*t, ny,        cx+(-nb+10*k+m)*r+r*t,  cy + r*t],
-        [cx+(-nbi+10*k+m)*r-r*t,cy + r*t, cx+(-nb+12*k+m)*r+r*t,  ny],
-    ])).astype("int")
+    nums = np.round(
+        np.array(
+            [
+                [
+                    cx + (nb + 0 * k) * r - r * t,
+                    cy + r * t,
+                    cx + (nbi + 2 * k) * r + r * t,
+                    ny,
+                ],
+                [
+                    cx + (nb + 2 * k) * r - r * t,
+                    ny,
+                    cx + (nbi + 4 * k) * r + r * t,
+                    cy + r * t,
+                ],
+                [
+                    cx + (nb + 4 * k) * r - r * t,
+                    cy + r * t,
+                    cx + (nbi + 6 * k) * r + r * t,
+                    ny,
+                ],
+                [
+                    cx + (-nbi + 6 * k + m) * r - r * t,
+                    cy + r * t,
+                    cx + (-nb + 8 * k + m) * r + r * t,
+                    ny,
+                ],
+                [
+                    cx + (-nbi + 8 * k + m) * r - r * t,
+                    ny,
+                    cx + (-nb + 10 * k + m) * r + r * t,
+                    cy + r * t,
+                ],
+                [
+                    cx + (-nbi + 10 * k + m) * r - r * t,
+                    cy + r * t,
+                    cx + (-nb + 12 * k + m) * r + r * t,
+                    ny,
+                ],
+            ]
+        )
+    ).astype("int")
 
     return avatar, nums
 
@@ -492,6 +573,7 @@ def _build_frame_boxes(cx, cy, r, high_tol=False):
 # ──────────────────────────────────────────────────────────
 # 单次完整检测流程（内部）
 # ──────────────────────────────────────────────────────────
+
 
 def _run_detection(image, blur, spare=0, p1=21, p2=28):
     """
@@ -506,9 +588,11 @@ def _run_detection(image, blur, spare=0, p1=21, p2=28):
     height, width, _ = image.shape
     big_min, big_max, small_min, small_max = _get_resolution_radius_range(image)
 
-    crop_blur, crop_thresh, x_ratio, x_ratio_small = _preprocess(image, blur=blur, spare=spare)
+    crop_blur, crop_thresh, x_ratio, x_ratio_small = _preprocess(
+        image, blur=blur, spare=spare
+    )
 
-    results_big   = _detect_big_circles(
+    results_big = _detect_big_circles(
         crop_blur, x_ratio, big_min, big_max, width, p1=p1, p2=p2
     )
     results_small = _detect_small_circles(
@@ -521,6 +605,7 @@ def _run_detection(image, blur, spare=0, p1=21, p2=28):
 # ──────────────────────────────────────────────────────────
 # 公开主接口
 # ──────────────────────────────────────────────────────────
+
 
 def find_monster_zone(image):
     """
@@ -567,7 +652,7 @@ def find_monster_zone(image):
 
     divisors = np.array([width, height, width, height])
     d_avatar = avatar / divisors
-    d_nums   = nums   / divisors
+    d_nums = nums / divisors
 
     return d_avatar, d_nums
 
@@ -584,8 +669,12 @@ if __name__ == "__main__":
     big_min, big_max, small_min, small_max = _get_resolution_radius_range(image)
     crop_blur, crop_thresh, x_ratio, x_ratio_small = _preprocess(image, blur=11)
 
-    results_big   = _detect_big_circles(crop_blur, x_ratio, big_min, big_max, width, p1=21, p2=32)
-    results_small = _detect_small_circles(crop_thresh, x_ratio_small, x_ratio, small_min, small_max, width)
+    results_big = _detect_big_circles(
+        crop_blur, x_ratio, big_min, big_max, width, p1=21, p2=32
+    )
+    results_small = _detect_small_circles(
+        crop_thresh, x_ratio_small, x_ratio, small_min, small_max, width
+    )
 
     for i in np.round(results_big).astype("int"):
         cv2.circle(image, (i[0], i[1]), i[2], (0, 255, 0), 2)

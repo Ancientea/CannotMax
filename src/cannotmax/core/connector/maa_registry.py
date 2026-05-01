@@ -6,6 +6,7 @@ Provides:
 - InputMethodRegistry: Input method options (maatouch, adb_shell, etc.)
 - MaaAvailability: Enum for MAA availability states
 """
+
 import logging
 from dataclasses import dataclass
 from enum import Enum
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class MaaAvailability(Enum):
     """MAA Framework availability states."""
+
     UNKNOWN = "unknown"
     AVAILABLE = "available"
     IMPORT_FAILED = "import_failed"
@@ -25,6 +27,7 @@ class MaaAvailability(Enum):
 @dataclass(frozen=True)
 class ConnectionType:
     """Emulator connection type definition."""
+
     type_id: str
     display_name: str
     default_address: str
@@ -34,6 +37,7 @@ class ConnectionType:
 @dataclass(frozen=True)
 class InputMethodOption:
     """Input method option definition."""
+
     method_id: str
     enum_value: int
     display_name: str
@@ -42,13 +46,14 @@ class InputMethodOption:
 
 class MaaFrameworkDetector:
     """Singleton detector for MAA Framework availability.
-    
+
     Usage:
         if MaaFrameworkDetector.is_available():
             # Use MAA Framework
         else:
             # Use legacy ADB/Win32
     """
+
     _instance = None
     _status: MaaAvailability = MaaAvailability.UNKNOWN
     _status_message: str = ""
@@ -116,14 +121,24 @@ class MaaFrameworkDetector:
 
 class ConnectionTypeRegistry:
     """Registry of emulator connection types with default addresses."""
-    
+
     _types: list[ConnectionType] = [
         ConnectionType("adb", "ADB 连接", "", "通用 ADB 连接，需手动指定设备地址"),
-        ConnectionType("ldplayer", "雷电模拟器", "emulator-5554", "雷电模拟器默认 ADB 地址"),
-        ConnectionType("mumu", "MuMu 模拟器", "127.0.0.1:7555", "MuMu 模拟器默认 ADB 地址"),
-        ConnectionType("mumu12", "MuMu12 模拟器", "127.0.0.1:16384", "MuMu12 模拟器默认 ADB 地址"),
-        ConnectionType("bluestacks", "蓝叠模拟器", "127.0.0.1:5555", "蓝叠模拟器默认 ADB 地址"),
-        ConnectionType("nox", "夜神模拟器", "127.0.0.1:62001", "夜神模拟器默认 ADB 地址"),
+        ConnectionType(
+            "ldplayer", "雷电模拟器", "emulator-5554", "雷电模拟器默认 ADB 地址"
+        ),
+        ConnectionType(
+            "mumu", "MuMu 模拟器", "127.0.0.1:7555", "MuMu 模拟器默认 ADB 地址"
+        ),
+        ConnectionType(
+            "mumu12", "MuMu12 模拟器", "127.0.0.1:16384", "MuMu12 模拟器默认 ADB 地址"
+        ),
+        ConnectionType(
+            "bluestacks", "蓝叠模拟器", "127.0.0.1:5555", "蓝叠模拟器默认 ADB 地址"
+        ),
+        ConnectionType(
+            "nox", "夜神模拟器", "127.0.0.1:62001", "夜神模拟器默认 ADB 地址"
+        ),
     ]
 
     @classmethod
@@ -150,12 +165,21 @@ class ConnectionTypeRegistry:
 
 class InputMethodRegistry:
     """Registry of input methods for MAA Framework."""
-    
+
     _methods: list[InputMethodOption] = [
-        InputMethodOption("adb_shell", 1, "AdbShell", "ADB shell input 命令，兼容性最高"),
-        InputMethodOption("minitouch_adb_key", 2, "MinitouchAndAdbKey", "minitouch 注入+ADB 按键，低延迟需 root"),
+        InputMethodOption(
+            "adb_shell", 1, "AdbShell", "ADB shell input 命令，兼容性最高"
+        ),
+        InputMethodOption(
+            "minitouch_adb_key",
+            2,
+            "MinitouchAndAdbKey",
+            "minitouch 注入+ADB 按键，低延迟需 root",
+        ),
         InputMethodOption("maatouch", 4, "Maatouch", "Maatouch 注入，低延迟 MAA 自带"),
-        InputMethodOption("emulator_extras", 8, "EmulatorExtras", "模拟器扩展接口，仅特定模拟器支持"),
+        InputMethodOption(
+            "emulator_extras", 8, "EmulatorExtras", "模拟器扩展接口，仅特定模拟器支持"
+        ),
     ]
 
     @classmethod

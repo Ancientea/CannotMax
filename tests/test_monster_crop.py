@@ -1,4 +1,5 @@
 """Tests for RecognizeMonster crop_ratio and process_regions with auto_fallback."""
+
 import pytest
 import cv2
 import numpy as np
@@ -95,6 +96,7 @@ class TestRecognitionAccuracy:
     def test_process_regions_returns_six_results(self, index):
         """process_regions must not raise on test images."""
         from pathlib import Path
+
         path = Path("images/process", f"{index}.png")
         if not path.exists():
             pytest.skip(f"images/process/{index}.png not found")
@@ -110,6 +112,7 @@ class TestRecognitionAccuracy:
     def test_correct_numbers_detected(self, index):
         """Verify correct (monster_type, number) pairs are detected (ADB mode)."""
         from pathlib import Path
+
         path = Path("images/process", f"{index}.png")
         if not path.exists():
             pytest.skip(f"images/process/{index}.png not found")
@@ -133,9 +136,7 @@ class TestRecognitionAccuracy:
             5: {(53, "5"), (24, "3"), (44, "22"), (10, "29"), (37, "2"), (30, "2")},
         }
         exp = expected[index]
-        assert detected == exp, (
-            f"Image {index}: expected {exp}, got {detected}"
-        )
+        assert detected == exp, f"Image {index}: expected {exp}, got {detected}"
 
 
 class TestPcRecognitionAccuracy:
@@ -144,6 +145,7 @@ class TestPcRecognitionAccuracy:
     @pytest.mark.parametrize("index", [1, 2])
     def test_pc_process_regions_returns_six_results(self, index):
         from pathlib import Path
+
         path = Path("images/process", f"pc_original_screenshot_{index}.png")
         if not path.exists():
             pytest.skip(f"images/process/pc_original_screenshot_{index}.png not found")
@@ -159,6 +161,7 @@ class TestPcRecognitionAccuracy:
     def test_pc_correct_numbers_detected(self, index):
         """Verify (monster_type, number) pairs in PC mode."""
         from pathlib import Path
+
         path = Path("images/process", f"pc_original_screenshot_{index}.png")
         if not path.exists():
             pytest.skip(f"images/process/pc_original_screenshot_{index}.png not found")
@@ -180,6 +183,4 @@ class TestPcRecognitionAccuracy:
             2: {(12, "4"), (8, "14"), (30, "3"), (36, "5"), (56, "6"), (5, "4")},
         }
         exp = expected[index]
-        assert detected == exp, (
-            f"PC image {index}: expected {exp}, got {detected}"
-        )
+        assert detected == exp, f"PC image {index}: expected {exp}, got {detected}"

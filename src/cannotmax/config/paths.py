@@ -3,6 +3,7 @@ Path configuration for CannotMax.
 
 集中管理项目路径，使用 pathlib.Path 对象。
 """
+
 from pathlib import Path
 
 # 项目根目录

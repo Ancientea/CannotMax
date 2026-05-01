@@ -1,6 +1,7 @@
 """
 Transformer model for Arknights battle prediction.
 """
+
 import torch
 import torch.nn as nn
 
@@ -10,15 +11,21 @@ from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 class UnitAwareTransformer(nn.Module):
     """
     Transformer model for predicting battle outcomes.
-    
+
     Args:
         num_units: Total number of units (monsters + field features)
         embed_dim: Embedding dimension
         num_heads: Number of attention heads
         num_layers: Number of transformer layers
     """
-    
-    def __init__(self, num_units: int, embed_dim: int = 128, num_heads: int = 8, num_layers: int = 4):
+
+    def __init__(
+        self,
+        num_units: int,
+        embed_dim: int = 128,
+        num_heads: int = 8,
+        num_layers: int = 4,
+    ):
         super().__init__()
         self.num_units = num_units
         self.monster_count = MONSTER_COUNT
@@ -43,7 +50,9 @@ class UnitAwareTransformer(nn.Module):
 
         for _ in range(num_layers):
             self.enemy_attentions.append(
-                nn.MultiheadAttention(embed_dim, num_heads, batch_first=True, dropout=0.2)
+                nn.MultiheadAttention(
+                    embed_dim, num_heads, batch_first=True, dropout=0.2
+                )
             )
             self.enemy_ffn.append(
                 nn.Sequential(
@@ -55,7 +64,9 @@ class UnitAwareTransformer(nn.Module):
             )
 
             self.friend_attentions.append(
-                nn.MultiheadAttention(embed_dim, num_heads, batch_first=True, dropout=0.2)
+                nn.MultiheadAttention(
+                    embed_dim, num_heads, batch_first=True, dropout=0.2
+                )
             )
             self.friend_ffn.append(
                 nn.Sequential(
@@ -103,14 +114,14 @@ class UnitAwareTransformer(nn.Module):
         left_feat = torch.cat(
             [
                 left_feat[..., : embed_dim // 2],
-                left_feat[..., embed_dim // 2:] * left_values.unsqueeze(-1),
+                left_feat[..., embed_dim // 2 :] * left_values.unsqueeze(-1),
             ],
             dim=-1,
         )
         right_feat = torch.cat(
             [
                 right_feat[..., : embed_dim // 2],
-                right_feat[..., embed_dim // 2:] * right_values.unsqueeze(-1),
+                right_feat[..., embed_dim // 2 :] * right_values.unsqueeze(-1),
             ],
             dim=-1,
         )

@@ -20,5 +20,3 @@ __all__ = [
     "PcConnector",
     "ConnectorFactory",
 ]
-
-

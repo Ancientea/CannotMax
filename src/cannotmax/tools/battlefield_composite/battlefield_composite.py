@@ -67,7 +67,7 @@ def get_random_png_frame(png_folder):
     # 随机选择一个png文件
     random_png = random.choice(png_list)
     print(f"随机选择的PNG文件: {random_png}")
-    frame = cv2.imread(str(random_png), cv2.IMREAD_UNCHANGED) # Read with alpha channel
+    frame = cv2.imread(str(random_png), cv2.IMREAD_UNCHANGED)  # Read with alpha channel
     if frame is None:
         raise Exception(f"无法读取PNG文件: {random_png}")
     return frame
@@ -123,7 +123,9 @@ def compose_frame(frame, background, x, y):
 
     # 进行alpha混合
     for c in range(0, 3):
-        roi[:, :, c] = roi[:, :, c] * (1 - alpha_channel) + overlay_colors[:, :, c] * alpha_channel
+        roi[:, :, c] = (
+            roi[:, :, c] * (1 - alpha_channel) + overlay_colors[:, :, c] * alpha_channel
+        )
 
     # 将结果放回原图
     background[y_start:y_end, x_start:x_end] = roi
@@ -156,7 +158,9 @@ def composite_random_frame():
 
     for i in range(10):
         x, y = frame_list[i]
-        frame = get_random_png_frame(Path(__file__).parent / "monster_images/Arc_Frontliner_Leader-Move")
+        frame = get_random_png_frame(
+            Path(__file__).parent / "monster_images/Arc_Frontliner_Leader-Move"
+        )
 
         # 缩放
         factor = (y / bg_height) * 0.4 + 0.6
@@ -173,9 +177,16 @@ def composite_random_frame():
         ellipse_x = int(x + center[0])
         ellipse_y = int(y + center[1] + new_frame_height * 0.30)
         black = (0, 0, 0)
-        cv2.ellipse(battlefield, (ellipse_x, ellipse_y),
-                    (int(new_frame_width * 0.100), int(new_frame_height * 0.025)),
-                    0, 0, 360, black, -1)
+        cv2.ellipse(
+            battlefield,
+            (ellipse_x, ellipse_y),
+            (int(new_frame_width * 0.100), int(new_frame_height * 0.025)),
+            0,
+            0,
+            360,
+            black,
+            -1,
+        )
         # 画框
         cv2.rectangle(battlefield, (x, y), (x + x1, y + y1), (0, 255, 0), 2)
 
@@ -195,7 +206,6 @@ def composite_random_frame():
 
     # 将渐变掩码应用到图像上
     battlefield = compose_frame(gradient_mask, battlefield, 0, 0)
-
 
     # 保存结果
     cv2.imwrite("./tools/battlefield_composite/battlefield_composite.png", battlefield)
@@ -234,7 +244,7 @@ def crop_to_bounding_box(image):
     x, y, w, h = cv2.boundingRect(coords)
 
     # 裁切图像
-    cropped_image = image[y:y+h, x:x+w]
+    cropped_image = image[y : y + h, x : x + w]
     center_x = image.shape[1] / 2 - x
     center_y = image.shape[0] / 2 - y
     center = (center_x, center_y)

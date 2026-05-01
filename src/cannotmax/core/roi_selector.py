@@ -6,6 +6,7 @@ Usage:
     roi = selector.select_roi(image)
     # roi: [(x1, y1), (x2, y2)]
 """
+
 import logging
 import cv2
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class ROISelector:
     """Interactive ROI selector using mouse drag."""
-    
+
     def __init__(self):
         self.roi_box = []
         self.drawing = False
@@ -34,19 +35,21 @@ class ROISelector:
             self.roi_box.append((x, y))
             self.drawing = False
 
-    def select_roi(self, image: cv2.typing.MatLike, example_image_path: str | None = None) -> tuple | None:
+    def select_roi(
+        self, image: cv2.typing.MatLike, example_image_path: str | None = None
+    ) -> tuple | None:
         """
         Select ROI interactively.
-        
+
         Args:
             image: Base image for selection
             example_image_path: Optional path to example image to display
-            
+
         Returns:
             tuple: [(x1, y1), (x2, y2)] normalized coordinates, or None if cancelled
         """
         self._image = image.copy()
-        
+
         while True:
             # Add instruction text
             cv2.putText(

@@ -112,8 +112,14 @@ class ArknightsApp(QMainWindow):
         self.history_match = similar_history_match.HistoryMatch()
         # Ensure feat_past and N_history are initialized
         try:
-            self.history_match.feat_past = np.hstack([self.history_match.past_left, self.history_match.past_right])
-            self.history_match.N_history = 0 if self.history_match.labels is None else len(self.history_match.labels)
+            self.history_match.feat_past = np.hstack(
+                [self.history_match.past_left, self.history_match.past_right]
+            )
+            self.history_match.N_history = (
+                0
+                if self.history_match.labels is None
+                else len(self.history_match.labels)
+            )
             logger.info("错题本加载成功")
         except Exception:
             self.history_match.feat_past = np.array([])
@@ -139,21 +145,18 @@ class ArknightsApp(QMainWindow):
             self.recognize_button.setToolTip("模型未加载，无法使用此功能")
             self.input_panel.predict_button.setEnabled(False)
             self.input_panel.predict_button.setToolTip("模型未加载，无法使用此功能")
-        
 
     def _get_connector_kwargs(self, mode: str) -> dict:
         """Get constructor kwargs for connector based on mode."""
         if mode == "ADB":
-            return {
-                "adb_serial": self.serial_entry.currentText()
-            }
+            return {"adb_serial": self.serial_entry.currentText()}
         elif mode == "PC":
             return {"window_name": "明日方舟"}
         elif mode == "WIN":
             # Try to get last selected window name if available
             return {"window_name": getattr(self, "_win_window_name", "")}
         return {}
-    
+
     def _get_current_state(self):
         """Get current connector state from factory."""
         if self.current_capture_mode not in self.connector_factory._pool:
@@ -163,26 +166,26 @@ class ArknightsApp(QMainWindow):
 
     def on_mode_changed(self, mode: str):
         """Switch capture mode. Uses state-based lazy pooling.
-        
+
         Args:
             mode: Capture mode (ADB/PC/WIN)
         """
         # Qt mutex with RAII-style locking (auto-unlock on scope exit)
         _ = QtCore.QMutexLocker(self._mode_switch_mutex)
-        
+
         old_mode = self.current_capture_mode
         self.current_capture_mode = mode
         logger.info(f"Switching mode: {old_mode} → {mode}")
-        
+
         # Reset recognizer custom settings (mode defaults kick in via process_regions)
         self.recognizer.crop_ratio = None
         self.recognizer.avatar_regions = None
         self.recognizer.number_regions = None
-        
+
         # Update UI controls visibility
         is_win_mode = mode == "WIN"
         is_adb_mode = mode == "ADB"
-        
+
         self.choose_window_button.setEnabled(is_win_mode)
         self.reselect_button.setEnabled(is_win_mode)
         self.serial_label.setEnabled(is_adb_mode)
@@ -192,22 +195,24 @@ class ArknightsApp(QMainWindow):
         self.connection_type_combo.setEnabled(is_adb_mode)
         self.input_method_label.setEnabled(is_adb_mode)
         self.input_method_combo.setEnabled(is_adb_mode)
-        
+
         # Get connector (state-based lazy pooling, no connection test)
         kwargs = self._get_connector_kwargs(mode)
         new_connector = self.connector_factory.get_connector(mode, **kwargs)
-        
+
         # Return old connector to pool if it exists in the pool
-        if (self.connector is not None and 
-            self.connector is not new_connector and 
-            old_mode in self.connector_factory._pool):
+        if (
+            self.connector is not None
+            and self.connector is not new_connector
+            and old_mode in self.connector_factory._pool
+        ):
             self.connector_factory.return_connector(old_mode, self.connector)
-        
+
         self.connector = new_connector
-        
+
         # Update UI based on factory state
         self._update_ui_from_factory_state()
-    
+
     def _update_ui_from_factory_state(self):
         """Update UI based on ConnectorFactory state (IDLE/VALID/INVALID)."""
         mode = self.current_capture_mode
@@ -215,9 +220,9 @@ class ArknightsApp(QMainWindow):
             self.maa_status_label.setText("未连接")
             self.maa_status_label.setStyleSheet("color: #999999; font-size: 10px;")
             return
-        
+
         _, _, state = self.connector_factory._pool[mode]
-        
+
         if state == ConnectorState.IDLE:
             # 首次使用或已归还，未验证
             self.maa_status_label.setText("未连接")
@@ -236,7 +241,7 @@ class ArknightsApp(QMainWindow):
         """Update UI after successful connection (called from get_recognize)."""
         self.recognize_button.setEnabled(True)
         self.auto_fetch_button.setEnabled(True)
-        
+
         # Update MAA status
         if hasattr(self.connector, "is_maa_available"):
             if self.connector.is_maa_available:
@@ -245,7 +250,7 @@ class ArknightsApp(QMainWindow):
             else:
                 self.maa_status_label.setText("使用自有实现")
                 self.maa_status_label.setStyleSheet("color: #996600; font-size: 10px;")
-        
+
         logger.info(f"Connected to {self.current_capture_mode} mode")
 
     def init_ui(self):
@@ -253,7 +258,7 @@ class ArknightsApp(QMainWindow):
             version_str = get_version("CannotMax-Greenvine")
         except PackageNotFoundError:
             version_str = "dev"
-        
+
         model_name = (
             Path(self.cannot_model.model_path).name
             if self.cannot_model.model_path
@@ -630,11 +635,12 @@ class ArknightsApp(QMainWindow):
         self.update_monster_signal.connect(self.update_monster)
         self.update_prediction_signal.connect(self.update_prediction)
         self.update_statistics_signal.connect(self.update_statistics)
-        
+
         # Refresh device list asynchronously using QTimer to avoid blocking UI
         from PyQt6.QtCore import QTimer
+
         QTimer.singleShot(0, self._load_device_list_async)
-        
+
         DarkModeStyleFix.apply(QApplication.instance())
 
     def toggle_input_panel(self):
@@ -668,7 +674,6 @@ class ArknightsApp(QMainWindow):
             self.setFixedWidth(self.width())
 
         self.size_animation.finished.connect(set_fixed_after_animation)
-
 
     def choose_capture_window(self):
         """弹出对话框选择窗口作为 WinRT 截屏源，用于窗口捕获模式"""
@@ -922,7 +927,7 @@ class ArknightsApp(QMainWindow):
         if self.connector is None:
             QMessageBox.warning(self, "未连接", "请先切换模式并连接设备/窗口")
             return
-        
+
         try:
             # 1. Get full-screen screenshot (lazy connection happens here if IDLE)
             screenshot = self.connector.capture_screenshot()
@@ -931,27 +936,33 @@ class ArknightsApp(QMainWindow):
                 self.connector_factory.mark_invalid(self.current_capture_mode)
                 self._update_ui_from_factory_state()
                 raise Exception("截图失败，请检查设备连接")
-            
+
             # 2. Recognizer handles: detect → crop → split → recognize
             mode = self.current_capture_mode
             auto_fb = mode in ("ADB", "PC")
-            results = self.recognizer.process_regions(screenshot, auto_fallback=auto_fb, mode=mode)
-            
+            results = self.recognizer.process_regions(
+                screenshot, auto_fallback=auto_fb, mode=mode
+            )
+
             if not results:
                 raise Exception("未检测到怪物条")
-            
+
             # 3. Success: mark VALID and update UI (IDLE→VALID transition)
             self.connector_factory.mark_valid(self.current_capture_mode)
             self._update_connector_ready_ui()
             self.update_monster(results)
-            
+
         except ROINotSelectedError:
             QMessageBox.warning(self, "错误", "请先选择怪物条范围")
         except Exception as e:
             logger.exception(f"Recognition failed: {e}")
             # Check if it's a connection error
             error_msg = str(e).lower()
-            if "connection" in error_msg or "断开" in error_msg or "closed" in error_msg:
+            if (
+                "connection" in error_msg
+                or "断开" in error_msg
+                or "closed" in error_msg
+            ):
                 self.connector_factory.mark_invalid(self.current_capture_mode)
                 self._update_ui_from_factory_state()
             QMessageBox.warning(self, "识别失败", str(e))
@@ -1017,7 +1028,9 @@ class ArknightsApp(QMainWindow):
         """Re-select ROI interactively."""
         try:
             screenshot = self.connector.capture_screenshot()
-            roi = self.roi_selector.select_roi(screenshot, example_image_path="images/eg.png")
+            roi = self.roi_selector.select_roi(
+                screenshot, example_image_path="images/eg.png"
+            )
             if roi:
                 (px1, py1), (px2, py2) = roi
                 h, w = screenshot.shape[:2]
@@ -1071,13 +1084,14 @@ class ArknightsApp(QMainWindow):
             # Only use AdbConnector for device list (doesn't require connection)
             if self.connector is not None:
                 from ..core.connector.adb_connector import AdbConnector
+
                 if isinstance(self.connector, AdbConnector):
                     devices = self.connector.get_device_list()
                     self._populate_serial_combo(devices)
                     return
         except Exception as e:
             logger.warning(f"Failed to load device list: {e}")
-        
+
         # Fallback to default
         self._populate_serial_combo(["127.0.0.1:5555"])
 
@@ -1093,28 +1107,32 @@ class ArknightsApp(QMainWindow):
                 self.serial_entry.setCurrentIndex(0)
         else:
             self.serial_entry.addItem("127.0.0.1:5555")
-            self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
+            self.serial_entry.setCurrentText(
+                current_text if current_text else "127.0.0.1:5555"
+            )
 
     def refresh_device_list(self):
         """刷新并更新模拟器序列号下拉列表"""
         current_text = self.serial_entry.currentText()
-        
+
         # Try pre-initialized connector first, then active connector
-        connector = getattr(self, '_device_list_connector', None) or self.connector
-        
+        connector = getattr(self, "_device_list_connector", None) or self.connector
+
         if connector is None:
             # No connector available, show default
             self.serial_entry.clear()
             self.serial_entry.addItem("127.0.0.1:5555")
-            self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
+            self.serial_entry.setCurrentText(
+                current_text if current_text else "127.0.0.1:5555"
+            )
             return
-        
+
         try:
             devices = connector.get_device_list()
         except Exception as e:
             logger.warning(f"Failed to get device list: {e}")
             devices = None
-        
+
         self._populate_serial_combo(devices if devices else [])
 
     def on_connection_type_changed(self, index):
@@ -1124,14 +1142,14 @@ class ArknightsApp(QMainWindow):
         default_address = ConnectionTypeRegistry.get_default_address(type_id)
         if default_address:
             self.serial_entry.setCurrentText(default_address)
-        
+
         if self.connector:
             # Update device serial first (preserves connection if possible)
             try:
                 self.connector.update_device_serial(default_address)
             except Exception as e:
                 logger.warning(f"Update device serial failed: {e}")
-            
+
             # Mark as INVALID and disconnect (state-based)
             self.connector_factory.mark_invalid(self.current_capture_mode)
             self.connector.disconnect()
@@ -1147,8 +1165,9 @@ class ArknightsApp(QMainWindow):
         if self.connector and self.current_capture_mode in self.connector_factory._pool:
             _, _, state = self.connector_factory._pool[self.current_capture_mode]
             if state == ConnectorState.VALID:
-                QMessageBox.information(self, '提示', '输入方式已更改，请重新连接以生效')
-
+                QMessageBox.information(
+                    self, "提示", "输入方式已更改，请重新连接以生效"
+                )
 
     def update_device_serial(self):
         if self.connector is None:
@@ -1160,7 +1179,9 @@ class ArknightsApp(QMainWindow):
         # Force reconnect by marking invalid and getting new connector
         self.connector_factory.mark_invalid(self.current_capture_mode)
         kwargs = self._get_connector_kwargs(self.current_capture_mode)
-        self.connector = self.connector_factory.get_connector(self.current_capture_mode, **kwargs)
+        self.connector = self.connector_factory.get_connector(
+            self.current_capture_mode, **kwargs
+        )
         self.serial_entry.setCurrentText(device_serial)
         # Update UI to reflect new connector state (IDLE)
         self._update_ui_from_factory_state()

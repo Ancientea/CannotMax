@@ -4,6 +4,7 @@
     uv run python -m src.cannotmax.tools.select_crop_ratio images/tmp/original_screenshot.png
     ENTER 确认  |  ESC 重选  |  Q 退出
 """
+
 import sys
 import cv2
 import numpy as np
@@ -31,8 +32,15 @@ def select_region(image):
             roi_box.append((x, y))
             drawing = False
 
-    cv2.putText(img, "Drag to select | ENTER:confirm | ESC:retry | Q:quit",
-                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+    cv2.putText(
+        img,
+        "Drag to select | ENTER:confirm | ESC:retry | Q:quit",
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (0, 0, 255),
+        2,
+    )
     cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(win_name, 1280, 720)
     cv2.setMouseCallback(win_name, on_mouse)
@@ -42,12 +50,19 @@ def select_region(image):
         key = cv2.waitKey(0)
         if key in (13, 32) and len(roi_box) == 2:
             break
-        elif key in (27, ord('r'), ord('R')):
+        elif key in (27, ord("r"), ord("R")):
             roi_box = []
             img = image.copy()
-            cv2.putText(img, "Drag to select | ENTER:confirm | ESC:retry | Q:quit",
-                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-        elif key in (ord('q'), ord('Q')):
+            cv2.putText(
+                img,
+                "Drag to select | ENTER:confirm | ESC:retry | Q:quit",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 0, 255),
+                2,
+            )
+        elif key in (ord("q"), ord("Q")):
             cv2.destroyAllWindows()
             return None
 
@@ -88,12 +103,20 @@ def confirm_regions(image, avatar_px, nums_px, bar_bbox, global_offset):
     for i, (ax1, ay1, ax2, ay2) in enumerate(avatar_px):
         cx = int(px1 + (ax1 + ax2) / 2)
         cy = int(py1 + ay1 - 5)
-        cv2.putText(display, str(i), (cx, cy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        cv2.putText(
+            display, str(i), (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2
+        )
 
     win_name = "Detected Regions (ENTER=accept, ESC=retry)"
-    cv2.putText(display, "Yellow=bar | Purple=avatar | Cyan=number | ENTER=accept | ESC=retry",
-                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    cv2.putText(
+        display,
+        "Yellow=bar | Purple=avatar | Cyan=number | ENTER=accept | ESC=retry",
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (0, 255, 0),
+        2,
+    )
     cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(win_name, 1280, 720)
 
@@ -103,7 +126,7 @@ def confirm_regions(image, avatar_px, nums_px, bar_bbox, global_offset):
         if key in (13, 32):
             cv2.destroyAllWindows()
             return True
-        elif key in (27, ord('r'), ord('R')):
+        elif key in (27, ord("r"), ord("R")):
             cv2.destroyAllWindows()
             return False
 
@@ -111,17 +134,21 @@ def confirm_regions(image, avatar_px, nums_px, bar_bbox, global_offset):
 def normalize_coords(coords, ref_w, ref_h):
     result = []
     for x1, y1, x2, y2 in coords:
-        result.append((
-            round(float(min(x1, x2)) / ref_w, 4),
-            round(float(min(y1, y2)) / ref_h, 4),
-            round(float(max(x1, x2)) / ref_w, 4),
-            round(float(max(y1, y2)) / ref_h, 4),
-        ))
+        result.append(
+            (
+                round(float(min(x1, x2)) / ref_w, 4),
+                round(float(min(y1, y2)) / ref_h, 4),
+                round(float(max(x1, x2)) / ref_w, 4),
+                round(float(max(y1, y2)) / ref_h, 4),
+            )
+        )
     return result
 
 
 def main():
-    img_path = sys.argv[1] if len(sys.argv) > 1 else "images/tmp/original_screenshot.png"
+    img_path = (
+        sys.argv[1] if len(sys.argv) > 1 else "images/tmp/original_screenshot.png"
+    )
     img = cv2.imread(img_path)
     if img is None:
         print(f"无法读取图片: {img_path}")
@@ -165,22 +192,27 @@ def main():
         gy2 = py1 + ay_max
 
         # 3. 展示区域让用户确认
-        ok = confirm_regions(img, avatar_px, nums_px,
-                             (gx1, gy1, gx2, gy2), (px1, py1))
+        ok = confirm_regions(img, avatar_px, nums_px, (gx1, gy1, gx2, gy2), (px1, py1))
         if not ok:
             print("重新选择...\n")
             continue
 
         # 4. 计算相对坐标
         avatar_rel = normalize_coords(
-            [(ax1 - ax_min, ay1 - ay_min, ax2 - ax_min, ay2 - ay_min)
-             for ax1, ay1, ax2, ay2 in avatar_px],
-            bar_w, bar_h,
+            [
+                (ax1 - ax_min, ay1 - ay_min, ax2 - ax_min, ay2 - ay_min)
+                for ax1, ay1, ax2, ay2 in avatar_px
+            ],
+            bar_w,
+            bar_h,
         )
         nums_rel = normalize_coords(
-            [(nx1 - ax_min, ny1 - ay_min, nx2 - ax_min, ny2 - ay_min)
-             for nx1, ny1, nx2, ny2 in nums_px],
-            bar_w, bar_h,
+            [
+                (nx1 - ax_min, ny1 - ay_min, nx2 - ax_min, ny2 - ay_min)
+                for nx1, ny1, nx2, ny2 in nums_px
+            ],
+            bar_w,
+            bar_h,
         )
         break
 

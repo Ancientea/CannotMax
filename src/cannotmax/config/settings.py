@@ -29,20 +29,20 @@ DEFAULT_RECOGNITION_ZONES: dict[str, list[tuple[float, float, float, float]]] = 
 def load_recognition_zones() -> dict[str, list[tuple[float, float, float, float]]]:
     """
     加载识别区域配置，文件不存在或无效时使用默认值。
-    
+
     Returns:
         包含 monsters 和 numbers 区域坐标的字典
     """
     config_path = Path("config/recognition_zones.json")
-    
+
     if not config_path.exists():
         logger.warning("配置文件不存在，使用默认识别区域")
         return DEFAULT_RECOGNITION_ZONES
-    
+
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            
+
         # 校验数据有效性
         if _validate_zones(data):
             logger.info("成功加载自定义识别区域配置")
@@ -50,7 +50,7 @@ def load_recognition_zones() -> dict[str, list[tuple[float, float, float, float]
         else:
             logger.error("配置数据无效，使用默认值")
             return DEFAULT_RECOGNITION_ZONES
-            
+
     except json.JSONDecodeError as e:
         logger.error(f"配置文件 JSON 格式错误：{e}，使用默认值")
         return DEFAULT_RECOGNITION_ZONES
@@ -64,18 +64,20 @@ def _validate_zones(data: dict) -> bool:
     for zone_type in ["monsters", "numbers"]:
         if zone_type not in data:
             return False
-        
+
         zones = data[zone_type]
         if not isinstance(zones, list) or len(zones) != 6:
             return False
-            
+
         for zone in zones:
             if not isinstance(zone, (list, tuple)) or len(zone) != 4:
                 return False
             # 检查所有坐标是否在 [0, 1] 范围内
-            if not all(isinstance(coord, (int, float)) and 0 <= coord <= 1 for coord in zone):
+            if not all(
+                isinstance(coord, (int, float)) and 0 <= coord <= 1 for coord in zone
+            ):
                 return False
-    
+
     return True
 
 

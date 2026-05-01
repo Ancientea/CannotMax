@@ -1,4 +1,5 @@
 """Window picker dialog for selecting capture target."""
+
 from typing import Optional
 
 import ctypes
@@ -9,7 +10,7 @@ from PyQt6.QtWidgets import QDialog, QVBoxLayout, QListWidget, QLineEdit
 
 def list_visible_window_titles(filter_hwnds: Optional[list[int]] = None) -> list[str]:
     """列出所有**可见**窗口的标题（去重并按字典序排序）。
-    
+
     参数
     ----
     filter_hwnds: Optional[list[int]]
@@ -27,7 +28,7 @@ def list_visible_window_titles(filter_hwnds: Optional[list[int]] = None) -> list
         # 过滤：如果提供了 filter_hwnds，只处理这些 hwnd
         if filter_hwnds is not None and hwnd not in filter_hwnds:
             return True
-        
+
         if IsWindowVisible(hwnd):
             length = GetWindowTextLengthW(hwnd)
             if length > 0:
@@ -42,6 +43,7 @@ def list_visible_window_titles(filter_hwnds: Optional[list[int]] = None) -> list
     titles = sorted(set(titles))
     logger.info(f"窗口列表：{titles}")
     return titles
+
 
 # ------------------------- 截屏源选择对话框 -------------------------
 class WindowPickerDialog(QDialog):
@@ -76,7 +78,9 @@ class WindowPickerDialog(QDialog):
         if filter_hwnds:
             # Build mapping when filter_hwnds provided
             EnumWindows = ctypes.windll.user32.EnumWindows
-            EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            EnumWindowsProc = ctypes.WINFUNCTYPE(
+                wintypes.BOOL, wintypes.HWND, wintypes.LPARAM
+            )
             IsWindowVisible = ctypes.windll.user32.IsWindowVisible
             GetWindowTextW = ctypes.windll.user32.GetWindowTextW
             GetWindowTextLengthW = ctypes.windll.user32.GetWindowTextLengthW
@@ -93,6 +97,7 @@ class WindowPickerDialog(QDialog):
                         if t:
                             self._hwnd_to_title[hwnd] = t
                 return True
+
             EnumWindows(EnumWindowsProc(build_map), 0)
 
         for t in self._all_titles:

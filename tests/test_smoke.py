@@ -1,6 +1,7 @@
 """
 Smoke tests to verify basic functionality before refactor.
 """
+
 import pytest
 import sys
 
@@ -10,6 +11,7 @@ def test_core_modules_import():
     # Test predict module
     try:
         from src.cannotmax.core.predict import CannotModel
+
         assert CannotModel is not None
     except Exception as e:
         pytest.skip(f"CannotModel import failed: {e}")
@@ -17,6 +19,7 @@ def test_core_modules_import():
     # Test recognize module
     try:
         from src.cannotmax.core.recognize import RecognizeMonster
+
         assert RecognizeMonster is not None
     except Exception as e:
         pytest.skip(f"RecognizeMonster import failed: {e}")
@@ -24,6 +27,7 @@ def test_core_modules_import():
     # Test connector module
     try:
         from src.cannotmax.core.connector.adb_connector import AdbConnector
+
         # AdbConnector requires device_serial parameter, just test import
         assert AdbConnector is not None
     except Exception as e:
@@ -34,6 +38,7 @@ def test_config_loaded():
     """Test that config data loads correctly."""
     try:
         from src.cannotmax.config import MONSTER_DATA, MONSTER_COUNT
+
         assert len(MONSTER_DATA) > 0
         assert MONSTER_COUNT > 0
     except Exception as e:

@@ -10,6 +10,7 @@ Usage:
     img = conn.capture_screenshot()  # MAA or ADB screencap
     conn.click((0.5, 0.5))  # MAA click or ADB input tap
 """
+
 import subprocess
 import time
 import logging
@@ -25,13 +26,13 @@ logger = logging.getLogger(__name__)
 
 class AdbConnector(BaseConnector):
     """ADB-based connector for Android emulators.
-    
+
     Features:
     - Auto-detects MAA Framework availability
     - MAA mode: High-performance raw screencap + MAA click (background)
     - Legacy mode: ADB screencap -p + input tap commands
     """
-    
+
     def __init__(self, adb_serial: Optional[str] = None):
         self._adb_path = Path(r".\3rdparty\platform-tools\adb.exe")
         self._device_serial = adb_serial or "127.0.0.1:5555"
@@ -83,7 +84,7 @@ class AdbConnector(BaseConnector):
                 self._device_serial,
                 self._screen_width,
                 self._screen_height,
-                'enabled' if self._maa_available else 'disabled'
+                "enabled" if self._maa_available else "disabled",
             )
             return True
 
@@ -96,7 +97,7 @@ class AdbConnector(BaseConnector):
         """Ensure connection with retry logic."""
         if self._is_connected:
             return True
-        
+
         for attempt in range(max_retries):
             try:
                 if self.connect():
@@ -104,10 +105,12 @@ class AdbConnector(BaseConnector):
                 if attempt < max_retries - 1:
                     time.sleep(0.5)  # 500ms delay between retries
             except Exception as e:
-                logger.warning(f"Connection attempt {attempt+1}/{max_retries} failed: {e}")
+                logger.warning(
+                    f"Connection attempt {attempt + 1}/{max_retries} failed: {e}"
+                )
                 if attempt < max_retries - 1:
                     time.sleep(0.5)
-        
+
         logger.error(f"Failed to connect after {max_retries} attempts")
         return False
 
@@ -125,7 +128,7 @@ class AdbConnector(BaseConnector):
                 adb_path=str(self._adb_path),
             )
             maa_controller.post_connection().wait()
-            
+
             # Only set instance variable after successful initialization
             self._maa_controller = maa_controller
             maa_controller = None  # Prevent __del__ from running on temporary object
@@ -145,7 +148,9 @@ class AdbConnector(BaseConnector):
         """Get screen resolution via ADB wm size."""
         try:
             cmd = f"{self._adb_path} -s {self._device_serial} shell wm size"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True, check=True
+            )
             output = result.stdout.strip()
 
             if "Physical size:" in output:
@@ -235,7 +240,9 @@ class AdbConnector(BaseConnector):
         """Get list of connected ADB devices."""
         try:
             cmd = f"{self._adb_path} devices"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=2)
+            result = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True, timeout=2
+            )
             devices = []
             for line in result.stdout.split("\n"):
                 if "\tdevice" in line:

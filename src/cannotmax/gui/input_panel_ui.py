@@ -57,7 +57,10 @@ class InputPanelUI(QFrame):
         """
         try:
             # 加载类别映射
-            class_map_path = PROJECT_ROOT / "src/cannotmax/tools/battlefield_recognize/class_to_idx.json"
+            class_map_path = (
+                PROJECT_ROOT
+                / "src/cannotmax/tools/battlefield_recognize/class_to_idx.json"
+            )
             with open(class_map_path, "r", encoding="utf-8") as f:
                 class_to_idx = json.load(f)
 
