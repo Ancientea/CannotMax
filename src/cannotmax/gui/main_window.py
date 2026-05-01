@@ -1006,7 +1006,7 @@ class ArknightsApp(QMainWindow):
         """Re-select ROI interactively."""
         try:
             screenshot = self.connector.capture_screenshot()
-            roi = self.roi_selector.select_roi(screenshot)
+            roi = self.roi_selector.select_roi(screenshot, example_image_path="images/eg.png")
             if roi:
                 (px1, py1), (px2, py2) = roi
                 h, w = screenshot.shape[:2]
