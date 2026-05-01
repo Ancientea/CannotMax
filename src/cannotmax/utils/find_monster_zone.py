@@ -317,6 +317,14 @@ def cutFrame(image, high_tol=False):
 
         high_tol = 1
 
+    # Fallback: use raw results if no valid filtering path was taken
+    if 'filtered_big' not in dir():
+        filtered_big = results_big
+        small_key = 4
+        warnings.warn("未能有效筛选大圆，使用原始结果")
+    if 'filtered_small' not in dir():
+        filtered_small = results_small if results_small.shape != (0,) else np.empty((0, 4))
+    
     # 开始最小二乘筛选
     def residuals(params, large_circles, small_circles):  # 定义目标函数
         cx, cy, r = params
