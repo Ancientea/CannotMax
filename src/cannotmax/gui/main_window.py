@@ -181,6 +181,7 @@ class ArknightsApp(QMainWindow):
         logger.info(f"Switching mode: {old_mode} → {mode}")
 
         # Block mode switch during auto-fetch
+        _af = QtCore.QMutexLocker(self._auto_fetch_mutex)
         if hasattr(self, "auto_fetch") and getattr(
             self.auto_fetch, "auto_fetch_running", False
         ):
@@ -1340,6 +1341,7 @@ class ArknightsApp(QMainWindow):
 
     def closeEvent(self, event):
         """窗口关闭时的处理"""
+        _af = QtCore.QMutexLocker(self._auto_fetch_mutex)
         if hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running:
             self.auto_fetch.stop_auto_fetch()
         event.accept()
