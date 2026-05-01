@@ -201,11 +201,15 @@ class MaaAdbConnector:
             self._selected_device_index = device_index
             device = self._devices[device_index]
 
+            from maa.define import MaaAdbScreencapMethodEnum, MaaAdbInputMethodEnum
+            screencap = device.screencap_methods if device.screencap_methods else MaaAdbScreencapMethodEnum.Default
+            input_m = device.input_methods if device.input_methods else MaaAdbInputMethodEnum.Default
+
             self._ctrl = AdbController(
                 device.adb_path,
                 device.address,
-                device.screencap_methods,
-                device.input_methods,
+                screencap,
+                input_m,
                 device.config,
             )
 
@@ -335,9 +339,46 @@ class MaaAdbConnector:
         except Exception as e:
             logger.error(f"MAA滑动失败: {e}")
 
+    def _scan_adb_devices_subprocess(self) -> list[str]:
+        try:
+            adb_path = ""
+            if self._devices:
+                adb_path = self._devices[0].adb_path
+            if not adb_path or not Path(adb_path).exists():
+                adb_path = str(Path.cwd() / "platform-tools" / "adb.exe")
+            if not Path(adb_path).exists():
+                return []
+            result = subprocess.run(
+                [adb_path, "devices"],
+                capture_output=True, text=True, timeout=5,
+            )
+            addresses = []
+            for line in result.stdout.splitlines():
+                parts = line.strip().split("\t")
+                if len(parts) == 2 and parts[1] == "device":
+                    addresses.append(parts[0])
+            return addresses
+        except Exception as e:
+            logger.debug(f"adb devices扫描失败: {e}")
+            return []
+
     def get_device_list(self) -> list[str]:
-        devices = self.find_devices()
-        return [f"{d.name} ({d.address})" for d in devices]
+        self.find_devices()
+        seen = {d.address for d in self._devices}
+        extra_addresses = [a for a in self._scan_adb_devices_subprocess() if a not in seen]
+        for addr in extra_addresses:
+            adb_path = self._devices[0].adb_path if self._devices else str(Path.cwd() / "platform-tools" / "adb.exe")
+            self._devices.append(AdbDeviceInfo(
+                name="ADB Device",
+                adb_path=adb_path,
+                address=addr,
+                screencap_methods=0,
+                input_methods=0,
+                config={},
+            ))
+        if extra_addresses:
+            logger.info(f"通过adb devices补充发现 {len(extra_addresses)} 个设备")
+        return [f"{d.name} ({d.address})" for d in self._devices]
 
     def update_device_serial(self, serial: str) -> str:
         self.device_serial = serial
