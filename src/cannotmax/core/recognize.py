@@ -24,12 +24,8 @@ from ..config import (
     MONSTER_IMAGES,
     MONSTER_COUNT,
     DEBUG_MODE,
-    DEFAULT_AVATAR_REGIONS,
-    DEFAULT_NUMBER_REGIONS,
-    PC_DEFAULT_AVATAR_REGIONS,
-    PC_DEFAULT_NUMBER_REGIONS,
+    get_recognition_zones,
 )
-from ..config.constants import DEFAULT_CROP_RATIO, PC_DEFAULT_CROP_RATIO
 from ..config.paths import TMP_IMAGES_DIR
 
 logger = logging.getLogger(__name__)
@@ -199,9 +195,8 @@ class RecognizeMonster:
         if self.crop_ratio is not None:
             return self.crop_ratio
         if auto_fallback:
-            if mode == "PC":
-                return PC_DEFAULT_CROP_RATIO
-            return DEFAULT_CROP_RATIO
+            cr = get_recognition_zones(mode)["crop_ratio"]
+            return tuple(tuple(p) for p in cr)
         raise ROINotSelectedError("请先选择怪物条范围")
 
     def _crop_by_ratio(self, screenshot: np.ndarray, ratio: tuple) -> np.ndarray:
@@ -235,15 +230,16 @@ class RecognizeMonster:
         """
         from ..utils import find_monster_zone
 
+        zones = get_recognition_zones(mode)
         avatar_regs = (
             self.avatar_regions
             if self.avatar_regions is not None
-            else (PC_DEFAULT_AVATAR_REGIONS if mode == "PC" else DEFAULT_AVATAR_REGIONS)
+            else zones["avatar_regions"]
         )
         number_regs = (
             self.number_regions
             if self.number_regions is not None
-            else (PC_DEFAULT_NUMBER_REGIONS if mode == "PC" else DEFAULT_NUMBER_REGIONS)
+            else zones["number_regions"]
         )
 
         # Save original screenshot for debugging

@@ -4,7 +4,8 @@ import pytest
 import cv2
 import numpy as np
 from src.cannotmax.core.recognize import RecognizeMonster, ROINotSelectedError
-from src.cannotmax.config.constants import DEFAULT_CROP_RATIO
+
+_DEFAULT_CROP_RATIO = ((0.2464, 0.8410), (0.7542, 0.9510))
 
 
 class TestRecognizeMonsterCropRatio:
@@ -22,7 +23,7 @@ class TestRecognizeMonsterCropRatio:
     def test_resolve_fallback_returns_default(self):
         recognizer = RecognizeMonster(crop_ratio=None)
         result = recognizer._resolve_crop_ratio(auto_fallback=True)
-        assert result == DEFAULT_CROP_RATIO
+        assert result == _DEFAULT_CROP_RATIO
 
     def test_resolve_fallback_returns_custom(self):
         ratio = ((0.1, 0.2), (0.8, 0.9))
@@ -55,7 +56,7 @@ class TestCropByRatio:
     def test_crop_by_ratio_default(self):
         recognizer = RecognizeMonster()
         img = np.zeros((1080, 1920, 3), dtype=np.uint8)
-        cropped = recognizer._crop_by_ratio(img, DEFAULT_CROP_RATIO)
+        cropped = recognizer._crop_by_ratio(img, _DEFAULT_CROP_RATIO)
         expected_h = int(0.9510 * 1080) - int(0.8410 * 1080)
         expected_w = int(0.7542 * 1920) - int(0.2464 * 1920)
         assert cropped.shape[0] == expected_h

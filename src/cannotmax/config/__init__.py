@@ -12,22 +12,17 @@ from .paths import (
     IMAGES_DIR,
 )
 from .settings import (
-    DEFAULT_RECOGNITION_ZONES,
-    load_recognition_zones,
-    get_relative_regions,
-    get_relative_regions_nums,
+    get_app_config,
+    get_recognition_zones,
 )
 
+# 应用配置（从 app.json 加载）
+_app_config = get_app_config()
+DEBUG_MODE: bool = _app_config["debug_mode"]
+
 # 从 constants 导入
-FIELD_FEATURE_COUNT = constants.FIELD_FEATURE_COUNT
+FIELD_FEATURE_COUNT: int = _app_config["recognition"]["field_feature_count"]
 UNIT_CONFIG = constants.UNIT_CONFIG
-DEBUG_MODE = constants.DEBUG_MODE
-DEFAULT_CROP_RATIO = constants.DEFAULT_CROP_RATIO
-DEFAULT_AVATAR_REGIONS = constants.DEFAULT_AVATAR_REGIONS
-DEFAULT_NUMBER_REGIONS = constants.DEFAULT_NUMBER_REGIONS
-PC_DEFAULT_CROP_RATIO = constants.PC_DEFAULT_CROP_RATIO
-PC_DEFAULT_AVATAR_REGIONS = constants.PC_DEFAULT_AVATAR_REGIONS
-PC_DEFAULT_NUMBER_REGIONS = constants.PC_DEFAULT_NUMBER_REGIONS
 
 logger = logging.getLogger(__name__)
 
@@ -87,16 +82,8 @@ __all__ = [
     "FIELD_FEATURE_COUNT",
     "UNIT_CONFIG",
     "DEBUG_MODE",
-    "DEFAULT_CROP_RATIO",
-    "DEFAULT_AVATAR_REGIONS",
-    "DEFAULT_NUMBER_REGIONS",
-    "PC_DEFAULT_CROP_RATIO",
-    "PC_DEFAULT_AVATAR_REGIONS",
-    "PC_DEFAULT_NUMBER_REGIONS",
+    "get_recognition_zones",
+    "get_app_config",
     "load_images",
     "load_monster_data",
-    "load_recognition_zones",
-    "DEFAULT_RECOGNITION_ZONES",
-    "get_relative_regions",
-    "get_relative_regions_nums",
 ]
