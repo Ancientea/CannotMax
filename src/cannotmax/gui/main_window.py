@@ -798,7 +798,9 @@ class ArknightsApp(QMainWindow):
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         try:
-            pixmap = QPixmap(f"images/{MONSTER_DATA['原始名称'][monster_id]}.png")
+            pixmap = QPixmap(
+                f"images/monsters/{MONSTER_DATA['原始名称'][monster_id]}.png"
+            )
             if not pixmap.isNull():
                 pixmap = pixmap.scaled(
                     70,
