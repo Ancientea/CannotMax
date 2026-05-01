@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 # 内嵌默认值（JSON 缺失时回退）
 _DEFAULT_CONFIG: dict[str, Any] = {
     "debug_mode": True,
+    "control": {
+        "disable_maafw": False,
+    },
     "recognition": {
         "field_feature_count": 0,
         "ADB": {

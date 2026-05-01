@@ -19,6 +19,7 @@ from .settings import (
 # 应用配置（从 app.json 加载）
 _app_config = get_app_config()
 DEBUG_MODE: bool = _app_config["debug_mode"]
+DISABLE_MAAFW: bool = _app_config["control"]["disable_maafw"]
 
 # 从 constants 导入
 FIELD_FEATURE_COUNT: int = _app_config["recognition"]["field_feature_count"]

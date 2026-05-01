@@ -1,5 +1,8 @@
 {
   "debug_mode": true,
+  "control": {
+    "disable_maafw": false
+  },
   "recognition": {
     "field_feature_count": 0,
     "ADB": {

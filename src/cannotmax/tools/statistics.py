@@ -4,7 +4,7 @@ from pathlib import Path
 from math import sqrt
 import csv
 from collections import defaultdict
-from config import MONSTER_COUNT, FIELD_FEATURE_COUNT, MONSTER_DATA
+from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT, MONSTER_DATA
 
 FIELD_FEATURE_COUNT = 0
 

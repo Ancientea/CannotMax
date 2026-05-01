@@ -158,6 +158,12 @@ class PcConnector(BaseConnector):
 
     def _init_maa(self):
         """Initialize MAA Win32Controller if available."""
+        from ...config import DISABLE_MAAFW
+
+        if DISABLE_MAAFW:
+            logger.info("MAA disabled by config (control.disable_maafw)")
+            self._maa_available = False
+            return
         maa_controller = None
         try:
             from maa.toolkit import Toolkit
