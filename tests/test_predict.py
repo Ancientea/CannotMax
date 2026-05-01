@@ -5,7 +5,6 @@ import numpy as np
 from pathlib import Path
 from src.cannotmax.core.predict import CannotModel
 from src.cannotmax.config import MONSTER_COUNT
-from src.cannotmax.config.paths import MODELS_DIR
 
 
 @pytest.fixture(scope="module")
@@ -16,7 +15,6 @@ def model():
         return CannotModel(model_path=Path("models/predictor"))
     except SystemExit:
         pytest.skip("CannotModel exited (no model checkpoint)")
-
 
 class TestCannotModel:
     def test_model_loads(self, model):
