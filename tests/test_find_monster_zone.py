@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 
-from src.cannotmax.utils.find_monster_zone import cutFrame
+from src.cannotmax.utils.find_monster_zone import find_monster_zone
 from src.cannotmax.core.recognize import RecognizeMonster
 
 
@@ -35,7 +35,7 @@ class TestMonsterBarDetection:
     def test_cutframe_no_crash(self, screenshot):
         """cutFrame must not raise exceptions on any valid image input."""
         try:
-            avatar_roi, nums_roi = cutFrame(screenshot)
+            avatar_roi, nums_roi = find_monster_zone(screenshot)
         except Exception as e:
             pytest.fail(f"cutFrame crashed: {e}")
 
@@ -44,7 +44,7 @@ class TestMonsterBarDetection:
 
     def test_cutframe_output_shape(self, screenshot):
         """cutFrame must return two arrays with shape (N, 4) where N >= 1."""
-        avatar_roi, nums_roi = cutFrame(screenshot)
+        avatar_roi, nums_roi = find_monster_zone(screenshot)
 
         assert isinstance(avatar_roi, np.ndarray), f"Expected ndarray, got {type(avatar_roi)}"
         assert isinstance(nums_roi, np.ndarray), f"Expected ndarray, got {type(nums_roi)}"
@@ -58,7 +58,7 @@ class TestMonsterBarDetection:
     def test_cutframe_coords_in_range(self, screenshot):
         """All normalized coordinates must be in [0, 1] range (with 5% tolerance)."""
         h, w = screenshot.shape[:2]
-        avatar_roi, nums_roi = cutFrame(screenshot)
+        avatar_roi, nums_roi = find_monster_zone(screenshot)
 
         for name, zones in [("avatar_roi", avatar_roi), ("nums_roi", nums_roi)]:
             for i, zone in enumerate(zones):
@@ -121,13 +121,13 @@ class TestRecognitionRegression:
         """Black/empty images should return empty results without crashing."""
         for shape in [(1080, 1920, 3), (720, 1280, 3)]:
             black = np.zeros(shape, dtype=np.uint8)
-            avatar, nums = cutFrame(black)
+            avatar, nums = find_monster_zone(black)
             assert isinstance(avatar, np.ndarray)
             assert isinstance(nums, np.ndarray)
 
     def test_white_image_doesnt_crash(self):
         """White images should return empty zones without crashing."""
         white = np.full((1080, 1920, 3), 255, dtype=np.uint8)
-        avatar, nums = cutFrame(white)
+        avatar, nums = find_monster_zone(white)
         assert isinstance(avatar, np.ndarray)
         assert isinstance(nums, np.ndarray)

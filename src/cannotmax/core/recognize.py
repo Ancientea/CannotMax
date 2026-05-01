@@ -172,7 +172,7 @@ class RecognizeMonster:
             cv2.imwrite(f"{TMP_IMAGES_DIR}/original_screenshot.png", screenshot)
         
         try:
-            monster_roi, cropped = find_monster_zone.cutFrame(screenshot)
+            monster_roi, cropped = find_monster_zone.find_monster_zone(screenshot)
             # Save debug images of monster bar detection
             if DEBUG_MODE:
                 cv2.imwrite(f"{TMP_IMAGES_DIR}/cropped_monster_bar.png", cropped)
