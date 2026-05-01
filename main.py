@@ -17,8 +17,7 @@ import PyQt6.QtCore as QtCore
 
 import loadData
 import auto_fetch
-import maa_adb_connector
-from maa_adb_connector import AdbConnectorAdapter, ConnectionTypeRegistry, InputMethodRegistry, MaaFrameworkDetector
+from maa_adb_connector import MaaAdbConnector, MaaFrameworkDetector
 from dark_mode_style_fix import DarkModeStyleFix
 import similar_history_match
 import recognize
@@ -55,17 +54,18 @@ except:
 
 class ADBConnectorThread(QThread):
     """
-    Worker thread to run loadData.AdbConnector.connect() without blocking the UI.
+    Worker thread to run MaaAdbConnector.connect() without blocking the UI.
     """
 
     connect_finished = pyqtSignal()
 
-    def __init__(self, app: "ArknightsApp"):
+    def __init__(self, app: "ArknightsApp", device_index: int = 0):
         super().__init__()
         self.app = app
+        self.device_index = device_index
 
     def run(self):
-        self.app.adb_connector.connect()
+        self.app.adb_connector.connect(self.device_index)
         self.connect_finished.emit()
 
 class ArknightsApp(QMainWindow):
@@ -98,7 +98,7 @@ class ArknightsApp(QMainWindow):
         self.current_capture_mode = "ADB"
 
         # 尝试连接模拟器
-        self.adb_connector = AdbConnectorAdapter()
+        self.adb_connector = MaaAdbConnector()
         self.pc_connector = loadData.PcConnector()
         self.adb_connector_thread = ADBConnectorThread(self)
         self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
@@ -390,46 +390,20 @@ class ArknightsApp(QMainWindow):
         self.win_mode_btn.clicked.connect(lambda: self.on_mode_changed("WIN"))
         connection_layout.addWidget(mode_row)
 
-        # MAA连接方式行
-        maa_row = QWidget()
-        maa_row_layout = QHBoxLayout(maa_row)
-        maa_row_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.connection_type_label = QLabel("连接方式:")
-        self.connection_type_combo = QComboBox()
-        for ct in ConnectionTypeRegistry.get_all_types():
-            self.connection_type_combo.addItem(ct.display_name, ct.type_id)
-        self.connection_type_combo.currentIndexChanged.connect(self.on_connection_type_changed)
-
-        self.input_method_label = QLabel("输入方式:")
-        self.input_method_combo = QComboBox()
-        default_method = InputMethodRegistry.get_default_method()
-        for m in InputMethodRegistry.get_all_methods():
-            self.input_method_combo.addItem(m.display_name, m.method_id)
-        idx = self.input_method_combo.findData(default_method.method_id)
-        if idx >= 0:
-            self.input_method_combo.setCurrentIndex(idx)
-        self.input_method_combo.currentIndexChanged.connect(self.on_input_method_changed)
-
-        maa_row_layout.addWidget(self.connection_type_label)
-        maa_row_layout.addWidget(self.connection_type_combo)
-        maa_row_layout.addWidget(self.input_method_label)
-        maa_row_layout.addWidget(self.input_method_combo)
-        connection_layout.addWidget(maa_row)
-
         # 序列号行
         conn_row1 = QWidget()
         conn_row1_layout = QHBoxLayout(conn_row1)
         conn_row1_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.serial_label = QLabel("模拟器序列号:")
+        self.serial_label = QLabel("ADB设备:")
         self.serial_entry = QComboBox()
         self.serial_entry.setEditable(True)
         self.serial_entry.setFixedWidth(200)
-        self.serial_entry.lineEdit().setPlaceholderText("127.0.0.1:5555")
+        self.serial_entry.lineEdit().setPlaceholderText("选择或输入设备地址")
+        self.serial_entry.currentIndexChanged.connect(self.on_device_selected)
 
-        self.serial_button = QPushButton("更新")
-        self.serial_button.clicked.connect(self.update_device_serial)
+        self.serial_button = QPushButton("刷新")
+        self.serial_button.clicked.connect(self.refresh_and_connect)
 
         conn_row1_layout.addWidget(self.serial_label)
         conn_row1_layout.addWidget(self.serial_entry)
@@ -577,16 +551,12 @@ class ArknightsApp(QMainWindow):
         self.serial_label.setEnabled(is_adb_mode)
         self.serial_entry.setEnabled(is_adb_mode)
         self.serial_button.setEnabled(is_adb_mode)
-        self.connection_type_label.setEnabled(is_adb_mode)
-        self.connection_type_combo.setEnabled(is_adb_mode)
-        self.input_method_label.setEnabled(is_adb_mode)
-        self.input_method_combo.setEnabled(is_adb_mode)
 
         if mode == "ADB":
             self.refresh_device_list()
             self.recognizer = recognize.RecognizeMonster(method="ADB")
-            if not self.adb_connector.device_serial:
-                self.adb_connector_thread.start()
+            if not self.adb_connector.is_connected:
+                self.refresh_and_connect()
         elif mode == "WIN":
             if self.recognizer.method != "WIN":
                 self.recognizer = recognize.RecognizeMonster(method="WIN")
@@ -601,34 +571,14 @@ class ArknightsApp(QMainWindow):
 
     def on_adb_connected(self):
         logger.info("模拟器初始化完成")
-        if self.adb_connector.is_maa_available:
-            self.maa_status_label.setText("MAA Framework已连接")
+        if self.adb_connector.is_connected:
+            device = self.adb_connector.selected_device
+            name = device.name if device else self.adb_connector.device_serial
+            self.maa_status_label.setText(f"MAA Framework已连接: {name}")
             self.maa_status_label.setStyleSheet("color: #00aa00; font-size: 10px;")
         else:
-            self.maa_status_label.setText("使用自有ADB实现（MAA Framework不可用）")
-            self.maa_status_label.setStyleSheet("color: #996600; font-size: 10px;")
-
-    def on_connection_type_changed(self, index):
-        type_id = self.connection_type_combo.currentData()
-        if not type_id:
-            return
-        default_address = ConnectionTypeRegistry.get_default_address(type_id)
-        if default_address:
-            self.serial_entry.setCurrentText(default_address)
-            self.adb_connector.set_connection_type(type_id)
-            self.adb_connector.set_device_serial(default_address)
-        if self.adb_connector.is_connected:
-            self.adb_connector.disconnect()
-            self.maa_status_label.setText("已断开，请重新连接")
+            self.maa_status_label.setText("MAA Framework连接失败")
             self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
-
-    def on_input_method_changed(self, index):
-        method_id = self.input_method_combo.currentData()
-        if not method_id:
-            return
-        self.adb_connector.set_input_method(method_id)
-        if self.adb_connector.is_connected:
-            QMessageBox.information(self, "提示", "输入方式已更改，请重新连接以生效")
 
     def choose_capture_window(self):
         """弹出窗口选择器，切换 WinRT 截屏源（窗口标题或整屏）。"""
@@ -959,26 +909,39 @@ class ArknightsApp(QMainWindow):
         self.stats_label.setText(stats_text)
 
     def refresh_device_list(self):
-        """刷新并更新模拟器序列号下拉列表"""
+        """刷新ADB设备下拉列表"""
         current_text = self.serial_entry.currentText()
-        devices = self.adb_connector.get_device_list()
+        device_names = self.adb_connector.get_device_list()
         self.serial_entry.clear()
-        if devices:
-            self.serial_entry.addItems(devices)
-            if current_text in devices:
+        if device_names:
+            self.serial_entry.addItems(device_names)
+            if current_text in device_names:
                 self.serial_entry.setCurrentText(current_text)
             else:
                 self.serial_entry.setCurrentIndex(0)
         else:
-            self.serial_entry.addItem("127.0.0.1:5555")
-            self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
+            self.serial_entry.addItem("未发现设备")
+            self.serial_entry.setCurrentIndex(0)
 
-    def update_device_serial(self):
-        new_serial = self.serial_entry.currentText()
-        device_serial = self.adb_connector.update_device_serial(new_serial)
-        self.adb_connector.connect()  # 尝试连接新设备
-        self.serial_entry.setCurrentText(device_serial)
-        QMessageBox.information(self, "提示", f"已更新模拟器序列号为: {device_serial}")
+    def refresh_and_connect(self):
+        """刷新设备列表并连接选中设备"""
+        self.refresh_device_list()
+        device_index = self.serial_entry.currentIndex()
+        if device_index < 0:
+            device_index = 0
+        if self.adb_connector.devices:
+            self.adb_connector_thread = ADBConnectorThread(self, device_index)
+            self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
+            self.adb_connector_thread.start()
+
+    def on_device_selected(self, index):
+        """下拉框选择设备后自动连接"""
+        if index < 0 or not self.adb_connector.devices:
+            return
+        if index < len(self.adb_connector.devices):
+            self.adb_connector_thread = ADBConnectorThread(self, index)
+            self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
+            self.adb_connector_thread.start()
 
     def start_callback(self):
         self.update_button_signal.emit("停止自动获取数据")
