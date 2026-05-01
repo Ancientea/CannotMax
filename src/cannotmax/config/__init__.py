@@ -22,6 +22,7 @@ from .settings import (
 FIELD_FEATURE_COUNT = constants.FIELD_FEATURE_COUNT
 UNIT_CONFIG = constants.UNIT_CONFIG
 DEBUG_MODE = constants.DEBUG_MODE
+DEFAULT_CROP_RATIO = constants.DEFAULT_CROP_RATIO
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,7 @@ __all__ = [
     "FIELD_FEATURE_COUNT",
     "UNIT_CONFIG",
     "DEBUG_MODE",
+    "DEFAULT_CROP_RATIO",
     "load_images",
     "load_monster_data",
     "load_recognition_zones",
