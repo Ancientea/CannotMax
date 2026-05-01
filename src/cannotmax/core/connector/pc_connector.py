@@ -244,6 +244,7 @@ class PcConnector(BaseConnector):
     def _click_internal(self, point: tuple[float, float]) -> None:
         """Click using MAA (preferred) or SendInput."""
         if not self._is_connected:
+            logger.warning("Click skipped: device not connected")
             return
 
         # Refresh client rect
@@ -254,8 +255,12 @@ class PcConnector(BaseConnector):
         x, y = point
         x_coord = int(x * self._screen_width)
         y_coord = int(y * self._screen_height)
+        logger.warning(
+            "PC click: (%.4f, %.4f) → window(%d, %d)", x, y, x_coord, y_coord
+        )
 
         if self._maa_available and self._maa_controller:
+            logger.warning("PC connector does not support game interaction")
             self._click_maa(x_coord, y_coord)
         else:
             self._click_sendinput(x_coord, y_coord)
