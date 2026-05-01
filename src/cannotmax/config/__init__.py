@@ -34,7 +34,7 @@ def load_images() -> dict[str, np.ndarray]:
     returns: dict - 图片字典，键为文件名 (不含扩展名)，值为 numpy.ndarray 对象
     """
     images: dict[str, np.ndarray] = {}
-    images_path = IMAGES_DIR
+    images_path = IMAGES_DIR / "monsters"
 
     if not images_path.is_dir():
         logger.warning("images 目录不存在")
