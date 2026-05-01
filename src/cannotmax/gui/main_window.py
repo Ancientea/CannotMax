@@ -692,11 +692,14 @@ class ArknightsApp(QMainWindow):
                     return
                 hint = ""
                 if "window_name" in sel:
+                    self._win_window_name = sel["window_name"]
                     hint = f"已切换至窗口：{sel['window_name']}"
                 else:
+                    self._win_window_name = ""
                     idx = max(1, sel["monitor_index"])
                     hint = f"已切换至整屏：显示器 {sel['monitor_index']}"
 
+                self.connector_factory.mark_invalid("WIN")
                 self.no_region = True
                 QMessageBox.information(self, "成功", hint + "\n建议重新选择范围。")
         except Exception as e:
