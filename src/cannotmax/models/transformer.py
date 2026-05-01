@@ -84,68 +84,91 @@ class UnitAwareTransformer(nn.Module):
         """
         batch_size = left_counts.size(0)
 
-        # 构建索引 (怪物索引 + 场地索引)
-        monster_indices = torch.arange(self.monster_count, device=left_counts.device)
-        field_indices = torch.arange(self.monster_count, self.monster_count + self.field_count, device=left_counts.device)
+        # 提取 TopK 特征（TopK 天然返回有效索引 0~num_units-1）
+        k = min(8, left_counts.shape[1])
+        left_values, left_indices = torch.topk(left_counts, k=k, dim=1)
+        right_values, right_indices = torch.topk(right_counts, k=k, dim=1)
 
-        # 提取怪物和场地计数
-        left_monster_counts = left_counts[:, :self.monster_count]
-        left_field_counts = left_counts[:, self.monster_count:]
-        right_monster_counts = right_counts[:, :self.monster_count]
-        right_field_counts = right_counts[:, self.monster_count:]
+        # 嵌入
+        left_feat = self.unit_embed(left_indices)
+        right_feat = self.unit_embed(right_indices)
 
-        # 计算非零单位掩码
-        left_monster_mask = left_monster_counts > 0
-        right_monster_mask = right_monster_counts > 0
+        embed_dim = self.embed_dim
 
-        # 生成单位索引
-        left_unit_indices = torch.where(
-            left_monster_mask,
-            monster_indices.expand(batch_size, -1),
-            torch.full((batch_size, self.monster_count), -1, device=left_counts.device, dtype=torch.long)
+        # 后半维度乘以数量值
+        left_feat = torch.cat(
+            [
+                left_feat[..., : embed_dim // 2],
+                left_feat[..., embed_dim // 2:] * left_values.unsqueeze(-1),
+            ],
+            dim=-1,
         )
-        left_unit_indices = torch.cat([left_unit_indices, field_indices.unsqueeze(0).expand(batch_size, -1)], dim=1)
-
-        right_unit_indices = torch.where(
-            right_monster_mask,
-            monster_indices.expand(batch_size, -1),
-            torch.full((batch_size, self.monster_count), -1, device=left_counts.device, dtype=torch.long)
+        right_feat = torch.cat(
+            [
+                right_feat[..., : embed_dim // 2],
+                right_feat[..., embed_dim // 2:] * right_values.unsqueeze(-1),
+            ],
+            dim=-1,
         )
-        right_unit_indices = torch.cat([right_unit_indices, field_indices.unsqueeze(0).expand(batch_size, -1)], dim=1)
 
-        # 获取嵌入
-        left_embeddings = self.unit_embed(left_unit_indices)
-        right_embeddings = self.unit_embed(right_unit_indices)
+        # FFN
+        left_feat = left_feat + self.value_ffn(left_feat)
+        right_feat = right_feat + self.value_ffn(right_feat)
 
-        # 价值嵌入
-        left_values = self.value_ffn(left_embeddings)
-        right_values = self.value_ffn(right_embeddings)
+        # mask (B, k)
+        left_mask = left_values > 0.1
+        right_mask = right_values > 0.1
 
-        # 逐层处理
         for i in range(self.num_layers):
-            # 友方注意力
-            left_friend_attn, _ = self.friend_attentions[i](left_values, left_values, left_values)
-            left_values = self.norm[i](left_values + left_friend_attn)
-            left_values = left_values + self.friend_ffn[i](left_values)
-
-            right_friend_attn, _ = self.friend_attentions[i](right_values, right_values, right_values)
-            right_values = self.norm[i](right_values + right_friend_attn)
-            right_values = right_values + self.friend_ffn[i](right_values)
-
             # 敌方注意力
-            left_enemy_attn, _ = self.enemy_attentions[i](left_values, right_values, right_values)
-            left_values = self.norm[i](left_values + left_enemy_attn)
-            left_values = left_values + self.enemy_ffn[i](left_values)
+            delta_left, _ = self.enemy_attentions[i](
+                query=left_feat,
+                key=right_feat,
+                value=right_feat,
+                key_padding_mask=~right_mask,
+                need_weights=False,
+            )
+            delta_right, _ = self.enemy_attentions[i](
+                query=right_feat,
+                key=left_feat,
+                value=left_feat,
+                key_padding_mask=~left_mask,
+                need_weights=False,
+            )
 
-            right_enemy_attn, _ = self.enemy_attentions[i](right_values, left_values, left_values)
-            right_values = self.norm[i](right_values + right_enemy_attn)
-            right_values = right_values + self.enemy_ffn[i](right_values)
+            left_feat = left_feat + delta_left
+            right_feat = right_feat + delta_right
 
-        # 聚合
-        left_agg = left_values.mean(dim=1)
-        right_agg = right_values.mean(dim=1)
-        combined = torch.cat([left_agg, right_agg], dim=1)
+            left_feat = left_feat + self.enemy_ffn[i](left_feat)
+            right_feat = right_feat + self.enemy_ffn[i](right_feat)
 
-        # 输出
-        out = self.fc(combined)
-        return torch.sigmoid(out)
+            # 友方注意力
+            delta_left, _ = self.friend_attentions[i](
+                query=left_feat,
+                key=left_feat,
+                value=left_feat,
+                key_padding_mask=~left_mask,
+                need_weights=False,
+            )
+            delta_right, _ = self.friend_attentions[i](
+                query=right_feat,
+                key=right_feat,
+                value=right_feat,
+                key_padding_mask=~right_mask,
+                need_weights=False,
+            )
+
+            left_feat = left_feat + delta_left
+            right_feat = right_feat + delta_right
+
+            left_feat = left_feat + self.friend_ffn[i](left_feat)
+            right_feat = right_feat + self.friend_ffn[i](right_feat)
+
+            left_feat = self.norm[i](left_feat)
+            right_feat = self.norm[i](right_feat)
+
+        L = self.fc(left_feat).squeeze(-1) * left_mask
+        R = self.fc(right_feat).squeeze(-1) * right_mask
+
+        output = torch.sigmoid(R.sum(1) - L.sum(1))
+        return output
