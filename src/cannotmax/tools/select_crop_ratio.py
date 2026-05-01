@@ -2,13 +2,61 @@
 
 用法：
     uv run python -m src.cannotmax.tools.select_crop_ratio images/tmp/original_screenshot.png
+    ENTER 确认选择  |  ESC 重选  |  Q 退出
 """
 import sys
 import cv2
 import numpy as np
 
-from ..core.roi_selector import ROISelector
 from ..utils.find_monster_zone import find_monster_zone
+
+
+def select_region(image):
+    """交互拖框选区域，返回 [(x1,y1),(x2,y2)]，按 Q 返回 None。"""
+    img = image.copy()
+    roi_box = []
+    drawing = False
+    win_name = "Select Region (ENTER=confirm, ESC=retry, Q=quit)"
+
+    def on_mouse(event, x, y, flags, param):
+        nonlocal roi_box, drawing
+        if event == cv2.EVENT_LBUTTONDOWN:
+            roi_box = [(x, y)]
+            drawing = True
+        elif event == cv2.EVENT_MOUSEMOVE and drawing:
+            tmp = img.copy()
+            cv2.rectangle(tmp, roi_box[0], (x, y), (0, 255, 0), 2)
+            cv2.imshow(win_name, tmp)
+        elif event == cv2.EVENT_LBUTTONUP:
+            roi_box.append((x, y))
+            drawing = False
+
+    cv2.putText(img, "Drag to select | ENTER:confirm | ESC:retry | Q:quit",
+                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+    cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(win_name, 1280, 720)
+    cv2.setMouseCallback(win_name, on_mouse)
+
+    while True:
+        cv2.imshow(win_name, img)
+        key = cv2.waitKey(0)
+        if key in (13, 32) and len(roi_box) == 2:  # ENTER or SPACE
+            break
+        elif key in (27, ord('r'), ord('R')):  # ESC or R
+            roi_box = []
+            img = image.copy()
+            cv2.putText(img, "Drag to select | ENTER:confirm | ESC:retry | Q:quit",
+                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        elif key in (ord('q'), ord('Q')):
+            cv2.destroyAllWindows()
+            return None
+
+    cv2.destroyAllWindows()
+    x1 = min(roi_box[0][0], roi_box[1][0])
+    y1 = min(roi_box[0][1], roi_box[1][1])
+    x2 = max(roi_box[0][0], roi_box[1][0])
+    y2 = max(roi_box[0][1], roi_box[1][1])
+    return [(x1, y1), (x2, y2)]
 
 
 def normalize_coords(coords, ref_w, ref_h):
@@ -35,10 +83,9 @@ def main():
     print(f"图片尺寸: {w}x{h}")
 
     # 1. 用户拖框选大致区域
-    selector = ROISelector()
-    roi = selector.select_roi(img, example_image_path="images/eg.png")
+    roi = select_region(img)
     if roi is None:
-        print("未选择区域")
+        print("已取消")
         sys.exit(0)
 
     (px1, py1), (px2, py2) = roi
