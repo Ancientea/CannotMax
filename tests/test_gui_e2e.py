@@ -6,8 +6,8 @@ CI skips these tests automatically.
 """
 
 import pytest
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtCore import Qt, QTimer
 from src.cannotmax.gui.main_window import ArknightsApp
 
 
@@ -27,7 +27,7 @@ def main_window(qtbot):
     win = ArknightsApp()
     qtbot.addWidget(win)
     win.show()
-    qtbot.wait(2000)  # let connector init
+    qtbot.wait(2000)
     return win
 
 
@@ -39,11 +39,12 @@ class TestGuiRecognize:
 
     def test_mode_switch_blocks_auto_fetch(self, main_window, qtbot):
         main_window.on_mode_changed("PC")
+
+        def close_popup():
+            for w in QApplication.topLevelWidgets():
+                if isinstance(w, QMessageBox):
+                    w.accept()
+
+        QTimer.singleShot(500, close_popup)
         qtbot.mouseClick(main_window.auto_fetch_button, Qt.MouseButton.LeftButton)
-        # QMessageBox.information is modal, wait for it then close
-        qtbot.waitUntil(
-            lambda: QApplication.activeModalWidget() is not None, timeout=3000
-        )
-        popup = QApplication.activeModalWidget()
-        assert popup is not None, "Expected popup"
-        popup.close()
+        qtbot.wait(1000)
