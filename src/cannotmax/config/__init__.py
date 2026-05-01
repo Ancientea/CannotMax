@@ -83,6 +83,7 @@ __all__ = [
     "FIELD_FEATURE_COUNT",
     "UNIT_CONFIG",
     "DEBUG_MODE",
+    "DISABLE_MAAFW",
     "get_recognition_zones",
     "get_app_config",
     "load_images",

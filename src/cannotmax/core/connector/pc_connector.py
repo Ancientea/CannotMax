@@ -175,12 +175,12 @@ class PcConnector(BaseConnector):
 
             Toolkit.init_option(str(Path.cwd()))
 
-            # Use SendMessageWithCursorPos to support background operation
+            # Use Seize (foreground) mode — Arknights PC uses ACE + Raw Input
             maa_controller = Win32Controller(
                 self._hwnd,
                 screencap_method=MaaWin32ScreencapMethodEnum.FramePool,
-                mouse_method=MaaWin32InputMethodEnum.SendMessageWithCursorPos,
-                keyboard_method=MaaWin32InputMethodEnum.SendMessageWithCursorPos,
+                mouse_method=MaaWin32InputMethodEnum.Seize,
+                keyboard_method=MaaWin32InputMethodEnum.Seize,
             )
             maa_controller.post_connection().wait()
             maa_controller.set_screenshot_use_raw_size(True)

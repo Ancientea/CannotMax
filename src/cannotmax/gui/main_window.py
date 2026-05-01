@@ -206,7 +206,8 @@ class ArknightsApp(QMainWindow):
         self.connection_type_combo.setEnabled(is_adb_mode)
         self.input_method_label.setEnabled(is_adb_mode)
         self.input_method_combo.setEnabled(is_adb_mode)
-        self.auto_fetch_button.setEnabled(not is_win_mode)
+        # Auto-fetch only available in ADB mode (MAA click broken on PC, WIN requires manual ROI)
+        self.auto_fetch_button.setEnabled(True)
 
         # Get connector (state-based lazy pooling, no connection test)
         kwargs = self._get_connector_kwargs(mode)
@@ -252,7 +253,7 @@ class ArknightsApp(QMainWindow):
     def _update_connector_ready_ui(self):
         """Update UI after successful connection (called from get_recognize)."""
         self.recognize_button.setEnabled(True)
-        self.auto_fetch_button.setEnabled(self.current_capture_mode != "WIN")
+        self.auto_fetch_button.setEnabled(True)
 
         # Update MAA status
         if hasattr(self.connector, "is_maa_available"):
@@ -1057,6 +1058,13 @@ class ArknightsApp(QMainWindow):
 
     def toggle_auto_fetch(self):
         _ = QtCore.QMutexLocker(self._auto_fetch_mutex)
+        if self.current_capture_mode != "ADB":
+            QMessageBox.information(
+                self,
+                "提示",
+                "暂未支持PC端点击，当前仅支持ADB(模拟器)模式自动获取",
+            )
+            return
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
             self.auto_fetch = auto_fetch.AutoFetch(
                 self.connector,
