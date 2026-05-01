@@ -922,8 +922,9 @@ class ArknightsApp(QMainWindow):
                 raise Exception("截图失败，请检查设备连接")
             
             # 2. Recognizer handles: detect → crop → split → recognize
-            auto_fb = self.current_capture_mode in ("ADB", "PC")
-            results = self.recognizer.process_regions(screenshot, auto_fallback=auto_fb)
+            mode = self.current_capture_mode
+            auto_fb = mode in ("ADB", "PC")
+            results = self.recognizer.process_regions(screenshot, auto_fallback=auto_fb, mode=mode)
             
             if not results:
                 raise Exception("未检测到怪物条")

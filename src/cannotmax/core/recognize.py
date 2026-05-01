@@ -25,8 +25,10 @@ from ..config import (
     DEBUG_MODE,
     DEFAULT_AVATAR_REGIONS,
     DEFAULT_NUMBER_REGIONS,
+    PC_DEFAULT_AVATAR_REGIONS,
+    PC_DEFAULT_NUMBER_REGIONS,
 )
-from ..config.constants import DEFAULT_CROP_RATIO
+from ..config.constants import DEFAULT_CROP_RATIO, PC_DEFAULT_CROP_RATIO
 from ..config.paths import TMP_IMAGES_DIR
 
 logger = logging.getLogger(__name__)
@@ -169,11 +171,12 @@ class RecognizeMonster:
         self.avatar_regions = avatar_regions
         self.number_regions = number_regions
     
-    def _resolve_crop_ratio(self, auto_fallback: bool) -> tuple:
+    def _resolve_crop_ratio(self, auto_fallback: bool, mode: str = "ADB") -> tuple:
         """解析裁剪比例。
 
         Args:
-            auto_fallback: True 时 crop_ratio=None 回退到 DEFAULT_CROP_RATIO
+            auto_fallback: True 时 crop_ratio=None 回退到默认值
+            mode: 捕获模式 (ADB/PC/WIN)，影响默认值选择
 
         Returns:
             ((x1, y1), (x2, y2)) 相对坐标
@@ -184,6 +187,8 @@ class RecognizeMonster:
         if self.crop_ratio is not None:
             return self.crop_ratio
         if auto_fallback:
+            if mode == "PC":
+                return PC_DEFAULT_CROP_RATIO
             return DEFAULT_CROP_RATIO
         raise ROINotSelectedError("请先选择怪物条范围")
     
@@ -203,20 +208,25 @@ class RecognizeMonster:
         px2, py2 = int(x2 * w), int(y2 * h)
         return screenshot[py1:py2, px1:px2]
 
-    def process_regions(self, screenshot: np.ndarray, auto_fallback: bool = True) -> list[dict]:
+    def process_regions(self, screenshot: np.ndarray, auto_fallback: bool = True, mode: str = "ADB") -> list[dict]:
         """Process full-screen screenshot to identify monsters.
         
         Args:
             screenshot: Full-screen BGR image (any resolution)
             auto_fallback: True 时 crop_ratio=None 回退默认值 (ADB/PC)；False 时抛异常 (WIN)
+            mode: 捕获模式 (ADB/PC/WIN)，影响默认裁剪参数选择
         
         Returns:
             List of 6 recognition results
         """
         from ..utils import find_monster_zone
         
-        avatar_regs = self.avatar_regions if self.avatar_regions is not None else DEFAULT_AVATAR_REGIONS
-        number_regs = self.number_regions if self.number_regions is not None else DEFAULT_NUMBER_REGIONS
+        avatar_regs = self.avatar_regions if self.avatar_regions is not None else (
+            PC_DEFAULT_AVATAR_REGIONS if mode == "PC" else DEFAULT_AVATAR_REGIONS
+        )
+        number_regs = self.number_regions if self.number_regions is not None else (
+            PC_DEFAULT_NUMBER_REGIONS if mode == "PC" else DEFAULT_NUMBER_REGIONS
+        )
         
         # Save original screenshot for debugging
         if DEBUG_MODE:
@@ -224,7 +234,7 @@ class RecognizeMonster:
             cv2.imwrite(f"{TMP_IMAGES_DIR}/original_screenshot.png", screenshot)
         
         # 1. Resolve crop ratio and crop
-        ratio = self._resolve_crop_ratio(auto_fallback)
+        ratio = self._resolve_crop_ratio(auto_fallback, mode)
         cropped = self._crop_by_ratio(screenshot, ratio)
         
         # 2. WIN mode: find_monster_zone secondary refinement
