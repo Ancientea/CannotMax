@@ -70,7 +70,11 @@ class UnitAwareTransformer(nn.Module):
             nn.init.xavier_uniform_(self.friend_attentions[-1].in_proj_weight)
             self.norm.append(nn.LayerNorm(embed_dim))
 
-        self.fc = nn.Linear(embed_dim, 1)
+        self.fc = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim * 2),
+            nn.ReLU(),
+            nn.Linear(embed_dim * 2, 1),
+        )
 
     def forward(self, left_signs, left_counts, right_signs, right_counts):
         """
