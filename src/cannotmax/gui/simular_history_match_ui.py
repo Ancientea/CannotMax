@@ -12,7 +12,7 @@ from PyQt6.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 import numpy as np
 import logging
 
-from ..analytics import HistoryMatch
+from ..utils import HistoryMatch
 from ..config import MONSTER_COUNT, MONSTER_DATA
 
 logger = logging.getLogger(__name__)

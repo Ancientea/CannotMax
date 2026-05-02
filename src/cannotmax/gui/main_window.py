@@ -31,10 +31,10 @@ from ..core.recognize import ROINotSelectedError
 from .dialogs.window_picker import WindowPickerDialog
 from ..core.roi_selector import ROISelector
 from .dark_mode_style_fix import DarkModeStyleFix
-from ..analytics import similar_history_match
+from ..utils import similar_history_match
 from ..core import recognize
 from ..config import MONSTER_COUNT
-from ..analytics.specialmonster import SpecialMonsterHandler
+from ..utils.specialmonster import SpecialMonsterHandler
 from ..pipelines import data_package
 from ..config import MONSTER_DATA
 from ..config.paths import IMAGES_DIR
@@ -1057,7 +1057,8 @@ class ArknightsApp(QMainWindow):
         try:
             screenshot = self.connector.capture_screenshot()
             roi = self.roi_selector.select_roi(
-                screenshot, example_image_path=IMAGES_DIR / "samples/roi_selecting_eg.png"
+                screenshot,
+                example_image_path=IMAGES_DIR / "samples/roi_selecting_eg.png",
             )
             if roi:
                 (px1, py1), (px2, py2) = roi

@@ -41,10 +41,11 @@ class TestImports:
 
         assert InputPanelUI is not None
 
-    def test_analytics_import(self):
-        from src.cannotmax.analytics import (
+    def test_utils_import(self):
+        from src.cannotmax.utils import (
             HistoryMatch,
             SpecialMonsterHandler,
+            find_monster_zone,
         )
 
         assert HistoryMatch is not None
