@@ -15,7 +15,7 @@ TARGET_IMAGES_DIR = DATA_DIR / "images"
 
 def load_monster_data():
     monster_data = pd.read_csv(
-        "monster_greenvine.csv", index_col="id", encoding="utf-8-sig"
+        DATA_DIR.parent / "monster_greenvine.csv", index_col="id", encoding="utf-8-sig"
     )
     return monster_data
 
@@ -179,7 +179,7 @@ def process_archives(merge_images=True, extract_result_images=False):
         for d in DATA_DIR.iterdir()
         if d.is_dir()
         and d.name not in ("compressed", "images", ".git")
-        and len(d.name) == 19  # 2026_04_26__18_47_37
+        and len(d.name) == 20  # 2026_05_02__20_40_17
         and d.name[4] == "_"
         and d.name[7] == "_"
         and d.name[10] == "_"
