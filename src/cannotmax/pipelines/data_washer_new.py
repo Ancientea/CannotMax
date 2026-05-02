@@ -5,8 +5,10 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import recognize
 import tqdm
+
+from cannotmax.config import MONSTER_COUNT
+from cannotmax.core import recognize
 
 MONSTER_NUM = 56
 black_list_rows = []
@@ -658,12 +660,12 @@ def is_list_true(onelist):
 def recognize_review(data, img_floder, matched_threshold=0.1, ocr_threshold=0.5):
     print("正在进行识别数据检查")
     print("data行数：", len(data))
-    ref_row = [0] * (recognize.MONSTER_COUNT * 2)
+    ref_row = [0] * (MONSTER_COUNT * 2)
     need_delete = [False] * len(data)
     for idx, row in tqdm.tqdm(enumerate(data), total=len(data), desc="Processing rows"):
-        ref_row = [0] * (recognize.MONSTER_COUNT * 2)
+        ref_row = [0] * (MONSTER_COUNT * 2)
         try:
-            img_name = row[recognize.MONSTER_COUNT * 2 + 1]
+            img_name = row[MONSTER_COUNT * 2 + 1]
             img_path = img_floder / Path(img_name)
             if not img_path.exists():
                 print(f"未找到对应的图像： {img_name} ")
@@ -690,7 +692,7 @@ def recognize_review(data, img_floder, matched_threshold=0.1, ocr_threshold=0.5)
                         )
             else:
                 # 检查数据行是否与参考行匹配
-                data_row = row[0 : recognize.MONSTER_COUNT * 2]
+                data_row = row[0 : MONSTER_COUNT * 2]
                 if data_row != ref_row:
                     print(
                         f"找到不匹配的数据行： {idx} 行，对应图片文件: {img_name}",
