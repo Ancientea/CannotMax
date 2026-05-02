@@ -11,6 +11,14 @@ a_main = Analysis(
     pathex=[project_root],
     binaries=[],
     datas=[
+        ('vendor', 'vendor'),
+        ('src/resources', 'src/resources'),
+        ('src/simulation/arknights.csv', 'src/simulation'),
+        ('src/simulation/monsters.json', 'src/simulation'),
+        ('src/simulation/scene.json', 'src/simulation'),
+        ('src/tools/battlefield_composite/monster_images', 'src/tools/battlefield_composite/monster_images'),
+        ('src/tools/battlefield_recognize/class_to_idx.json', 'src/tools/battlefield_recognize'),
+        ('src/tools/battlefield_recognize/场地识别字段说明.txt', 'src/tools/battlefield_recognize'),
         ('.venv/Lib/site-packages/rapidocr/default_models.yaml', 'rapidocr'),
         ('.venv/Lib/site-packages/rapidocr/config.yaml', 'rapidocr'),
         ('.venv/Lib/site-packages/rapidocr/models', 'rapidocr/models')
@@ -19,7 +27,7 @@ a_main = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['train', 'torch', 'torchvision', 'matplotlib', 'sklearn', 'scikit-learn', 'scipy', 'PyQt6.QtPdf', 'PyQt6.QtNetwork', 'predict', 'onnxscript'],
+    excludes=['torch', 'torchvision', 'matplotlib', 'sklearn', 'scikit-learn', 'scipy', 'PyQt6.QtPdf', 'PyQt6.QtNetwork', 'predict', 'onnxscript'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -40,7 +48,7 @@ exe_main = EXE(
     a_main.scripts,
     [],
     exclude_binaries=True,
-    name='main',
+    name='CannotMax',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -51,7 +59,7 @@ exe_main = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['ico\\icon_64x64.ico'],
+    icon=['src\\resources\\assets\\icons\\icon_64x64.ico'],
 )
 
 # 多开管理器分析
@@ -60,6 +68,14 @@ a_multi = Analysis(
     pathex=[project_root],
     binaries=[],
     datas=[
+        ('vendor', 'vendor'),
+        ('src/resources', 'src/resources'),
+        ('src/simulation/arknights.csv', 'src/simulation'),
+        ('src/simulation/monsters.json', 'src/simulation'),
+        ('src/simulation/scene.json', 'src/simulation'),
+        ('src/tools/battlefield_composite/monster_images', 'src/tools/battlefield_composite/monster_images'),
+        ('src/tools/battlefield_recognize/class_to_idx.json', 'src/tools/battlefield_recognize'),
+        ('src/tools/battlefield_recognize/场地识别字段说明.txt', 'src/tools/battlefield_recognize'),
         ('.venv/Lib/site-packages/rapidocr/default_models.yaml', 'rapidocr'),
         ('.venv/Lib/site-packages/rapidocr/config.yaml', 'rapidocr'),
         ('.venv/Lib/site-packages/rapidocr/models', 'rapidocr/models')
@@ -68,7 +84,7 @@ a_multi = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['train', 'torch', 'torchvision', 'matplotlib', 'sklearn', 'scikit-learn', 'scipy', 'PyQt6.QtPdf', 'PyQt6.QtNetwork', 'predict', 'onnxscript'],
+    excludes=['torch', 'torchvision', 'matplotlib', 'sklearn', 'scikit-learn', 'scipy', 'PyQt6.QtPdf', 'PyQt6.QtNetwork', 'predict', 'onnxscript'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -96,7 +112,7 @@ exe_multi = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['ico\\icon_64x64.ico'],
+    icon=['src\\resources\\assets\\icons\\icon_64x64.ico'],
 )
 
 coll = COLLECT(
