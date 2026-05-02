@@ -76,6 +76,7 @@ uv sync --group dev
 
 ```bash
 uv run cannotmax          # 启动 GUI
+uv run cannotmax multi    # 多开管理器
 uv run cannotmax train    # 训练模型
 uv run cannotmax eval     # 评估模型
 uv run cannotmax convert -i model.pth -o model.onnx  # PyTorch → ONNX

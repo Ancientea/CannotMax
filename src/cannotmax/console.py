@@ -33,6 +33,20 @@ def convert_model_command(args):
     sys.exit(result.returncode)
 
 
+def multi_instance_command(args):
+    """Launch multi-instance automation manager."""
+    import sys as _sys
+
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication(_sys.argv)
+    from cannotmax.gui.multi_instance import MultiInstanceManager
+
+    window = MultiInstanceManager()
+    window.show()
+    _sys.exit(app.exec())
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -65,6 +79,10 @@ def main():
         help="Output ONNX model path (.onnx)",
     )
     convert_parser.set_defaults(func=convert_model_command)
+
+    # Multi-instance command
+    multi_parser = subparsers.add_parser("multi", help="Launch multi-instance manager")
+    multi_parser.set_defaults(func=multi_instance_command)
 
     args = parser.parse_args()
 
