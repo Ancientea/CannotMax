@@ -50,7 +50,7 @@ images/nums/
 # 训练相关数据
 data_train/tmp/
 data_train/package/*.zip
-data_train/images/
+data_train/data_images/
 
 # 单独的截图文件
 screenshot.png
@@ -70,3 +70,4 @@ tmp
 # ===========================
 arknights.csv
 multi_ports.txt
+*.bak

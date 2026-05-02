@@ -1110,7 +1110,23 @@ class ArknightsApp(QMainWindow):
         event.accept()
 
 
+def ensure_admin():
+    import ctypes
+    try:
+        if ctypes.windll.shell32.IsUserAnAdmin():
+            return
+    except:
+        return
+    ctypes.windll.shell32.ShellExecuteW(
+        None, "runas", sys.executable,
+        " ".join([f'"{arg}"' for arg in sys.argv]),
+        None, 1
+    )
+    sys.exit()
+
+
 if __name__ == "__main__":
+    ensure_admin()
     app = QApplication([])
     window = ArknightsApp()
     window.show()

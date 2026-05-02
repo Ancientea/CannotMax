@@ -14,17 +14,7 @@ project_root = base_dir.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-#from config import MONSTER_COUNT, FIELD_FEATURE_COUNT config会读取图片导致非常慢
-
-def load_monster_data():
-    monster_data = pd.read_csv('monster_greenvine.csv', index_col="id", encoding='utf-8-sig')
-    return monster_data
-
-MONSTER_DATA = load_monster_data()
-
-# 全局变量
-MONSTER_COUNT = len(MONSTER_DATA)
-FIELD_FEATURE_COUNT = 0
+from config import MONSTER_COUNT, FIELD_FEATURE_COUNT # config会读取图片导致非常慢
 
 
 def get_expected_header():
@@ -65,7 +55,7 @@ def read_csv_from_zip(zip_ref, csv_filename):
 
 def process_archives(merge_images=True, extract_result_images=False):
     package_dir = base_dir / "package"
-    target_images_dir = base_dir / 'images'
+    target_images_dir = base_dir / 'data_images'
     target_csv_path = base_dir / 'arknights.csv'
 
     # 1. 目录准备 (移除旧的清空逻辑，保证增量更新)
@@ -137,7 +127,7 @@ def process_archives(merge_images=True, extract_result_images=False):
 
                     if header is None or header != expected_header:
                         print(f"  [跳过] {csv_member}: 表头不符合预期格式")
-                        continue
+                        # continue
 
                     zip_new_csv_rows = []
                     skip_csv_count = 0

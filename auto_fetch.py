@@ -703,7 +703,7 @@ class AutoFetch:
                     self._log(logging.INFO, "已达到设定时长，结束自动获取")
                     break
                 # 检测一次间隔时间——————————————————————————————————
-                time.sleep(0.2)
+                time.sleep(0.05)
             except Exception as e:
                 logger.exception(f"自动获取数据出错:\n{e}")
                 self._log(logging.ERROR, f"自动获取数据出错:\n{e}")
