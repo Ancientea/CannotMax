@@ -1,6 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 
+from PyInstaller.utils.hooks import collect_dynamic_libs, collect_data_files
+
 block_cipher = None
 project_root = os.path.abspath(os.getcwd())
 
@@ -8,13 +10,13 @@ project_root = os.path.abspath(os.getcwd())
 a_main = Analysis(
     ['src/cannotmax/console.py', 'src/cannotmax/_multi.py'],
     pathex=[project_root, os.path.join(project_root, 'src')],
-    binaries=[],
+    binaries=collect_dynamic_libs('maa'),
     datas=[
         ('.venv/Lib/site-packages/rapidocr/default_models.yaml', 'rapidocr'),
         ('.venv/Lib/site-packages/rapidocr/config.yaml', 'rapidocr'),
         ('.venv/Lib/site-packages/rapidocr/models', 'rapidocr/models'),
-    ],
-    hiddenimports=[],
+    ] + collect_data_files('maa'),
+    hiddenimports=['maa', 'maa.controller', 'maa.toolkit', 'maa.resource', 'maa.library'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
