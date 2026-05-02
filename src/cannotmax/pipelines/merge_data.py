@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..config.paths import COMPRESSED_DIR, DATA_DIR
+from ..config.paths import COMPRESSED_DIR, DATA_DIR, PROJECT_ROOT
 
 # 路径配置
 TARGET_CSV_PATH = DATA_DIR / "arknights.csv"
@@ -15,7 +15,7 @@ TARGET_IMAGES_DIR = DATA_DIR / "images"
 
 def load_monster_data():
     monster_data = pd.read_csv(
-        DATA_DIR.parent / "monster_greenvine.csv", index_col="id", encoding="utf-8-sig"
+        PROJECT_ROOT / "monster_greenvine.csv", index_col="id", encoding="utf-8-sig"
     )
     return monster_data
 
