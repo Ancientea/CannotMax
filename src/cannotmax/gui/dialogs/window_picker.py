@@ -1,10 +1,13 @@
 """Window picker dialog for selecting capture target."""
 
 import ctypes
+import logging
 from ctypes import wintypes
 from typing import Optional
 
 from PyQt6.QtWidgets import QDialog, QLineEdit, QListWidget, QVBoxLayout
+
+logger = logging.getLogger(__name__)
 
 
 def list_visible_window_titles(filter_hwnds: Optional[list[int]] = None) -> list[str]:
