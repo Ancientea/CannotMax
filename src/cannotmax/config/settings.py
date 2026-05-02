@@ -70,8 +70,14 @@ def _load_app_config() -> dict[str, Any]:
 
     config_path = Path("config/app.json")
     if not config_path.exists():
-        logger.warning("config/app.json 不存在，使用内置默认配置")
-        _app_config = _DEFAULT_CONFIG
+        logger.warning("config/app.json 不存在，使用内置默认配置并创建")
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(_DEFAULT_CONFIG, f, indent=2, ensure_ascii=False)
+        except OSError as e:
+            logger.error("无法创建 config/app.json: %s", e)
+        _app_config = _DEFAULT_CONFIG.copy()
         return _app_config
 
     try:
