@@ -6,13 +6,9 @@ from pathlib import Path
 
 import pandas as pd
 
-# 路径配置
-base_dir = Path(__file__).resolve().parent
-project_root = base_dir.parent.parent.parent.parent  # 项目根目录
+from ..config.paths import COMPRESSED_DIR, DATA_DIR
 
-# 数据目录结构
-DATA_DIR = project_root / "data"
-COMPRESSED_DIR = DATA_DIR / "compressed"
+# 路径配置
 TARGET_CSV_PATH = DATA_DIR / "arknights.csv"
 TARGET_IMAGES_DIR = DATA_DIR / "images"
 
@@ -234,7 +230,7 @@ def process_archives(merge_images=True, extract_result_images=False):
                             try:
                                 shutil.copy2(img_path, target)
                                 ext_count += 1
-                            except:
+                            except Exception:
                                 pass
                         else:
                             skip_count += 1
