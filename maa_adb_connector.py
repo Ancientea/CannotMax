@@ -391,3 +391,24 @@ class MaaAdbConnector:
             except Exception:
                 pass
         self.is_connected = False
+
+    def stop_adb_server(self):
+        adb_path = ""
+        device = self.selected_device
+        if device:
+            adb_path = device.adb_path
+        elif self._devices:
+            adb_path = self._devices[0].adb_path
+
+        if not adb_path or not Path(adb_path).exists():
+            adb_path = str(Path.cwd() / "platform-tools" / "adb.exe")
+
+        if not Path(adb_path).exists():
+            logger.warning("未找到adb.exe，跳过关闭ADB server")
+            return
+
+        try:
+            subprocess.run([adb_path, "kill-server"], capture_output=True, text=True, timeout=5, check=False)
+            logger.info("已执行 adb kill-server")
+        except Exception as e:
+            logger.warning(f"关闭ADB server失败: {e}")

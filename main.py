@@ -1107,6 +1107,11 @@ class ArknightsApp(QMainWindow):
         """窗口关闭时的处理"""
         if hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running:
             self.auto_fetch.stop_auto_fetch()
+        try:
+            self.adb_connector.disconnect()
+            self.adb_connector.stop_adb_server()
+        except Exception as e:
+            logger.warning(f"退出时清理ADB失败: {e}")
         event.accept()
 
 
