@@ -7,7 +7,6 @@ import time
 import numpy as np
 from pathlib import Path
 from importlib.metadata import version as get_version, PackageNotFoundError
-import onnxruntime  # workaround: Pre-import to avoid ImportError: DLL load failed while importing onnxruntime_pybind11_state: 动态链接库 (DLL) 初始化例程失败。
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout
 from PyQt6.QtWidgets import (
     QLabel,
@@ -18,7 +17,7 @@ from PyQt6.QtWidgets import (
     QButtonGroup,
 )
 from PyQt6.QtWidgets import QGroupBox, QMessageBox, QGraphicsDropShadowEffect, QFrame
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
 import PyQt6.QtCore as QtCore
 
@@ -26,11 +25,9 @@ from ..core import auto_fetch
 from ..core.connector.maa_registry import (
     ConnectionTypeRegistry,
     InputMethodRegistry,
-    MaaFrameworkDetector,
 )
 from ..core.connector.factory import ConnectorFactory, ConnectorState
 from ..core.recognize import ROINotSelectedError
-from ..core.connector.winrt_capture import WinRTScreenCapture
 from .dialogs.window_picker import WindowPickerDialog
 from ..core.roi_selector import ROISelector
 from .dark_mode_style_fix import DarkModeStyleFix
@@ -39,7 +36,8 @@ from ..core import recognize
 from ..config import MONSTER_COUNT
 from ..analytics.specialmonster import SpecialMonsterHandler
 from ..pipelines import data_package
-from ..config import FIELD_FEATURE_COUNT, MONSTER_DATA
+from ..config import MONSTER_DATA
+from ..config.paths import IMAGES_DIR
 from . import HistoryMatchUI, InputPanelUI
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -1059,7 +1057,7 @@ class ArknightsApp(QMainWindow):
         try:
             screenshot = self.connector.capture_screenshot()
             roi = self.roi_selector.select_roi(
-                screenshot, example_image_path="images/eg.png"
+                screenshot, example_image_path=IMAGES_DIR / "samples/roi_selecting_eg.png"
             )
             if roi:
                 (px1, py1), (px2, py2) = roi
