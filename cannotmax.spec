@@ -6,7 +6,7 @@ project_root = os.path.abspath(os.getcwd())
 
 # 主程序分析
 a_main = Analysis(
-    ['src/cannotmax/console.py'],
+    ['src/cannotmax/console.py', 'src/cannotmax/_multi.py'],
     pathex=[project_root, os.path.join(project_root, 'src')],
     binaries=[],
     datas=[
@@ -53,8 +53,32 @@ exe_main = EXE(
     icon=['ico\\icon_64x64.ico'],
 )
 
+# 多开管理器（薄封装，使用 _multi.py 作为入口）
+_multi_scripts = [s for s in a_main.scripts if '_multi' in s[0]] + \
+                [s for s in a_main.scripts if '_multi' not in s[0]]
+
+exe_multi = EXE(
+    pyz_main,
+    _multi_scripts,
+    [],
+    exclude_binaries=True,
+    name='多开管理器',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=['ico\\icon_64x64.ico'],
+)
+
 coll = COLLECT(
     exe_main,
+    exe_multi,
     a_main.binaries,
     a_main.zipfiles,
     a_main.datas,
