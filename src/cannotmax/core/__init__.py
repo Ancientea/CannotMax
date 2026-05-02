@@ -13,7 +13,12 @@ Components:
 from .auto_fetch import AutoFetch
 from .connector import AdbConnector, BaseConnector, PcConnector
 from .field_recognition import FieldRecognizer
-from .predict import CannotModel
+
+try:
+    from .predict import CannotModel
+except ImportError:
+    from .predict_onnx import CannotModel
+
 from .recognize import RecognizeMonster
 from .roi_selector import ROISelector
 

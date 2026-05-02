@@ -15,10 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import cv2
-import torch
-import torch.nn as nn
 from PIL import Image
-from torchvision import models, transforms
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +76,9 @@ class FieldRecognizer:
 
     def _init_field_recognition(self):
         """初始化场地识别模型和相关组件"""
+        import torch
+        from torchvision import transforms
+
         try:
             # 设置设备
             self.field_device = torch.device(
@@ -139,10 +139,12 @@ class FieldRecognizer:
             logger.error(f"场地识别初始化失败: {e}")
             self.is_initialized = False
 
-    def _load_pytorch_model(
-        self, model_path: str, num_classes: int, device: torch.device
-    ):
+    def _load_pytorch_model(self, model_path: str, num_classes: int, device):
         """加载 PyTorch 模型并设置为评估模式"""
+        import torch
+        import torch.nn as nn
+        from torchvision import models
+
         logger.info(f"正在加载 PyTorch 模型: {model_path}")
         model = models.mobilenet_v3_small(weights=None)
         num_ftrs = model.classifier[-1].in_features
@@ -157,6 +159,8 @@ class FieldRecognizer:
         self, image_path: str, threshold: float = 0.5
     ) -> list[str]:
         """使用 PyTorch 模型对给定图片的所有 ROI 进行分类预测"""
+        import torch
+
         try:
             full_image = Image.open(image_path).convert("RGB")
         except Exception:
