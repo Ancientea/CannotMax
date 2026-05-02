@@ -1,34 +1,64 @@
+# ===========================
+# 1. Python 环境与缓存
+# ===========================
 venv/
+.venv/
 __pycache__/
-.idea/
-.vscode/
-screenshot.png
-tmp
-log.txt
-data/images/
-data/[0-9][0-9][0-9][0-9]_[0-1][0-9]_[0-3][0-9]__[0-2][0-9]_[0-5][0-9]_[0-5][0-9]/
-images/nums/
-*.log
-models/Local_models/*
-!arknights.csv
-build/
-output/
-*.pth
-*.onnx
-*.onnx.data
-data/*
-!data/compressed/.gitkeep
+.mypy_cache/
 
-# pixi environments
+# ===========================
+# 2. Pixi 包管理环境
+# ===========================
 .pixi/*
 !.pixi/config.toml
 
-# other
+# ===========================
+# 3. IDE 与编辑器配置
+# ===========================
+.idea/
+.vscode/
+
+# ===========================
+# 4. AI 辅助工具配置
+# ===========================
 .claude/
 .codex/
 .copilot/
-.codeartdoer/
-.agents/
+.codeartsdoer
+
+# ===========================
+# 5. 模型权重与构建产物
+# ===========================
+# 模型文件
+models/*.png
+*.pth
+*.onnx
+*.onnx.data
+# 构建与输出目录
+build/
+output/
+
+# ===========================
+# 6. 数据集与媒体资源
+# ===========================
+data/*
+!data/compressed/.gitkeep
+images/nums/
+
+# 训练相关数据
+data_train/tmp/
+data_train/package/*.zip
+data_train/images/
+
+# 单独的截图文件
+screenshot.png
+
+# ===========================
+# 7. 日志与临时文件
+# ===========================
+log.txt
+*.log
+
+tmp
 arknights.csv
 multi_ports.txt
-/arknights.csv

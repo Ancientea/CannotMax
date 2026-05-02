@@ -1,23 +1,23 @@
 [project]
 name = "CannotMax-Greenvine"
-version = "1.0.8"
+version = "1.1.0"
 description = "这是一个基于深度学习的明日方舟游戏辅助工具，用于自动识别游戏画面中的单位并预测战斗结果。"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
-    "matplotlib",
-    "numpy",
-    "onnxruntime",
-    "opencv-python",
-    "pandas",
-    "pillow",
-    "pyqt6",
-    "rapidocr",
-    "scikit-learn",
-    "windows-capture",
-    "toml",
-    "pywin32>=311",
-    "maafw>=5.10.2",
+  "matplotlib",
+  "numpy",
+  "onnxruntime",
+  "opencv-python",
+  "pandas",
+  "pillow",
+  "pyqt6",
+  "rapidocr",
+  "scikit-learn",
+  "windows-capture",
+  "toml",
+  "pywin32>=311",
+  "maafw>=5.10.2",
 ]
 
 [dependency-groups]
@@ -30,14 +30,9 @@ dev = [
 ]
 
 [project.optional-dependencies]
-cpu = [
-  "torch",
-  "torchvision",
-]
-cu128 = [
-  "torch>=2.7.0",
-  "torchvision>=0.22.0",
-]
+cpu = ["torch", "torchvision"]
+cu128 = ["torch>=2.7.0", "torchvision>=0.22.0"]
+cu130 = ["torch>=2.7.0", "torchvision>=0.22.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -53,16 +48,26 @@ packages = ["src/cannotmax"]
     { extra = "cpu" },
     { extra = "cu128" },
   ],
+  [
+    { extra = "cpu" },
+    { extra = "cu130" },
+  ],
+  [
+    { extra = "cu128" },
+    { extra = "cu130" },
+  ],
 ]
 
 [tool.uv.sources]
 torch = [
   { index = "pytorch-cpu", extra = "cpu" },
   { index = "pytorch-cu128", extra = "cu128" },
+  { index = "pytorch-cu130", extra = "cu130" },
 ]
 torchvision = [
   { index = "pytorch-cpu", extra = "cpu" },
   { index = "pytorch-cu128", extra = "cu128" },
+  { index = "pytorch-cu130", extra = "cu130" },
 ]
 
 [[tool.uv.index]]
@@ -77,6 +82,11 @@ explicit = true
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
 [project.scripts]

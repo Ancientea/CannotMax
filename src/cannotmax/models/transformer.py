@@ -22,9 +22,10 @@ class UnitAwareTransformer(nn.Module):
     def __init__(
         self,
         num_units: int,
-        embed_dim: int = 128,
-        num_heads: int = 8,
+        embed_dim: int = 256,
+        num_heads: int = 4,
         num_layers: int = 4,
+        dropout: float = 0.3,
     ):
         super().__init__()
         self.num_units = num_units
@@ -32,6 +33,7 @@ class UnitAwareTransformer(nn.Module):
         self.field_count = FIELD_FEATURE_COUNT
         self.embed_dim = embed_dim
         self.num_layers = num_layers
+        self.dropout = dropout
 
         self.unit_embed = nn.Embedding(num_units, embed_dim)
         nn.init.normal_(self.unit_embed.weight, mean=0.0, std=0.02)
@@ -39,6 +41,7 @@ class UnitAwareTransformer(nn.Module):
         self.value_ffn = nn.Sequential(
             nn.Linear(embed_dim, embed_dim * 2),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(embed_dim * 2, embed_dim),
         )
 
@@ -51,28 +54,28 @@ class UnitAwareTransformer(nn.Module):
         for _ in range(num_layers):
             self.enemy_attentions.append(
                 nn.MultiheadAttention(
-                    embed_dim, num_heads, batch_first=True, dropout=0.2
+                    embed_dim, num_heads, batch_first=True, dropout=dropout
                 )
             )
             self.enemy_ffn.append(
                 nn.Sequential(
                     nn.Linear(embed_dim, embed_dim * 2),
                     nn.ReLU(),
-                    nn.Dropout(0.2),
+                    nn.Dropout(dropout),
                     nn.Linear(embed_dim * 2, embed_dim),
                 )
             )
 
             self.friend_attentions.append(
                 nn.MultiheadAttention(
-                    embed_dim, num_heads, batch_first=True, dropout=0.2
+                    embed_dim, num_heads, batch_first=True, dropout=dropout
                 )
             )
             self.friend_ffn.append(
                 nn.Sequential(
                     nn.Linear(embed_dim, embed_dim * 2),
                     nn.ReLU(),
-                    nn.Dropout(0.2),
+                    nn.Dropout(dropout),
                     nn.Linear(embed_dim * 2, embed_dim),
                 )
             )
@@ -84,6 +87,7 @@ class UnitAwareTransformer(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(embed_dim, embed_dim * 2),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(embed_dim * 2, 1),
         )
 
@@ -100,7 +104,7 @@ class UnitAwareTransformer(nn.Module):
         batch_size = left_counts.size(0)
 
         # 提取 TopK 特征（TopK 天然返回有效索引 0~num_units-1）
-        k = min(8, left_counts.shape[1])
+        k = min(4, left_counts.shape[1])
         left_values, left_indices = torch.topk(left_counts, k=k, dim=1)
         right_values, right_indices = torch.topk(right_counts, k=k, dim=1)
 

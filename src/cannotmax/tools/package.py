@@ -1,13 +1,24 @@
 import subprocess
 import shutil
+import sys
 from pathlib import Path
 import toml  # 导入toml库
 
-# TODO: 需重新适配UV
+
+def _configure_utf8_stdio():
+    """Ensure console output can safely print Chinese text on Windows CI."""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is not None and hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+_configure_utf8_stdio()
 
 # 配置区（用户可根据需要修改这些参数）
 CONFIG = {
     "venv_dir": ".venv",  # 虚拟环境目录
+    "output_name": "cannotmax",  # PyInstaller 输出目录名（与 main.spec 中 EXE name 一致）
     "source_script": "src/cannotmax/console.py",  # 主程序文件路径
     "icon_file": r"ico/icon_64x64.ico",  # 图标文件路径
     "output_dir": "output",  # 输出目录
@@ -61,7 +72,7 @@ def build_exe():
 
 def copy_additional_files():
     """复制额外文件到输出目录"""
-    exe_dir = Path(CONFIG["output_dir"]) / Path(CONFIG["source_script"]).stem
+    exe_dir = Path(CONFIG["output_dir"]) / CONFIG["output_name"]
     if not exe_dir.exists():
         print(f"输出目录不存在: {exe_dir}")
         return False
@@ -111,7 +122,7 @@ def copy_additional_files():
 
 def create_zip_archive(project_name, project_version):
     """将输出目录打包为zip文件"""
-    output_dir = Path(CONFIG["output_dir"]) / "main"
+    output_dir = Path(CONFIG["output_dir"]) / CONFIG["output_name"]
     if not output_dir.exists():
         print(f"错误：输出目录 '{output_dir}' 不存在，无法创建zip文件。")
 

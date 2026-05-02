@@ -70,6 +70,7 @@ class ArknightsApp(QMainWindow):
     update_monster_signal = pyqtSignal(list)
     update_prediction_signal = pyqtSignal(float)
     update_statistics_signal = pyqtSignal()  # 用于更新统计信息
+    update_package_button_signal = pyqtSignal(bool)  # 用于更新打包按钮启用状态
     qt_button_style = """
         QPushButton {
             background-color: #313131;
@@ -281,9 +282,9 @@ class ArknightsApp(QMainWindow):
             f"铁鲨鱼_Arknights Neural Network - v{version_str} - model: {model_name}"
         )
         self.setWindowIcon(QIcon("ico/icon.ico"))
-        self.setGeometry(100, 100, 500, 580)
-        self.setMinimumWidth(580)
-        self.setMaximumWidth(580)
+        self.setGeometry(100, 100, 570, 570)
+        self.setMinimumWidth(570)
+        self.setMaximumWidth(570)
         self.background = QPixmap("ico/background.png")
 
         # 初始化动画对象
@@ -296,9 +297,9 @@ class ArknightsApp(QMainWindow):
         main_layout = QHBoxLayout(main_widget)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        # 左侧面板
+        # 输入面板
         self.input_panel = InputPanelUI()
-        self.input_panel.setFixedWidth(528)
+        self.input_panel.setFixedWidth(640)
         self.input_panel.predict_requested.connect(self.predict)
         self.input_panel.reset_requested.connect(self.reset_entries)
         self.input_panel.input_changed.connect(self.update_input_display)
@@ -417,7 +418,7 @@ class ArknightsApp(QMainWindow):
         control_group = QGroupBox("控制面板")
         control_layout = QVBoxLayout(control_group)
 
-        # 第一行按钮
+        # 第一行按钮 - 基础设置
         row1 = QWidget()
         row1_layout = QHBoxLayout(row1)
         row1_layout.setContentsMargins(0, 0, 0, 0)
@@ -426,21 +427,33 @@ class ArknightsApp(QMainWindow):
         self.duration_entry = QLineEdit("325")
         self.duration_entry.setFixedWidth(50)
 
-        self.auto_fetch_button = QPushButton("自动获取数据")
-        self.auto_fetch_button.clicked.connect(self.toggle_auto_fetch)
-
         self.mode_menu = QComboBox()
         self.mode_menu.addItems(["单人", "30人"])
         self.mode_menu.currentTextChanged.connect(self.update_game_mode)
+
+        self.predict_enabled_checkbox = QCheckBox("预测")
+        self.predict_enabled_checkbox.setChecked(True)
+        self.predict_enabled_checkbox.toggled.connect(self._on_predict_toggled)
 
         self.invest_checkbox = QCheckBox("投资")
         self.invest_checkbox.stateChanged.connect(self.update_invest_status)
 
         row1_layout.addWidget(self.duration_label)
         row1_layout.addWidget(self.duration_entry)
-        row1_layout.addWidget(self.auto_fetch_button)
         row1_layout.addWidget(self.mode_menu)
+        row1_layout.addWidget(self.predict_enabled_checkbox)
         row1_layout.addWidget(self.invest_checkbox)
+        row1_layout.addStretch()
+
+        # 第二行按钮 - 自动获取数据配置
+        row_config = QWidget()
+        row_config_layout = QHBoxLayout(row_config)
+        row_config_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.auto_fetch_button = QPushButton("自动获取数据")
+        self.auto_fetch_button.clicked.connect(self.toggle_auto_fetch)
+
+        row_config_layout.addWidget(self.auto_fetch_button)
 
         # 第二行按钮 - 数据操作和统计
         row2 = QWidget()
@@ -468,6 +481,7 @@ class ArknightsApp(QMainWindow):
 
         # 添加到控制布局
         control_layout.addWidget(row1)
+        control_layout.addWidget(row_config)
         control_layout.addWidget(row2)
         control_layout.addWidget(github_label)
 
@@ -648,6 +662,7 @@ class ArknightsApp(QMainWindow):
         self.update_monster_signal.connect(self.update_monster)
         self.update_prediction_signal.connect(self.update_prediction)
         self.update_statistics_signal.connect(self.update_statistics)
+        self.update_package_button_signal.connect(self.package_data_button.setEnabled)
 
         # Refresh device list asynchronously using QTimer to avoid blocking UI
         from PyQt6.QtCore import QTimer
@@ -1079,7 +1094,9 @@ class ArknightsApp(QMainWindow):
                 stop_callback=self.stop_callback,
                 training_duration=float(self.duration_entry.text()) * 3600,
                 recognizer=self.recognizer,
-                cannot_model=self.cannot_model,
+                cannot_model=self.cannot_model
+                if self.predict_enabled_checkbox.isChecked()
+                else None,
                 capture_mode=self.current_capture_mode,
             )
             self.auto_fetch.start_auto_fetch()
@@ -1095,9 +1112,9 @@ class ArknightsApp(QMainWindow):
         hours, remainder = divmod(elapsed_time, 3600)
         minutes, _ = divmod(remainder, 60)
         stats_text = (
-            f"总共填写次数: {self.auto_fetch.total_fill_count},    "
-            f"填写×次数: {self.auto_fetch.incorrect_fill_count},    "
-            f"当次运行时长: {int(hours)}小时{int(minutes)}分钟"
+            f"总次数: {self.auto_fetch.total_fill_count}, "
+            f"填写×次数: {self.auto_fetch.incorrect_fill_count}, "
+            f"运行: {int(hours)}小时{int(minutes)}分钟"
         )
         self.stats_label.setText(stats_text)
 
@@ -1212,9 +1229,11 @@ class ArknightsApp(QMainWindow):
 
     def start_callback(self):
         self.update_button_signal.emit("停止自动获取数据")
+        self.update_package_button_signal.emit(False)
 
     def stop_callback(self):
         self.update_button_signal.emit("自动获取数据")
+        self.update_package_button_signal.emit(True)
 
     def update_monster_callback(self, results: list):
         self.update_monster_signal.emit(results)
@@ -1308,6 +1327,11 @@ class ArknightsApp(QMainWindow):
 
     def update_invest_status(self, state):
         self.is_invest = state == Qt.CheckState.Checked.value
+
+    def _on_predict_toggled(self, checked):
+        self.invest_checkbox.setEnabled(checked)
+        if not checked:
+            self.invest_checkbox.setChecked(False)
 
     def update_result(self, text):
         self.result_label.setText(text)

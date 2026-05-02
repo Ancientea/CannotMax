@@ -180,7 +180,7 @@ class InputPanelUI(QFrame):
         self.scroll_grid.setContentsMargins(5, 5, 5, 5)
 
         # 设置5列布局
-        self.COLUMNS = 7
+        self.COLUMNS = 10
         self.ROW_HEIGHT = 120  # 每个单元的高度
 
         scroll.setWidget(scroll_content)
@@ -370,15 +370,15 @@ class InputPanelUI(QFrame):
 
             # 人物图片
             img_label = QLabel()
-            img_label.setFixedSize(60, 60)
+            img_label.setFixedSize(50, 50)
             img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             try:
                 pixmap = QPixmap(f"images/{MONSTER_DATA['原始名称'][i]}.png")
                 if not pixmap.isNull():
                     pixmap = pixmap.scaled(
-                        60,
-                        60,
+                        50,
+                        50,
                         Qt.AspectRatioMode.KeepAspectRatio,
                         Qt.TransformationMode.SmoothTransformation,
                     )
@@ -396,7 +396,7 @@ class InputPanelUI(QFrame):
 
             # 左输入框
             left_entry = QLineEdit()
-            left_entry.setFixedWidth(60)
+            left_entry.setFixedWidth(50)
             left_entry.setPlaceholderText("左")
             left_entry.setAlignment(Qt.AlignmentFlag.AlignCenter)
             left_entry.textChanged.connect(self.input_changed.emit)  # Connect to signal
@@ -404,7 +404,7 @@ class InputPanelUI(QFrame):
 
             # 右输入框 (放在左输入框下方)
             right_entry = QLineEdit()
-            right_entry.setFixedWidth(60)
+            right_entry.setFixedWidth(50)
             right_entry.setPlaceholderText("右")
             right_entry.setAlignment(Qt.AlignmentFlag.AlignCenter)
             right_entry.textChanged.connect(
