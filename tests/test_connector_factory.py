@@ -21,7 +21,7 @@ class TestConnectorStateTransitions:
 
     def test_new_connector_starts_idle(self):
         """New connector should be created in IDLE state (no connection)."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             mock_conn = Mock(spec=BaseConnector)
             mock_conn._controller = None  # Not connected
             MockAdb.return_value = mock_conn
@@ -39,7 +39,7 @@ class TestConnectorStateTransitions:
 
     def test_idle_to_valid_on_successful_local_check(self):
         """IDLE → VALID when local check passes (first use)."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             mock_controller = Mock()
             mock_controller.is_alive.return_value = True
 
@@ -62,7 +62,7 @@ class TestConnectorStateTransitions:
 
     def test_idle_to_invalid_on_failed_local_check(self):
         """IDLE → INVALID when local check fails (dead connection)."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             # First connector: dead controller
             dead_controller = Mock()
             dead_controller.is_alive.return_value = False
@@ -93,7 +93,7 @@ class TestConnectorStateTransitions:
 
     def test_valid_stays_valid_without_check(self):
         """VALID state should be reused without any check (fast path)."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             mock_controller = Mock()
             mock_controller.is_alive.return_value = True
 
@@ -118,7 +118,7 @@ class TestConnectorStateTransitions:
 
     def test_invalid_triggers_rebuild(self):
         """INVALID state should trigger immediate rebuild on next get()."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             # First connector (will be marked INVALID)
             invalid_conn = Mock(spec=BaseConnector)
             invalid_conn._controller = None
@@ -152,7 +152,7 @@ class TestConfigChangeDetection:
 
     def test_same_config_reuses_connector(self):
         """Same kwargs should reuse existing connector."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             mock_conn = Mock(spec=BaseConnector)
             MockAdb.return_value = mock_conn
 
@@ -167,7 +167,7 @@ class TestConfigChangeDetection:
 
     def test_different_serial_rebuilds_connector(self):
         """Different adb_serial should discard old and create new."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             conn1 = Mock(spec=BaseConnector)
             conn1._controller = Mock(is_alive=lambda: True)
             conn2 = Mock(spec=BaseConnector)
@@ -187,8 +187,8 @@ class TestConfigChangeDetection:
     def test_mode_switch_creates_separate_connectors(self):
         """Different modes should have separate connectors in pool."""
         with (
-            patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb,
-            patch("src.cannotmax.core.connector.factory.PcConnector") as MockPc,
+            patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb,
+            patch("cannotmax.core.connector.factory.PcConnector") as MockPc,
         ):
             adb_conn = Mock(spec=BaseConnector)
             pc_conn = Mock(spec=BaseConnector)
@@ -251,7 +251,7 @@ class TestLocalUsabilityCheck:
         from cannotmax.core.connector.pc_connector import PcConnector
 
         # Patch the module-level import in factory
-        with patch("src.cannotmax.core.connector.factory.IsWindow") as mock_iswindow:
+        with patch("cannotmax.core.connector.factory.IsWindow") as mock_iswindow:
             mock_iswindow.return_value = True
 
             # Create mock that passes isinstance check for PcConnector
@@ -281,7 +281,7 @@ class TestPoolManagement:
 
     def test_return_connector_marks_idle(self):
         """return_connector() should mark state as IDLE without testing."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             mock_controller = Mock()
             mock_conn = Mock(spec=BaseConnector)
             mock_conn._controller = mock_controller
@@ -307,7 +307,7 @@ class TestPoolManagement:
 
     def test_mark_invalid_sets_state(self):
         """mark_invalid() should set state to INVALID."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             mock_conn = Mock(spec=BaseConnector)
             MockAdb.return_value = mock_conn
 
@@ -319,7 +319,7 @@ class TestPoolManagement:
 
     def test_mark_valid_idempotent(self):
         """mark_valid() should only transition IDLE→VALID, not VALID→VALID or INVALID→VALID."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             mock_conn = Mock(spec=BaseConnector)
             MockAdb.return_value = mock_conn
 
@@ -341,8 +341,8 @@ class TestPoolManagement:
     def test_disconnect_all_clears_pool(self):
         """disconnect_all() should disconnect all connectors and clear pool."""
         with (
-            patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb,
-            patch("src.cannotmax.core.connector.factory.PcConnector") as MockPc,
+            patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb,
+            patch("cannotmax.core.connector.factory.PcConnector") as MockPc,
         ):
             adb_conn = Mock(spec=BaseConnector)
             pc_conn = Mock(spec=BaseConnector)
@@ -377,7 +377,7 @@ class TestEdgeCases:
     def test_get_connector_creation_exception(self):
         """Should return None if connector creation raises exception."""
         with patch(
-            "src.cannotmax.core.connector.factory.AdbConnector",
+            "cannotmax.core.connector.factory.AdbConnector",
             side_effect=Exception("Create failed"),
         ):
             factory = ConnectorFactory()
@@ -389,7 +389,7 @@ class TestEdgeCases:
 
     def test_return_wrong_connector_ignores(self):
         """return_connector() should ignore if connector doesn't match pool."""
-        with patch("src.cannotmax.core.connector.factory.AdbConnector") as MockAdb:
+        with patch("cannotmax.core.connector.factory.AdbConnector") as MockAdb:
             conn1 = Mock(spec=BaseConnector)
             conn2 = Mock(spec=BaseConnector)
             MockAdb.return_value = conn1
