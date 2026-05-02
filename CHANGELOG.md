@@ -1,9 +1,38 @@
 # CannotMax-Greenvine v2.0.0 更新日志
 
-**发布日期**: 2026-05-02
-**提交范围**: `main..refactor` — 143 个提交
+## 2.0.0-alpha.2 (2026-05-03)
+
+### 打包与分发
+- 修复 PyInstaller 打包中 MAA Framework 原生 DLL 缺失（`hiddenimports` + `collect_dynamic_libs`）
+- `config/app.json` 不存在时自动从默认值创建，避免打包版首次启动报错
+- `FIELD_FEATURE_COUNT=0` 时跳过地形特征文件加载，消除无关警告
+
+### PC 端适配
+- 解除 PC 模式自动获取限制（原仅 ADB 可用）
+- 新增 PC 端状态模板（`pc_3/4/5.png`），支持多模板匹配同一状态
+- 状态检测失败时输出前 3 匹配结果日志，便于调试分辨率适配
+- 启动时自动请求管理员权限（PC 端 SendInput 点击需要）
+- 修复 `window_picker.py` 缺少 `logger` 导入导致 PC 连接失败
+- 修复 `pc_connector.py` 异常块缩进错误
+
+### CLI 与命令
+- 新增 `uv run cannotmax multi` 子命令启动多开管理器
+- 新增 `uv run cannotmax tools <script>` 和 `uv run cannotmax pipelines <script>` 开发命令
+- 多开管理器独立 `.exe` 改为薄封装 `_multi.py`，与主程序共享依赖
+
+### 修复
+- 测试 mock 路径从 `src.cannotmax` 更正为 `cannotmax`，修复 7 个失败测试
+- `merge_data.py` 日期目录长度检查修正（19 → 20）和 `monster_greenvine.csv` 路径修正
+- `field_recognition.py` torch/torchvision 改为懒加载，打包版不再因缺少 torch 崩溃
+- `data_washer_new.py` 遗留 `import recognize` 替换为包内绝对导入
+
+### 杂项
+- 预提交钩子从 `uv run ruff` 改为直接 `ruff`，避免 `uv sync` 导致的假失败
+- 添加 `outputs/` 到 `.gitignore`
 
 ---
+
+## 2.0.0-alpha.1 (2026-05-02)
 
 ## 破坏性变更
 

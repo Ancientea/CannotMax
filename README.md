@@ -84,7 +84,10 @@ uv run cannotmax convert -i model.pth -o model.onnx  # PyTorch → ONNX
 # 独立运行模块
 uv run -m src.cannotmax.simulator.sim_mc            # Tkinter 模拟器
 uv run -m src.cannotmax.simulator.main_sim          # PyQt6 模拟器
-uv run -m src.cannotmax.pipelines.merge_data        # 合并数据
+
+# 开发命令
+uv run cannotmax tools statistics                   # 统计分析
+uv run cannotmax pipelines merge_data               # 合并数据
 ```
 
 ### 2. 捕获模式选择
