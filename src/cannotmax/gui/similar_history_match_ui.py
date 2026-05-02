@@ -279,7 +279,9 @@ class HistoryMatchUI(QFrame):
                 img_label.setFixedSize(60, 60)
                 img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 try:
-                    pixmap = QPixmap(f"images/{MONSTER_DATA['原始名称'][i + 1]}.png")
+                    pixmap = QPixmap(
+                        f"images/monsters/{MONSTER_DATA['原始名称'][i + 1]}.png"
+                    )
                     if not pixmap.isNull():
                         pixmap = pixmap.scaled(
                             60,

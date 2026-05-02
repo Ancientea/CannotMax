@@ -370,7 +370,7 @@ class InputPanelUI(QFrame):
             img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             try:
-                pixmap = QPixmap(f"images/{MONSTER_DATA['原始名称'][i]}.png")
+                pixmap = QPixmap(f"images/monsters/{MONSTER_DATA['原始名称'][i]}.png")
                 if not pixmap.isNull():
                     pixmap = pixmap.scaled(
                         50,
