@@ -53,57 +53,8 @@ exe_main = EXE(
     icon=['ico\\icon_64x64.ico'],
 )
 
-# 多开管理器分析
-a_multi = Analysis(
-    ['src/cannotmax/gui/multi_instance.py'],
-    pathex=[project_root, os.path.join(project_root, 'src')],
-    binaries=[],
-    datas=[
-        ('.venv/Lib/site-packages/rapidocr/default_models.yaml', 'rapidocr'),
-        ('.venv/Lib/site-packages/rapidocr/config.yaml', 'rapidocr'),
-        ('.venv/Lib/site-packages/rapidocr/models', 'rapidocr/models'),
-    ],
-    hiddenimports=[],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[
-        'cannotmax.training', 'torch', 'torchvision', 'matplotlib', 'sklearn',
-        'scikit-learn', 'scipy', 'PyQt6.QtPdf', 'PyQt6.QtNetwork',
-        'cannotmax.core.predict', 'onnxscript',
-    ],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
-)
-
-a_multi.binaries = [x for x in a_multi.binaries if not any(bad in x[0] for bad in unwanted_bins)]
-
-pyz_multi = PYZ(a_multi.pure, a_multi.zipped_data, cipher=block_cipher)
-
-exe_multi = EXE(
-    pyz_multi,
-    a_multi.scripts,
-    [],
-    exclude_binaries=True,
-    name='多开管理器',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=True,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=['ico\\icon_64x64.ico'],
-)
-
 coll = COLLECT(
     exe_main,
-    exe_multi,
     a_main.binaries,
     a_main.zipfiles,
     a_main.datas,

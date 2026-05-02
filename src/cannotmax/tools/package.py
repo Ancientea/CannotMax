@@ -42,6 +42,7 @@ CONFIG = {
         "pyproject.toml",
         "monster.csv",
         "monster_greenvine.csv",
+        "多开管理器.bat",
     ],
 }
 
