@@ -1,6 +1,5 @@
 """Unit tests for CannotModel prediction."""
 
-
 import numpy as np
 import pytest
 

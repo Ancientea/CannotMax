@@ -6,7 +6,6 @@ and automatic rebuild logic using Mock to avoid real device connections.
 
 from unittest.mock import Mock, patch
 
-
 from src.cannotmax.core.connector.base_connector import BaseConnector
 
 # Import under test

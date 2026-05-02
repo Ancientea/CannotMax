@@ -3,7 +3,6 @@ Smoke tests for CannotMax package structure.
 """
 
 
-
 class TestImports:
     """Test that all package imports work correctly."""
 

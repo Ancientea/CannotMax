@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 from .utils import VIRTUAL_TIME_DELTA, BuffEffect, BuffType
 from .vector2d import FastVector
 
