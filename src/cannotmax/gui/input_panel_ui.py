@@ -54,6 +54,9 @@ class InputPanelUI(QFrame):
         """
         从data_cleaning_with_field_recognize_gpu.py的逻辑中获取地形特征列名
         """
+        if FIELD_FEATURE_COUNT == 0:
+            return []
+
         try:
             # 加载类别映射
             class_map_path = CONFIG_DIR / "battlefield_recognize/class_to_idx.json"
