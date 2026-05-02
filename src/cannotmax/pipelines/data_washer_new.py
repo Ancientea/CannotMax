@@ -1,10 +1,10 @@
+import csv
 import logging
+import sys
 from pathlib import Path
+
 import cv2
 import numpy as np
-import time
-import csv
-import sys
 import recognize
 import tqdm
 
@@ -236,14 +236,14 @@ def view_monster_counts(listdata):
                     wrong_counts.append(ind)
                 if MONSTER_LIMIT[j][2] and not black_listed:
                     black_listed = True
-                    print(f"确认为30人数据，文档加入黑名单。")
+                    print("确认为30人数据，文档加入黑名单。")
             if i2[j] not in MONSTER_LIMIT[j][0]:
                 print(f"{ind}行右侧发现{MONSTER_LIMIT[j][1]}，数量：{i2[j]}")
                 if ind not in wrong_counts:
                     wrong_counts.append(ind)
                 if MONSTER_LIMIT[j][2] and not black_listed:
                     black_listed = True
-                    print(f"确认为30人数据，文档加入黑名单。")
+                    print("确认为30人数据，文档加入黑名单。")
         ind += 1
     processed_data = [
         listdata[j] for j in range(len(listdata)) if j not in wrong_counts
@@ -844,7 +844,7 @@ def process_floder(
             # 未进黑名单则合并至全部数据
             full_data_list += newdata
         else:
-            print(f"该数据为30人局数据，自动进入黑名单，不计入总数据！")
+            print("该数据为30人局数据，自动进入黑名单，不计入总数据！")
             if len(newdata) < 5000:  # 不是整合数据
                 black_list_rows += newdata
     savecsv(full_data_list, savefilename)
@@ -920,11 +920,10 @@ def process_file(
 
 # process_floder(r'D:\Backup\Downloads\arcdata','arcdata_fullaa.csv','arcdata_full_washed_plus.csv')
 
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
-import sys
-import threading
 import queue
+import threading
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
 
 
 class RedirectText(object):

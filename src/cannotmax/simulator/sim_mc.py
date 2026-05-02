@@ -1,26 +1,20 @@
-from collections import Counter, defaultdict
-from concurrent.futures import ThreadPoolExecutor
-import queue
-import threading
-import time
-import os
 import copy
-from enum import Enum, auto
+import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
+import os
+import queue
+import random  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
+import sys  # Import sys for stdin
+import threading
 import tkinter as tk
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+from enum import Enum, auto
 
 # from tkinter import messagebox # messagebox 已被自定义提示替代，可以注释或移除
 from PIL import Image, ImageTk
-import math
-import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
-import random  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
-import sys  # Import sys for stdin
 
-from .battle_field import Battlefield
-from .unit import Unit
-from .monsters import Monster, MonsterFactory, AttackState
-from .utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction
-from .vector2d import FastVector
 from ..config import MONSTER_COUNT
+from .battle_field import Battlefield
 
 
 class AppState(Enum):
@@ -432,7 +426,7 @@ class SandboxSimulator:
             if fut.done():
                 try:
                     local_counter, done = fut.result()
-                except Exception as e:
+                except Exception:
                     local_counter, done = Counter(), 0  # 出错就忽略该分片
                 with self.mc_lock:
                     self._mc_counts.update(local_counter)

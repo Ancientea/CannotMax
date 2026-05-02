@@ -7,6 +7,7 @@ frame_detector.py
 """
 
 import logging
+
 import cv2
 import numpy as np
 

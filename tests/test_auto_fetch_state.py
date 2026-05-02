@@ -1,6 +1,7 @@
 """Unit tests for AutoFetch state machine with mock connector."""
 
 import pytest
+
 from src.cannotmax.core.auto_fetch import AutoFetch, GameState
 from tests.mock_connector import MockConnector
 

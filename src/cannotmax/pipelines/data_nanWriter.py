@@ -1,9 +1,10 @@
+import numpy as np
 import pandas as pd
 import torch
-import numpy as np
 from tqdm import tqdm
-from ..models.transformer import UnitAwareTransformer
+
 from ..config.paths import DATA_DIR, MODELS_DIR
+from ..models.transformer import UnitAwareTransformer
 
 # 配置参数（需要与训练时一致）
 CONFIG = {

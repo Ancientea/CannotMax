@@ -6,6 +6,7 @@
 """
 
 import sys
+
 import cv2
 import numpy as np
 
@@ -216,25 +217,25 @@ def main():
         )
         break
 
-    print(f"\n=== 1. 裁剪比例 (DEFAULT_CROP_RATIO) ===")
-    print(f"DEFAULT_CROP_RATIO: tuple[tuple[float, float], tuple[float, float]] = (")
+    print("\n=== 1. 裁剪比例 (DEFAULT_CROP_RATIO) ===")
+    print("DEFAULT_CROP_RATIO: tuple[tuple[float, float], tuple[float, float]] = (")
     print(f"    ({gx1 / w:.4f}, {gy1 / h:.4f}),")
     print(f"    ({gx2 / w:.4f}, {gy2 / h:.4f}),")
-    print(f")")
+    print(")")
     print(f"  对应像素: [({gx1:.0f}, {gy1:.0f}), ({gx2:.0f}, {gy2:.0f})]")
 
-    print(f"\n=== 2. 头像区域 (DEFAULT_AVATAR_REGIONS) ===")
+    print("\n=== 2. 头像区域 (DEFAULT_AVATAR_REGIONS) ===")
     print(f"  怪物条尺寸: {bar_w:.0f}x{bar_h:.0f}  (resize 到 975x119)")
-    print(f"DEFAULT_AVATAR_REGIONS = (")
+    print("DEFAULT_AVATAR_REGIONS = (")
     for i, (x1, y1, x2, y2) in enumerate(avatar_rel):
         print(f"    ({x1:.4f}, {y1:.4f}, {x2:.4f}, {y2:.4f}),  # region {i}")
-    print(f")")
+    print(")")
 
-    print(f"\n=== 3. 数字区域 (DEFAULT_NUMBER_REGIONS) ===")
-    print(f"DEFAULT_NUMBER_REGIONS = (")
+    print("\n=== 3. 数字区域 (DEFAULT_NUMBER_REGIONS) ===")
+    print("DEFAULT_NUMBER_REGIONS = (")
     for i, (x1, y1, x2, y2) in enumerate(nums_rel):
         print(f"    ({x1:.4f}, {y1:.4f}, {x2:.4f}, {y2:.4f}),  # region {i}")
-    print(f")")
+    print(")")
 
 
 if __name__ == "__main__":

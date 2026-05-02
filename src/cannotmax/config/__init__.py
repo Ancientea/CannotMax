@@ -8,8 +8,8 @@ import pandas as pd
 
 from . import constants
 from .paths import (
-    PROJECT_ROOT,
     IMAGES_DIR,
+    PROJECT_ROOT,
 )
 from .settings import (
     get_app_config,

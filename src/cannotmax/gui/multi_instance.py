@@ -7,38 +7,38 @@ starting/stopping instances per-port, logging, and crash recovery.
 Entry point: uv run -m src.cannotmax.gui.multi_instance
 """
 
+import logging
+import subprocess
 import sys
 import threading
 import time
-import logging
-import subprocess
 from pathlib import Path
+
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QApplication,
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QLabel,
-    QPlainTextEdit,
-    QSpinBox,
-    QComboBox,
     QCheckBox,
-    QMessageBox,
-    QSplitter,
-    QScrollArea,
+    QComboBox,
     QFrame,
+    QHBoxLayout,
+    QLabel,
     QLineEdit,
+    QMainWindow,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QScrollArea,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, pyqtSlot
-from PyQt6.QtGui import QFont
 
-from ..core.connector.adb_connector import AdbConnector
+from ..config import FIELD_FEATURE_COUNT
 from ..core import auto_fetch
 from ..core.auto_fetch import GameState
+from ..core.connector.adb_connector import AdbConnector
 from ..pipelines import data_package
-from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 from .login import LoginManager
 
 logging.getLogger().setLevel(logging.DEBUG)

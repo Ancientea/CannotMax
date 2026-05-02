@@ -1,10 +1,10 @@
-import sys
-import zipfile
 import csv
 import io
 import shutil
-import pandas as pd
+import zipfile
 from pathlib import Path
+
+import pandas as pd
 
 # 路径配置
 base_dir = Path(__file__).resolve().parent

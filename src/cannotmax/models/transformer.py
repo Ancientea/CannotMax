@@ -5,7 +5,7 @@ Transformer model for Arknights battle prediction.
 import torch
 import torch.nn as nn
 
-from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 
 
 class UnitAwareTransformer(nn.Module):

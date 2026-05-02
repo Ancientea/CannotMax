@@ -13,15 +13,14 @@ Windows 10+ 上基于 **Windows.Graphics.Capture** 的屏幕捕获轻量封装�
 """
 
 from __future__ import annotations
+
+import logging
 import threading
 import time
-import logging
 from typing import Optional
 
-import ctypes
-from ctypes import wintypes
 import numpy as np
-from windows_capture import WindowsCapture, Frame, InternalCaptureControl
+from windows_capture import Frame, InternalCaptureControl, WindowsCapture
 
 logger = logging.getLogger(__name__)
 

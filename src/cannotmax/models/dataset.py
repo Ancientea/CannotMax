@@ -2,12 +2,12 @@
 Dataset for Arknights battle data.
 """
 
-import torch
 import numpy as np
 import pandas as pd
+import torch
 from torch.utils.data import Dataset
 
-from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 
 TOTAL_FEATURE_COUNT = (MONSTER_COUNT + FIELD_FEATURE_COUNT) * 2
 

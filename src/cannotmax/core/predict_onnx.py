@@ -8,13 +8,13 @@ Usage:
     prob = predictor.get_prediction(left_counts, right_counts)
 """
 
+import logging
 from pathlib import Path
 
-import onnxruntime as ort
 import numpy as np
-import logging
+import onnxruntime as ort
 
-from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 from ..config.paths import MODELS_DIR
 
 logger = logging.getLogger(__name__)

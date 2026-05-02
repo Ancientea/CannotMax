@@ -4,13 +4,13 @@ Tests the IDLE→VALID→INVALID state transitions, config change detection,
 and automatic rebuild logic using Mock to avoid real device connections.
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-import numpy as np
+from unittest.mock import Mock, patch
+
+
+from src.cannotmax.core.connector.base_connector import BaseConnector
 
 # Import under test
 from src.cannotmax.core.connector.factory import ConnectorFactory, ConnectorState
-from src.cannotmax.core.connector.base_connector import BaseConnector
 
 
 class TestConnectorStateTransitions:

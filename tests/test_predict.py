@@ -1,11 +1,12 @@
 """Unit tests for CannotModel prediction."""
 
-import pytest
+
 import numpy as np
-from pathlib import Path
-from src.cannotmax.core.predict import CannotModel
+import pytest
+
 from src.cannotmax.config import MONSTER_COUNT
 from src.cannotmax.config.paths import MODELS_DIR
+from src.cannotmax.core.predict import CannotModel
 
 
 @pytest.fixture(scope="module")

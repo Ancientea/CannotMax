@@ -27,6 +27,7 @@ dev = [
     "pyinstaller>=6.15.0",
     "pytest>=8.0.0",
     "pytest-qt>=4.5.0",
+    "ruff>=0.15.12",
 ]
 
 [project.optional-dependencies]

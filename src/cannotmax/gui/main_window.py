@@ -1,44 +1,49 @@
 import json
 import logging
-
 import subprocess
 import sys
 import time
-import numpy as np
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_version
 from pathlib import Path
-from importlib.metadata import version as get_version, PackageNotFoundError
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout
+
+import numpy as np
+import PyQt6.QtCore as QtCore
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
-    QLabel,
-    QPushButton,
-    QLineEdit,
+    QApplication,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
-    QButtonGroup,
+    QGraphicsDropShadowEffect,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtWidgets import QGroupBox, QMessageBox, QGraphicsDropShadowEffect, QFrame
-from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
-import PyQt6.QtCore as QtCore
 
-from ..core import auto_fetch
+from ..config import MONSTER_COUNT, MONSTER_DATA
+from ..config.paths import IMAGES_DIR
+from ..core import auto_fetch, recognize
+from ..core.connector.factory import ConnectorFactory, ConnectorState
 from ..core.connector.maa_registry import (
     ConnectionTypeRegistry,
     InputMethodRegistry,
 )
-from ..core.connector.factory import ConnectorFactory, ConnectorState
 from ..core.recognize import ROINotSelectedError
-from .dialogs.window_picker import WindowPickerDialog
 from ..core.roi_selector import ROISelector
-from .dark_mode_style_fix import DarkModeStyleFix
-from ..utils import similar_history_match
-from ..core import recognize
-from ..config import MONSTER_COUNT
-from ..utils.specialmonster import SpecialMonsterHandler
 from ..pipelines import data_package
-from ..config import MONSTER_DATA
-from ..config.paths import IMAGES_DIR
+from ..utils import similar_history_match
+from ..utils.specialmonster import SpecialMonsterHandler
 from . import HistoryMatchUI, InputPanelUI
+from .dark_mode_style_fix import DarkModeStyleFix
+from .dialogs.window_picker import WindowPickerDialog
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.getLogger("PIL").setLevel(logging.INFO)
@@ -703,7 +708,9 @@ class ArknightsApp(QMainWindow):
 
     def choose_capture_window(self):
         """弹出对话框选择窗口作为 WinRT 截屏源，用于窗口捕获模式"""
-        import traceback, cv2
+        import traceback
+
+        import cv2
 
         if getattr(self, "_switching_source", False):
             return

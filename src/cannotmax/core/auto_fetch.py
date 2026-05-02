@@ -17,21 +17,20 @@ os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
 
 import csv
 import datetime
-from enum import Enum, auto
 import logging
-from pathlib import Path
 import threading
 import time
-from typing import Literal
+from collections import deque
+from collections.abc import Callable
+from enum import Enum, auto
+from pathlib import Path
+
 import cv2
 import numpy as np
 
 # loadData removed - use core.connector.AdbConnector/PcConnector
-from ..config import DEBUG_MODE
-from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config import DEBUG_MODE, FIELD_FEATURE_COUNT, MONSTER_COUNT
 from ..config.paths import DATA_DIR
-from collections.abc import Callable
-from collections import deque
 from ..gui import LoginManager
 
 logger = logging.getLogger(__name__)

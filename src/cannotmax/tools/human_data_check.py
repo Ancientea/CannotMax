@@ -1,9 +1,10 @@
-from pathlib import Path
-import tkinter as tk
-from PIL import Image, ImageTk
 import csv
+import tkinter as tk
+from pathlib import Path
 
-from ..config.paths import PROJECT_ROOT, IMAGES_DIR, DATA_DIR
+from PIL import Image, ImageTk
+
+from ..config.paths import DATA_DIR, IMAGES_DIR, PROJECT_ROOT
 
 
 class ArknightsApp:
@@ -308,7 +309,7 @@ class ArknightsApp:
         else:
             tk.Label(
                 self.bottom_frame,
-                text=f"找不到结果图",
+                text="找不到结果图",
                 bg=self.BG_COLOR,
                 fg=self.FG_COLOR,
             ).pack(side=tk.TOP, pady=5)

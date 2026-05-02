@@ -1,12 +1,9 @@
-import json
-import math
+import logging
 import random
 import time
-import numpy as np
-from enum import Enum
-import logging
-
 from typing import TYPE_CHECKING
+
+import numpy as np
 
 from .vector2d import FastVector
 
@@ -16,7 +13,7 @@ if TYPE_CHECKING:
     from .monsters import Monster
 
 from .monsters import MonsterFactory
-from .utils import VIRTUAL_TIME_DELTA, BuffEffect, BuffType, Faction, SpatialHash
+from .utils import VIRTUAL_TIME_DELTA, Faction, SpatialHash
 from .zone import PoisonZone
 
 # 场景参数
@@ -24,7 +21,7 @@ MAP_SIZE = np.array([13, 9])  # 场景宽度（单位：格）
 SPAWN_AREA = 2  # 阵营出生区域宽度
 
 
-from collections import defaultdict
+
 from .projectiles import ProjectileManager
 
 

@@ -1,11 +1,10 @@
 """Window picker dialog for selecting capture target."""
 
-from typing import Optional
-
 import ctypes
 from ctypes import wintypes
+from typing import Optional
 
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QListWidget, QLineEdit
+from PyQt6.QtWidgets import QDialog, QLineEdit, QListWidget, QVBoxLayout
 
 
 def list_visible_window_titles(filter_hwnds: Optional[list[int]] = None) -> list[str]:

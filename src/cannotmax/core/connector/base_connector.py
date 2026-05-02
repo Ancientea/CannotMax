@@ -1,6 +1,7 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import Optional
-import logging
+
 import numpy as np
 
 logger = logging.getLogger(__name__)

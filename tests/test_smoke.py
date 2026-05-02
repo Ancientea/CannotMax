@@ -2,8 +2,9 @@
 Smoke tests to verify basic functionality before refactor.
 """
 
-import pytest
 import sys
+
+import pytest
 
 
 def test_core_modules_import():
@@ -37,7 +38,7 @@ def test_core_modules_import():
 def test_config_loaded():
     """Test that config data loads correctly."""
     try:
-        from src.cannotmax.config import MONSTER_DATA, MONSTER_COUNT
+        from src.cannotmax.config import MONSTER_COUNT, MONSTER_DATA
 
         assert len(MONSTER_DATA) > 0
         assert MONSTER_COUNT > 0

@@ -2,7 +2,6 @@
 Smoke tests for CannotMax package structure.
 """
 
-import pytest
 
 
 class TestImports:
@@ -10,10 +9,8 @@ class TestImports:
 
     def test_config_import(self):
         from src.cannotmax.config import (
-            MONSTER_COUNT,
             FIELD_FEATURE_COUNT,
-            MONSTER_DATA,
-            UNIT_CONFIG,
+            MONSTER_COUNT,
         )
 
         assert MONSTER_COUNT > 0
@@ -21,11 +18,8 @@ class TestImports:
 
     def test_core_import(self):
         from src.cannotmax.core import (
-            RecognizeMonster,
             CannotModel,
-            AutoFetch,
-            AdbConnector,
-            FieldRecognizer,
+            RecognizeMonster,
         )
 
         assert RecognizeMonster is not None
@@ -34,9 +28,6 @@ class TestImports:
     def test_gui_import(self):
         from src.cannotmax.gui import (
             InputPanelUI,
-            HistoryMatchUI,
-            DarkModeStyleFix,
-            LoginManager,
         )
 
         assert InputPanelUI is not None
@@ -44,8 +35,6 @@ class TestImports:
     def test_utils_import(self):
         from src.cannotmax.utils import (
             HistoryMatch,
-            SpecialMonsterHandler,
-            find_monster_zone,
         )
 
         assert HistoryMatch is not None
@@ -53,13 +42,6 @@ class TestImports:
     def test_simulator_import(self):
         from src.cannotmax.simulator import (
             Battlefield,
-            Unit,
-            Monster,
-            Projectile,
-            ElementAccumulator,
-            FastVector,
-            EffectZone,
-            SandboxSimulator,
         )
 
         assert Battlefield is not None
@@ -67,8 +49,6 @@ class TestImports:
     def test_connector_import(self):
         from src.cannotmax.core.connector import (
             AdbConnector,
-            PcConnector,
-            ConnectorFactory,
         )
 
         assert AdbConnector is not None

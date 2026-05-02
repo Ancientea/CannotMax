@@ -1,9 +1,10 @@
 """Tests for RecognizeMonster crop_ratio and process_regions with auto_fallback."""
 
-import pytest
+from pathlib import Path
+
 import cv2
 import numpy as np
-from pathlib import Path
+import pytest
 
 from src.cannotmax.core.recognize import RecognizeMonster, ROINotSelectedError
 

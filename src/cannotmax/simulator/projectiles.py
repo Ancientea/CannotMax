@@ -1,17 +1,18 @@
 # 射弹基础组件
 
-from enum import Enum
 import math
+from enum import Enum
+from typing import TYPE_CHECKING
+
 import numpy as np
 
-from .vector2d import FastVector
 from .utils import DamageType, calculate_normal_dmg, debug_print
-from typing import TYPE_CHECKING
+from .vector2d import FastVector
 
 if TYPE_CHECKING:
     # 仅用于IDE类型提示，不会真实导入
-    from .monsters import Monster
     from .battle_field import Battlefield
+    from .monsters import Monster
 
 
 class Projectile:

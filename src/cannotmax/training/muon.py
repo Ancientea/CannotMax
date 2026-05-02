@@ -34,23 +34,23 @@ class Lion(torch.optim.Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-            for p in group['params']:
+            for p in group["params"]:
                 if p.grad is None:
                     continue
 
-                p.data.mul_(1 - group['lr'] * group['weight_decay'])
+                p.data.mul_(1 - group["lr"] * group["weight_decay"])
 
                 grad = p.grad
                 state = self.state[p]
 
                 if len(state) == 0:
-                    state['exp_avg'] = torch.zeros_like(p)
+                    state["exp_avg"] = torch.zeros_like(p)
 
-                exp_avg = state['exp_avg']
-                beta1, beta2 = group['betas']
+                exp_avg = state["exp_avg"]
+                beta1, beta2 = group["betas"]
 
                 update = exp_avg * beta1 + grad * (1 - beta1)
-                p.add_(torch.sign(update), alpha=-group['lr'])
+                p.add_(torch.sign(update), alpha=-group["lr"])
 
                 exp_avg.mul_(beta2).add_(grad, alpha=1 - beta2)
 
@@ -63,7 +63,9 @@ class Muon(torch.optim.Optimizer):
     """
 
     def __init__(self, params, lr=1e-3, momentum=0.95, weight_decay=0.1, ns_steps=5):
-        defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay, ns_steps=ns_steps)
+        defaults = dict(
+            lr=lr, momentum=momentum, weight_decay=weight_decay, ns_steps=ns_steps
+        )
         super().__init__(params, defaults)
 
     @torch.no_grad()
@@ -74,23 +76,23 @@ class Muon(torch.optim.Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-            lr = group['lr']
-            momentum = group['momentum']
-            weight_decay = group['weight_decay']
-            ns_steps = group['ns_steps']
+            lr = group["lr"]
+            momentum = group["momentum"]
+            weight_decay = group["weight_decay"]
+            ns_steps = group["ns_steps"]
 
-            for p in group['params']:
+            for p in group["params"]:
                 if p.grad is None:
                     continue
                 grad = p.grad
                 if grad.is_sparse:
-                    raise RuntimeError('Muon 不支持稀疏梯度计算')
+                    raise RuntimeError("Muon 不支持稀疏梯度计算")
 
                 state = self.state[p]
                 if len(state) == 0:
-                    state['momentum_buffer'] = torch.zeros_like(grad)
+                    state["momentum_buffer"] = torch.zeros_like(grad)
 
-                buf = state['momentum_buffer']
+                buf = state["momentum_buffer"]
 
                 buf.mul_(momentum).add_(grad)
                 g = grad + momentum * buf
@@ -119,7 +121,7 @@ class Muon(torch.optim.Optimizer):
 
                 dim0, dim1 = X.size(0), X.size(1) if X.ndim > 1 else 1
                 max_dim = max(dim0, dim1)
-                scale = 0.2 * (max_dim ** 0.5)
+                scale = 0.2 * (max_dim**0.5)
 
                 p.data.mul_(1 - lr * weight_decay)
                 p.data.add_(X, alpha=-lr * scale)
@@ -127,7 +129,9 @@ class Muon(torch.optim.Optimizer):
         return loss
 
 
-def get_muon_lion_optimizers(model, muon_lr, lion_lr, weight_decay=0.1, muon_momentum=0.95):
+def get_muon_lion_optimizers(
+    model, muon_lr, lion_lr, weight_decay=0.1, muon_momentum=0.95
+):
     """
     提供 Muon + Lion 的组合优化器分发策略。
     对模型的所有 >=2D 参数采用 Muon；
@@ -141,12 +145,14 @@ def get_muon_lion_optimizers(model, muon_lr, lion_lr, weight_decay=0.1, muon_mom
         if not p.requires_grad:
             continue
 
-        if p.ndim >= 2 and 'embed' not in name.lower():
+        if p.ndim >= 2 and "embed" not in name.lower():
             muon_params.append(p)
         else:
             lion_params.append(p)
 
-    muon_opt = Muon(muon_params, lr=muon_lr, momentum=muon_momentum, weight_decay=weight_decay)
+    muon_opt = Muon(
+        muon_params, lr=muon_lr, momentum=muon_momentum, weight_decay=weight_decay
+    )
     lion_opt = Lion(lion_params, lr=lion_lr, weight_decay=weight_decay * 3.0)
 
     return muon_opt, lion_opt

@@ -1,15 +1,16 @@
-import pandas as pd
-import numpy as np
 import json
-from pathlib import Path
 import re
 from collections import defaultdict
-from PIL import Image
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
+from PIL import Image
 from torchvision import models, transforms
 
-from ..config.paths import DATA_DIR, MODELS_DIR, CONFIG_DIR
+from ..config.paths import CONFIG_DIR, DATA_DIR, MODELS_DIR
 
 # ==============================================================================
 # SECTION 1: 游戏画面元素识别模块 (已修改为PyTorch+GPU)
@@ -128,7 +129,7 @@ def clean_data(
         i for i, row in enumerate(features.values) if np.any(np.abs(row) >= 100)
     ]
     cleaned_data = data.drop(rows_to_remove).reset_index(drop=True)
-    if not (len(data) - 1 in rows_to_remove):
+    if len(data) - 1 not in rows_to_remove:
         cleaned_data = cleaned_data.iloc[:-1]
     if rows_to_remove:
         cleaned_data = pd.concat(
@@ -230,7 +231,7 @@ def clean_data(
                         row_image_data[condensed_name] = 0
                     else:
                         row_image_data[condensed_name] = -1
-        except Exception as e:
+        except Exception:
             row_image_data = {col: -20 for col in image_feature_columns}
         all_rows_image_data.append(row_image_data)
     print("\n截图元素识别完成。")
@@ -301,7 +302,7 @@ def clean_data(
     print(
         f"最终数据维度: {final_cleaned_data.shape[0]} 行, {final_cleaned_data.shape[1]} 列"
     )
-    print(f"已按要求生成自定义表头。")
+    print("已按要求生成自定义表头。")
 
 
 if __name__ == "__main__":

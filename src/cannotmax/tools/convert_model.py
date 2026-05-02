@@ -3,9 +3,10 @@ import sys
 sys.path.append(".")
 
 import numpy as np
-from ..core import predict, predict_onnx
+
 from ..config import MONSTER_COUNT
 from ..config.paths import MODELS_DIR
+from ..core import predict, predict_onnx
 
 model_path = MODELS_DIR / "predictor" / "best_model_full.pth"
 

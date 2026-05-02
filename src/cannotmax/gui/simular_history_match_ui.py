@@ -1,19 +1,20 @@
+import logging
+
+import numpy as np
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QPixmap
 from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
+    QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QScrollArea,
-    QGraphicsDropShadowEffect,
-    QFrame,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
-import numpy as np
-import logging
 
-from ..utils import HistoryMatch
 from ..config import MONSTER_COUNT, MONSTER_DATA
+from ..utils import HistoryMatch
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ class HistoryMatchUI(QFrame):
                 self.history_layout.itemAt(i).widget().setParent(None)
 
             # 添加标题
-            title_label = QLabel(f"错题本")
+            title_label = QLabel("错题本")
             shadow = QGraphicsDropShadowEffect()
             shadow.setBlurRadius(0)  # 模糊半径（控制发光范围）
             shadow.setColor(QColor("#313131"))  # 发光颜色

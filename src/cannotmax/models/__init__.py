@@ -2,7 +2,7 @@
 Neural network models and datasets.
 """
 
+from .dataset import TOTAL_FEATURE_COUNT, ArknightsDataset
 from .transformer import UnitAwareTransformer
-from .dataset import ArknightsDataset, TOTAL_FEATURE_COUNT
 
 __all__ = ["UnitAwareTransformer", "ArknightsDataset", "TOTAL_FEATURE_COUNT"]

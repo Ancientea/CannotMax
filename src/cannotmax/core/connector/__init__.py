@@ -9,10 +9,10 @@ Both connectors automatically detect MAA Framework availability:
 - If MAA unavailable: Use legacy implementation (ADB/Win32 API)
 """
 
-from .base_connector import BaseConnector
 from .adb_connector import AdbConnector
-from .pc_connector import PcConnector
+from .base_connector import BaseConnector
 from .factory import ConnectorFactory
+from .pc_connector import PcConnector
 
 __all__ = [
     "BaseConnector",

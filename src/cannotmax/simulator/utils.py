@@ -1,13 +1,12 @@
+import csv  # 添加csv模块导入
+import logging
+import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-import logging
-import math
-import csv  # 添加csv模块导入
+from typing import TYPE_CHECKING
 
 import numpy as np
-
-from typing import TYPE_CHECKING
 
 from .vector2d import FastVector
 
@@ -15,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .battle_field import Battlefield
-    from .monsters import Monster
 
 VISUALIZATION_MODE = True
 

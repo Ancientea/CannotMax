@@ -6,10 +6,10 @@ CI skips these tests automatically.
 """
 
 import pytest
-from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import Qt, QTimer
-from src.cannotmax.gui.main_window import ArknightsApp
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
+from src.cannotmax.gui.main_window import ArknightsApp
 
 pytestmark = pytest.mark.e2e
 

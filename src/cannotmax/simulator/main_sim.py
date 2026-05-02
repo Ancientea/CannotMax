@@ -1,20 +1,19 @@
 import copy
-from enum import Enum, auto
-import tkinter as tk
-from tkinter import messagebox
-from PIL import Image, ImageTk
-import math
 import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
-import random  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
-import sys  # Import sys for stdin
 import logging
+import sys  # Import sys for stdin
+import tkinter as tk
+from enum import Enum, auto
+from tkinter import messagebox
 
-from .battle_field import Battlefield
-from .unit import Unit
-from .monsters import Monster, MonsterFactory, AttackState
-from .utils import MONSTER_MAPPING, REVERSE_MONSTER_MAPPING, Faction
-from .vector2d import FastVector
+from PIL import Image, ImageTk
+
 from ..config import MONSTER_COUNT
+from .battle_field import Battlefield
+from .monsters import AttackState, Monster
+from .unit import Unit
+from .utils import REVERSE_MONSTER_MAPPING, Faction
+from .vector2d import FastVector
 
 logger = logging.getLogger(__name__)
 

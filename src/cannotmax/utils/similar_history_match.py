@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+
+from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 from ..config.paths import DATA_DIR
 
 

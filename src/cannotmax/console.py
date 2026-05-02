@@ -71,8 +71,8 @@ def main():
     if args.command is None:
         # 无命令时启动 GUI
         import sys as _sys
+
         from PyQt6.QtWidgets import QApplication
-        from PyQt6.QtCore import Qt
 
         app = QApplication(_sys.argv)  # PyQt6 默认启用 High DPI
         from .gui.main_window import ArknightsApp

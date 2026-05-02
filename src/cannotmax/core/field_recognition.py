@@ -9,15 +9,15 @@ Usage:
 """
 
 import json
-import re
 import logging
-from pathlib import Path
+import re
 from collections import defaultdict
-from PIL import Image
+from pathlib import Path
+
 import cv2
-import numpy as np
 import torch
 import torch.nn as nn
+from PIL import Image
 from torchvision import models, transforms
 
 logger = logging.getLogger(__name__)

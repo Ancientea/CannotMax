@@ -8,6 +8,7 @@ Usage:
 """
 
 import logging
+
 import cv2
 
 logger = logging.getLogger(__name__)

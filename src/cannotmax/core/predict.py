@@ -12,17 +12,16 @@ Usage:
     prob = predictor.get_prediction(left_counts, right_counts)
 """
 
+import logging
 import re
 from datetime import datetime
-from functools import cache
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
-import logging
 
-from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 from ..config.paths import MODELS_DIR
 
 logger = logging.getLogger(__name__)

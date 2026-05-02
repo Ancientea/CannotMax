@@ -1,9 +1,9 @@
 import time
-from functools import cache
 from datetime import datetime
+from functools import cache
 from pathlib import Path
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
@@ -12,9 +12,9 @@ import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
 
-from ..config import MONSTER_COUNT, FIELD_FEATURE_COUNT
+from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 from ..config.paths import DATA_DIR, MODELS_DIR
-from ..models import UnitAwareTransformer, ArknightsDataset, TOTAL_FEATURE_COUNT
+from ..models import TOTAL_FEATURE_COUNT, ArknightsDataset, UnitAwareTransformer
 from .muon import get_muon_lion_optimizers
 
 
@@ -43,20 +43,20 @@ def plot_learning_curve(train_losses, val_losses, train_accs, val_accs, save_pat
     plt.figure(figsize=(12, 5))
 
     plt.subplot(1, 2, 1)
-    plt.plot(epochs, train_losses, 'b-', label='Train Loss')
-    plt.plot(epochs, val_losses, 'r-', label='Val Loss')
-    plt.title('Training and Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
+    plt.plot(epochs, train_losses, "b-", label="Train Loss")
+    plt.plot(epochs, val_losses, "r-", label="Val Loss")
+    plt.title("Training and Validation Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
     plt.legend()
     plt.grid(True)
 
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, train_accs, 'b-', label='Train Acc')
-    plt.plot(epochs, val_accs, 'r-', label='Val Acc')
-    plt.title('Training and Validation Accuracy')
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy (%)')
+    plt.plot(epochs, train_accs, "b-", label="Train Acc")
+    plt.plot(epochs, val_accs, "r-", label="Val Acc")
+    plt.title("Training and Validation Accuracy")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy (%)")
     plt.legend()
     plt.grid(True)
 
@@ -337,15 +337,23 @@ def main():
         dropout=config["dropout"],
     ).to(device)
 
-    print(f"模型使用特征数: 怪物({MONSTER_COUNT}) + 场地({FIELD_FEATURE_COUNT}) = {total_units}")
-    print(f"模型参数数量: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
+    print(
+        f"模型使用特征数: 怪物({MONSTER_COUNT}) + 场地({FIELD_FEATURE_COUNT}) = {total_units}"
+    )
+    print(
+        f"模型参数数量: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+    )
 
     criterion = nn.MSELoss()
     muon_opt, lion_opt = get_muon_lion_optimizers(
         model, muon_lr=config["lr"], lion_lr=config["lion_lr"], weight_decay=1e-1
     )
-    scheduler_muon = optim.lr_scheduler.CosineAnnealingLR(muon_opt, T_max=config["epochs"])
-    scheduler_lion = optim.lr_scheduler.CosineAnnealingLR(lion_opt, T_max=config["epochs"])
+    scheduler_muon = optim.lr_scheduler.CosineAnnealingLR(
+        muon_opt, T_max=config["epochs"]
+    )
+    scheduler_lion = optim.lr_scheduler.CosineAnnealingLR(
+        lion_opt, T_max=config["epochs"]
+    )
 
     train_losses, val_losses, train_accs, val_accs = [], [], [], []
     best_acc, best_loss = 0, float("inf")
@@ -379,7 +387,9 @@ def main():
         print(f"最佳准确率为: {best_acc:.2f}, 最佳损失为: {best_loss:.4f}")
         torch.save(model, Path(config["save_dir"]) / "best_model_full.pth")
 
-        print(f"Train Loss: {train_loss:.4f} | Acc: {train_acc:.2f}%    Val Loss: {val_loss:.4f} | Acc: {val_acc:.2f}%")
+        print(
+            f"Train Loss: {train_loss:.4f} | Acc: {train_acc:.2f}%    Val Loss: {val_loss:.4f} | Acc: {val_acc:.2f}%"
+        )
 
         if epoch == 0:
             start_time = time.time()
@@ -390,7 +400,9 @@ def main():
             elapsed_time = current_time - start_time
             avg_epoch_time = elapsed_time / (epoch + 1)
             remaining_time = (avg_epoch_time * config["epochs"]) - elapsed_time
-            print(f"Epoch Time: {epoch_duration:.2f}s, Estimated Remaining: {remaining_time / 60:.2f}min")
+            print(
+                f"Epoch Time: {epoch_duration:.2f}s, Estimated Remaining: {remaining_time / 60:.2f}min"
+            )
             epoch_start_time = current_time
 
         print("-" * 40)
@@ -404,8 +416,13 @@ def main():
         if old_path.exists():
             old_path.rename(save_dir_path / f"best_model_{model_type}_{base_filename}")
 
-    plot_learning_curve(train_losses, val_losses, train_accs, val_accs,
-                        save_dir_path / f"learning_curve_{base_filename}.png")
+    plot_learning_curve(
+        train_losses,
+        val_losses,
+        train_accs,
+        val_accs,
+        save_dir_path / f"learning_curve_{base_filename}.png",
+    )
 
 
 if __name__ == "__main__":

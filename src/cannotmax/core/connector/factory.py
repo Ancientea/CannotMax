@@ -7,9 +7,11 @@ solving the lazy connection vs. instance pooling contradiction.
 import logging
 from enum import Enum
 from typing import Optional
+
 from win32gui import IsWindow  # Module-level import for performance
-from .base_connector import BaseConnector
+
 from .adb_connector import AdbConnector
+from .base_connector import BaseConnector
 from .pc_connector import PcConnector
 
 logger = logging.getLogger(__name__)

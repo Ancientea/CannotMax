@@ -11,14 +11,15 @@ Usage:
     conn.click((0.5, 0.5))  # MAA click or SendInput
 """
 
-import time
+import ctypes
 import logging
+import time
 from pathlib import Path
 from typing import Optional
+
 import numpy as np
-import win32gui
 import win32con
-import ctypes
+import win32gui
 
 from .base_connector import BaseConnector
 from .winrt_capture import WinRTScreenCapture
@@ -166,12 +167,12 @@ class PcConnector(BaseConnector):
             return
         maa_controller = None
         try:
-            from maa.toolkit import Toolkit
             from maa.controller import (
-                Win32Controller,
-                MaaWin32ScreencapMethodEnum,
                 MaaWin32InputMethodEnum,
+                MaaWin32ScreencapMethodEnum,
+                Win32Controller,
             )
+            from maa.toolkit import Toolkit
 
             Toolkit.init_option(str(Path.cwd()))
 

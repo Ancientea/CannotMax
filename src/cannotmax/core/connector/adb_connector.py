@@ -11,13 +11,14 @@ Usage:
     conn.click((0.5, 0.5))  # MAA click or ADB input tap
 """
 
+import logging
 import subprocess
 import time
-import logging
 from pathlib import Path
 from typing import Optional
-import numpy as np
+
 import cv2
+import numpy as np
 
 from .base_connector import BaseConnector
 
@@ -124,8 +125,8 @@ class AdbConnector(BaseConnector):
             return
         maa_controller = None
         try:
-            from maa.toolkit import Toolkit
             from maa.controller import AdbController
+            from maa.toolkit import Toolkit
 
             Toolkit.init_option(str(Path.cwd()))
 

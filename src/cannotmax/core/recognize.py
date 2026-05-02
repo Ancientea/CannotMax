@@ -14,16 +14,17 @@ Usage:
 """
 
 import logging
+from pathlib import Path
+
 import cv2
 import numpy as np
-from pathlib import Path
-from rapidocr import RapidOCR, EngineType
+from rapidocr import EngineType, RapidOCR
 
 from ..config import (
+    DEBUG_MODE,
+    MONSTER_COUNT,
     MONSTER_DATA,
     MONSTER_IMAGES,
-    MONSTER_COUNT,
-    DEBUG_MODE,
     get_recognition_zones,
 )
 from ..config.paths import TMP_IMAGES_DIR
@@ -99,7 +100,7 @@ def find_best_match(
             if max_val > confidence:
                 confidence = max_val
                 best_id = img_id
-        except Exception as e:
+        except Exception:
             logger.exception("处理参考图像 %d 时出错", img_id)
             continue
 

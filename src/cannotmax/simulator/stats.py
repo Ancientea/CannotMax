@@ -1,9 +1,10 @@
 import json
 from collections import defaultdict
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.stats import fisher_exact
-import matplotlib.pyplot as plt
 
 # 配置中文字体
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei"]

@@ -1,7 +1,8 @@
+import random
 from pathlib import Path
+
 import cv2
 import numpy as np
-import random
 
 
 def get_webm_frame(webm_path, frame_number):

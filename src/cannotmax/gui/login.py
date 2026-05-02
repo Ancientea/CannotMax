@@ -4,9 +4,10 @@ import os
 os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
 
 import logging
-import time
 import subprocess
+import time
 from pathlib import Path
+
 import cv2
 import numpy as np
 
@@ -128,9 +129,8 @@ class LoginManager:
         try:
             if is_pc:
                 # 对于PC端，关闭游戏进程
-                import win32gui
-                import win32process
                 import win32api
+                import win32process
 
                 _, process_id = win32process.GetWindowThreadProcessId(
                     self.connector.hwnd
