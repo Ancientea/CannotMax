@@ -5,8 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..config.paths import DATA_DIR
-
-OUTPUT_DIR = Path("output/data")
+from ..config.settings import get_data_package_output_dir
 
 
 def create_zip_package(output_zip_path):
@@ -21,7 +20,8 @@ def create_zip_package(output_zip_path):
     if not time_folders:
         return False
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir = get_data_package_output_dir()
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     with zipfile.ZipFile(output_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         for folder in time_folders:
@@ -42,9 +42,10 @@ def create_zip_package(output_zip_path):
 
 
 def package_data():
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir = get_data_package_output_dir()
+    output_dir.mkdir(parents=True, exist_ok=True)
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_zip = OUTPUT_DIR / f"arknights_package_{current_time}.zip"
+    output_zip = output_dir / f"arknights_package_{current_time}.zip"
 
     success = create_zip_package(str(output_zip))
     if not success:

@@ -3,6 +3,9 @@
   "control": {
     "disable_maafw": false
   },
+  "data": {
+    "package_output_dir": "output/data"
+  },
   "recognition": {
     "field_feature_count": 0,
     "ADB": {

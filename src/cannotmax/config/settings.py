@@ -13,6 +13,9 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "control": {
         "disable_maafw": False,
     },
+    "data": {
+        "package_output_dir": "output/data",
+    },
     "recognition": {
         "field_feature_count": 0,
         "ADB": {
@@ -131,3 +134,9 @@ def get_recognition_zones(mode: str) -> dict[str, Any]:
     """
     config = _load_app_config()
     return config["recognition"].get(mode, config["recognition"]["ADB"])
+
+
+def get_data_package_output_dir() -> Path:
+    """获取数据打包输出目录。"""
+    config = _load_app_config()
+    return Path(config["data"]["package_output_dir"])
