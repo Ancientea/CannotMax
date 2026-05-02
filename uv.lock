@@ -145,7 +145,7 @@ sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/3e/38/7859ff463
 
 [[package]]
 name = "cannotmax-greenvine"
-version = "2.0.0"
+version = "2.0.0a1"
 source = { editable = "." }
 dependencies = [
     { name = "maafw" },
