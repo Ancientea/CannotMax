@@ -301,7 +301,7 @@ def main():
     elif str(device) == "cpu":
         print("警告: 未检测到GPU，将在CPU上运行训练!")
 
-    num_data = preprocess_data(config["data_file"])
+    preprocess_data(config["data_file"])
 
     dataset = ArknightsDataset(
         config["data_file"],
@@ -427,3 +427,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# test lint hook
