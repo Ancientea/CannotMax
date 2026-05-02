@@ -129,22 +129,31 @@ class AutoFetch:
 
     def _init_templates(self):
         for i in range(16):
+            templates = []
+            # 标准模板
             img = cv2.imread(f"images/process/{i}.png")
             if img is not None:
-                # 使用最近邻插值缩放模板，速度最快
                 img_resized = cv2.resize(
                     img,
                     (self.MATCH_WIDTH, self.MATCH_HEIGHT * 4),
                     interpolation=cv2.INTER_NEAREST,
                 )
                 img_quarter = img_resized[self.MATCH_HEIGHT * 3 :, :]
-                self.processed_template.append(img_quarter)
-            else:
-                self.processed_template.append(None)
+                templates.append(img_quarter)
+            # PC 端模板（UI 比例不同）
+            pc_img = cv2.imread(f"images/process/pc_{i}.png")
+            if pc_img is not None:
+                pc_resized = cv2.resize(
+                    pc_img,
+                    (self.MATCH_WIDTH, self.MATCH_HEIGHT * 4),
+                    interpolation=cv2.INTER_NEAREST,
+                )
+                pc_quarter = pc_resized[self.MATCH_HEIGHT * 3 :, :]
+                templates.append(pc_quarter)
+            self.processed_template.append(templates if templates else None)
 
     def match_images(self, screenshot):
         h, w = screenshot.shape[:2]
-        # 裁剪底部 1/4 ROI
         y_start = int(h * 3 / 4)
         screenshot_quarter = screenshot[y_start:, :]
         screenshot_quarter = cv2.resize(
@@ -154,12 +163,18 @@ class AutoFetch:
         )
 
         results = []
-        for idx, template in enumerate(self.processed_template):
-            if template is None:
+        for idx, templates in enumerate(self.processed_template):
+            if templates is None:
                 continue
-            res = cv2.matchTemplate(screenshot_quarter, template, cv2.TM_CCOEFF_NORMED)
-            _, max_val, _, _ = cv2.minMaxLoc(res)
-            results.append((idx, max_val))
+            best_val = 0.0
+            for template in templates:
+                res = cv2.matchTemplate(
+                    screenshot_quarter, template, cv2.TM_CCOEFF_NORMED
+                )
+                _, max_val, _, _ = cv2.minMaxLoc(res)
+                if max_val > best_val:
+                    best_val = max_val
+            results.append((idx, best_val))
         return results
 
     def fill_data(
