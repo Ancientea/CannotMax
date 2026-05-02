@@ -118,7 +118,7 @@ from ..config import MONSTER_COUNT
   2. `ruff check --select I --fix` — import sorting
   3. `ruff format` — code formatting
 - **Packaging**: `package.py` updated for `src/cannotmax/console.py` entry point
-- **`main.spec`**: Entry points updated, excludes updated (`'cannotmax.training'`, `'cannotmax.core.predict'`), output name `cannotmax`
+- **`cannotmax.spec`**: Entry points updated, excludes updated (`'cannotmax.training'`, `'cannotmax.core.predict'`), output name `cannotmax`
 - **CI build**: `.github/workflows/build-and-release.yml` with PyInstaller + artifact upload + release on tag
 - **`pyproject.toml`**: `requires-python = ">=3.10"`, cu128/cu130 extras, ruff dev dep, pre-commit dev dep
 

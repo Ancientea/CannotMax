@@ -19,7 +19,7 @@ _configure_utf8_stdio()
 # 配置区（用户可根据需要修改这些参数）
 CONFIG = {
     "venv_dir": ".venv",  # 虚拟环境目录
-    "output_name": "cannotmax",  # PyInstaller 输出目录名（与 main.spec 中 EXE name 一致）
+    "output_name": "cannotmax",  # PyInstaller 输出目录名（与 cannotmax.spec 中 EXE name 一致）
     "source_script": "src/cannotmax/console.py",  # 主程序文件路径
     "icon_file": r"ico/icon_64x64.ico",  # 图标文件路径
     "output_dir": "output",  # 输出目录
@@ -60,7 +60,7 @@ def build_exe():
         CONFIG["output_dir"],
         "--workpath",
         "build",
-        "main.spec",
+        "cannotmax.spec",
     ]
 
     try:

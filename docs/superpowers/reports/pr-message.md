@@ -43,7 +43,7 @@ Massive architectural refactoring — 143 commits over 4 months — converting C
 
 ### DevOps
 - Pre-commit hooks: ruff lint, import sorting, formatting
-- `package.py` + `main.spec` updated for refactored entry points
+- `package.py` + `cannotmax.spec` updated for refactored entry points
 - CI build workflow with PyInstaller + artifact upload + GitHub release on tag
 - `monster_greenvine.csv`: 78 monsters (from main's 60)
 

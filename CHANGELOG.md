@@ -48,7 +48,7 @@
 - **预提交钩子**: 3 个本地钩子 — ruff 代码检查、导入排序、格式化
 - **CI 测试工作流**: Windows 运行器，`uv run pytest tests/ -v`
 - **CI 构建工作流**: PyInstaller 打包 + 制品上传 + 基于标签的 GitHub Release
-- **打包脚本**: `package.py` 和 `main.spec` 已针对重构后的入口点更新
+- **打包脚本**: `package.py` 和 `cannotmax.spec` 已针对重构后的入口点更新
 
 ---
 
