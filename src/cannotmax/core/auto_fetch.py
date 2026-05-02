@@ -650,8 +650,11 @@ class AutoFetch:
                         f"匹配到状态: {self.last_state.name} -> {current_state.name}, score:{best_score:.4f}"
                     )
             else:
-                # logger.info("状态机匹配置信度过低: idx:%d, score:%.4f", best_idx, best_score)
-                pass
+                if best_score > 0.3:
+                    logger.debug(
+                        f"状态匹配置信度过低: idx={best_idx}, score={best_score:.4f} "
+                        f"(top3: {results[:3]})"
+                    )
 
         # 处理状态发生变化时的逻辑
         if current_state != self.last_state:
