@@ -75,8 +75,30 @@ def pipelines_command(args):
     _run_dev_script("pipelines", args.script)
 
 
+def _ensure_admin():
+    """Ensure the process is running with administrator privileges for PC mode."""
+    import ctypes
+
+    try:
+        if ctypes.windll.shell32.IsUserAnAdmin():
+            return
+    except Exception:
+        return
+    ctypes.windll.shell32.ShellExecuteW(
+        None,
+        "runas",
+        sys.executable,
+        " ".join([f'"{arg}"' for arg in sys.argv]),
+        None,
+        1,
+    )
+    sys.exit(0)
+
+
 def main():
     """Main CLI entry point."""
+    _ensure_admin()
+
     parser = argparse.ArgumentParser(
         prog="cannotmax",
         description="CannotMax - Arknights battle predictor",

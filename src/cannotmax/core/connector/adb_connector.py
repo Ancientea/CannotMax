@@ -303,6 +303,23 @@ class AdbConnector(BaseConnector):
                 self._maa_controller = None
             self._maa_available = False
             self._is_connected = False
+            self._stop_adb_server()
             logger.info(f"ADB disconnected: {self._device_serial}")
         except Exception as e:
             logger.warning(f"ADB disconnect error: {e}")
+
+    def _stop_adb_server(self) -> None:
+        """Kill ADB server to clean up stale connections."""
+        if not self._adb_path.exists():
+            return
+        try:
+            subprocess.run(
+                [str(self._adb_path), "kill-server"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            logger.info("ADB server stopped")
+        except Exception as e:
+            logger.warning(f"Failed to stop ADB server: {e}")
