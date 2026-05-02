@@ -1082,13 +1082,6 @@ class ArknightsApp(QMainWindow):
 
     def toggle_auto_fetch(self):
         _ = QtCore.QMutexLocker(self._auto_fetch_mutex)
-        if self.current_capture_mode != "ADB":
-            QMessageBox.information(
-                self,
-                "提示",
-                "暂未支持PC端点击，当前仅支持ADB(模拟器)模式自动获取",
-            )
-            return
         if not (hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running):
             self.auto_fetch = auto_fetch.AutoFetch(
                 self.connector,

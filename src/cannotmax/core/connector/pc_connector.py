@@ -148,7 +148,7 @@ class PcConnector(BaseConnector):
                 if attempt < max_retries - 1:
                     time.sleep(0.5)  # 500ms delay between retries
             except Exception as e:
-                logger.warning(
+                logger.info(
                     f"Connection attempt {attempt + 1}/{max_retries} failed: {e}"
                 )
                 if attempt < max_retries - 1:
@@ -261,7 +261,6 @@ class PcConnector(BaseConnector):
         )
 
         if self._maa_available and self._maa_controller:
-            logger.warning("PC connector does not support game interaction")
             self._click_maa(x_coord, y_coord)
         else:
             self._click_sendinput(x_coord, y_coord)
