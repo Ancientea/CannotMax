@@ -182,7 +182,7 @@ class LoginManager:
                                         f"从注册表获取游戏路径并启动: {game_path}",
                                     )
                                     break
-                        except:
+                        except Exception:
                             pass
                     else:
                         # 如果从注册表获取失败，使用默认路径
@@ -195,7 +195,7 @@ class LoginManager:
                         else:
                             self._log(logging.ERROR, "无法找到游戏可执行文件")
                             return False
-                except:
+                except Exception:
                     # 如果注册表操作失败，使用默认路径
                     game_path = Path("C:\\Program Files\\Arknights\\Arknights.exe")
                     if game_path.exists():
@@ -410,10 +410,6 @@ class LoginManager:
             if not check_stop():
                 return False
 
-            # 每隔3秒进行一次检测，避免频繁截图和识别抢占CPU（特别是多开时）
-            if not sleep_with_check(3):
-                return False
-
             screenshot = self.connector.capture_screenshot()
             if screenshot is not None:
                 comp_matched, _ = self.match_template(
@@ -436,6 +432,10 @@ class LoginManager:
                         return False
 
                     break
+
+            # 每隔3秒进行一次检测，避免频繁截图和识别抢占CPU（特别是多开时）
+            if not sleep_with_check(3):
+                return False
 
         # 寻找争锋频道入口，最多等待30秒
         self._log(logging.INFO, "寻找争锋频道入口")
@@ -488,15 +488,13 @@ class LoginManager:
                         )
                         break  # 发现并点击了一个按钮后，跳出内层循环，避免同一张截图重复点击
 
-            # 每次检测完等待2秒
-            if not sleep_with_check(2):
-                return False
-                if self._check_and_click_competition_page(
-                    screenshot, sleep_with_check, check_stop
-                ):
-                    return True
+            # 每次检测完检查是否出现争锋频道入口
+            if self._check_and_click_competition_page(
+                screenshot, sleep_with_check, check_stop
+            ):
+                return True
 
-            # 每次轮询间隔2秒，避免频繁截图造成性能浪费
+            # 每次检测完等待2秒
             if not sleep_with_check(2):
                 return False
 

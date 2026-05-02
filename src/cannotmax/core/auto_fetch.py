@@ -285,11 +285,6 @@ class AutoFetch:
             if isinstance(x, (int, float)) and np.isnan(x):
                 data_row[i] = -1
 
-        # 保存数据
-        start_time = datetime.datetime.fromtimestamp(self.start_time).strftime(
-            r"%Y_%m_%d__%H_%M_%S"
-        )
-
         if DEBUG_MODE:  # 如果处于debug模式，保存人工审核图片到本地
             data_row.append(image_name)
 
@@ -596,14 +591,13 @@ class AutoFetch:
             (0.1640, 0.8833),  # 左礼物
             (0.4979, 0.6324),  # 本轮观望
         ]
-        timea = time.time()
         screenshot = self.connector.capture_screenshot()
         if screenshot is None:
             self._log(logging.ERROR, "截图失败，尝试自动登录")
 
             # 使用 LoginManager 的自动登录（带重启重试）
             if not self.login_manager.auto_login_with_restart(
-                lambda: self.auto_fetch_running
+                stop_callback=lambda: self.auto_fetch_running
             ):
                 self._log(logging.ERROR, "自动登录失败，无法继续操作")
                 return
@@ -833,7 +827,6 @@ class AutoFetch:
                 # 检测一次间隔时间——————————————————————————————————
                 time.sleep(0.2)
             except Exception as e:
-                logger.exception(f"自动获取数据出错:\n{e}")
                 self._log(logging.ERROR, f"自动获取数据出错:\n{e}")
                 break
 
