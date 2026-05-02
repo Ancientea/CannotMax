@@ -47,6 +47,34 @@ def multi_instance_command(args):
     _sys.exit(app.exec())
 
 
+def _run_dev_script(category: str, script_name: str):
+    """Run a development script from tools/ or pipelines/ via subprocess."""
+    script_path = Path(__file__).parent / category / f"{script_name}.py"
+    if not script_path.exists():
+        available = [
+            p.stem
+            for p in (Path(__file__).parent / category).glob("*.py")
+            if p.stem != "__init__"
+        ]
+        print(f"Unknown {category} script: {script_name}")
+        print(f"Available: {', '.join(sorted(available))}")
+        sys.exit(1)
+    import subprocess
+
+    result = subprocess.run([sys.executable, str(script_path)])
+    sys.exit(result.returncode)
+
+
+def tools_command(args):
+    """Run a development tool script."""
+    _run_dev_script("tools", args.script)
+
+
+def pipelines_command(args):
+    """Run a data pipeline script."""
+    _run_dev_script("pipelines", args.script)
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -83,6 +111,18 @@ def main():
     # Multi-instance command
     multi_parser = subparsers.add_parser("multi", help="Launch multi-instance manager")
     multi_parser.set_defaults(func=multi_instance_command)
+
+    # Tools command (dev only)
+    tools_parser = subparsers.add_parser("tools", help="Run a development tool script")
+    tools_parser.add_argument("script", help="Tool script name (without .py)")
+    tools_parser.set_defaults(func=tools_command)
+
+    # Pipelines command (dev only)
+    pipelines_parser = subparsers.add_parser(
+        "pipelines", help="Run a data pipeline script"
+    )
+    pipelines_parser.add_argument("script", help="Pipeline script name (without .py)")
+    pipelines_parser.set_defaults(func=pipelines_command)
 
     args = parser.parse_args()
 
