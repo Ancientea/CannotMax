@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..config.paths import COMPRESSED_DIR, DATA_DIR, PROJECT_ROOT
+from cannotmax.config.paths import COMPRESSED_DIR, DATA_DIR, PROJECT_ROOT
 
 # 路径配置
 TARGET_CSV_PATH = DATA_DIR / "arknights.csv"

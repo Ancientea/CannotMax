@@ -11,7 +11,7 @@ def test_core_modules_import():
     """Test that core modules can be imported without errors."""
     # Test predict module
     try:
-        from src.cannotmax.core.predict import CannotModel
+        from cannotmax.core.predict import CannotModel
 
         assert CannotModel is not None
     except Exception as e:
@@ -19,7 +19,7 @@ def test_core_modules_import():
 
     # Test recognize module
     try:
-        from src.cannotmax.core.recognize import RecognizeMonster
+        from cannotmax.core.recognize import RecognizeMonster
 
         assert RecognizeMonster is not None
     except Exception as e:
@@ -27,7 +27,7 @@ def test_core_modules_import():
 
     # Test connector module
     try:
-        from src.cannotmax.core.connector.adb_connector import AdbConnector
+        from cannotmax.core.connector.adb_connector import AdbConnector
 
         # AdbConnector requires device_serial parameter, just test import
         assert AdbConnector is not None
@@ -38,7 +38,7 @@ def test_core_modules_import():
 def test_config_loaded():
     """Test that config data loads correctly."""
     try:
-        from src.cannotmax.config import MONSTER_COUNT, MONSTER_DATA
+        from cannotmax.config import MONSTER_COUNT, MONSTER_DATA
 
         assert len(MONSTER_DATA) > 0
         assert MONSTER_COUNT > 0

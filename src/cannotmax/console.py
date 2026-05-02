@@ -9,14 +9,14 @@ from pathlib import Path
 
 def train_command(args):
     """Train the model."""
-    from .training.trainer import main as train_main
+    from cannotmax.training.trainer import main as train_main
 
     train_main()
 
 
 def eval_command(args):
     """Evaluate the model."""
-    from .training.evaluator import main as eval_main
+    from cannotmax.training.evaluator import main as eval_main
 
     eval_main()
 
@@ -75,7 +75,7 @@ def main():
         from PyQt6.QtWidgets import QApplication
 
         app = QApplication(_sys.argv)  # PyQt6 默认启用 High DPI
-        from .gui.main_window import ArknightsApp
+        from cannotmax.gui.main_window import ArknightsApp
 
         window = ArknightsApp()
         window.show()

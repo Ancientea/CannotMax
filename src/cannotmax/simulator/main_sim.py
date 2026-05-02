@@ -1,14 +1,16 @@
 import copy
-import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
+import json
 import logging
-import sys  # Import sys for stdin
+import sys
 import tkinter as tk
 from enum import Enum, auto
+from pathlib import Path
 from tkinter import messagebox
 
 from PIL import Image, ImageTk
 
-from ..config import MONSTER_COUNT
+from cannotmax.config import MONSTER_COUNT
+
 from .battle_field import Battlefield
 from .monsters import AttackState, Monster
 from .unit import Unit
@@ -563,8 +565,8 @@ class SandboxSimulator:
             )
 
     def on_mouse_down(self, event):
-        grid_x = event.x / self.cell_size
-        grid_y = event.y / self.cell_size
+        event.x / self.cell_size
+        event.y / self.cell_size
 
         if self.state_machine.state in [AppState.PAUSED, AppState.SETUP]:
             clicked_monster_obj = None
@@ -586,22 +588,6 @@ class SandboxSimulator:
             if clicked_monster_obj:
                 self.selected_monster_for_drag = clicked_monster_obj
                 return
-
-    def on_mouse_drag(self, event):
-        if self.selected_monster_for_drag and self.state_machine.state in [
-            AppState.PAUSED,
-            AppState.SETUP,
-        ]:
-            new_grid_x = event.x / self.cell_size
-            new_grid_y = event.y / self.cell_size
-            new_grid_x = max(0.25, min(new_grid_x, self.grid_width - 0.25))
-            new_grid_y = max(0.25, min(new_grid_y, self.grid_height - 0.25))
-            self.selected_monster_for_drag.position.x = new_grid_x
-            self.selected_monster_for_drag.position.y = new_grid_y
-            self.selected_monster_for_drag.target = (
-                self.selected_monster_for_drag.find_target()
-            )
-            self.refresh_canvas_display()
 
     def on_mouse_up(self, event):
         if self.selected_monster_for_drag:

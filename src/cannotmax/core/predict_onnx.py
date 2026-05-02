@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 import onnxruntime as ort
 
-from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT
-from ..config.paths import MODELS_DIR
+from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotmax.config.paths import MODELS_DIR
 
 logger = logging.getLogger(__name__)
 

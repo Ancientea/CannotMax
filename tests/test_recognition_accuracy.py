@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
-from src.cannotmax.core.recognize import RecognizeMonster, ROINotSelectedError
+from cannotmax.core.recognize import RecognizeMonster, ROINotSelectedError
 
 _DEFAULT_CROP_RATIO = ((0.2464, 0.8410), (0.7542, 0.9510))
 

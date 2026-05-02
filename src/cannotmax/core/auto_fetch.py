@@ -29,9 +29,9 @@ import cv2
 import numpy as np
 
 # loadData removed - use core.connector.AdbConnector/PcConnector
-from ..config import DEBUG_MODE, FIELD_FEATURE_COUNT, MONSTER_COUNT
-from ..config.paths import DATA_DIR
-from ..gui import LoginManager
+from cannotmax.config import DEBUG_MODE, FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotmax.config.paths import DATA_DIR
+from cannotmax.gui import LoginManager
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

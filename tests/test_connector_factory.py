@@ -6,10 +6,10 @@ and automatic rebuild logic using Mock to avoid real device connections.
 
 from unittest.mock import Mock, patch
 
-from src.cannotmax.core.connector.base_connector import BaseConnector
+from cannotmax.core.connector.base_connector import BaseConnector
 
 # Import under test
-from src.cannotmax.core.connector.factory import ConnectorFactory, ConnectorState
+from cannotmax.core.connector.factory import ConnectorFactory, ConnectorState
 
 
 class TestConnectorStateTransitions:
@@ -212,7 +212,7 @@ class TestLocalUsabilityCheck:
 
     def test_adb_check_uses_is_alive(self):
         """AdbConnector local check should use controller.is_alive()."""
-        from src.cannotmax.core.connector.adb_connector import AdbConnector
+        from cannotmax.core.connector.adb_connector import AdbConnector
 
         mock_controller = Mock()
         mock_controller.is_alive.return_value = True
@@ -248,7 +248,7 @@ class TestLocalUsabilityCheck:
 
     def test_pc_check_uses_win32gui_iswindow(self):
         """PcConnector local check should use win32gui.IsWindow()."""
-        from src.cannotmax.core.connector.pc_connector import PcConnector
+        from cannotmax.core.connector.pc_connector import PcConnector
 
         # Patch the module-level import in factory
         with patch("src.cannotmax.core.connector.factory.IsWindow") as mock_iswindow:
@@ -311,7 +311,7 @@ class TestPoolManagement:
             mock_conn = Mock(spec=BaseConnector)
             MockAdb.return_value = mock_conn
 
-            conn = self.factory.get_connector("ADB", adb_serial="127.0.0.1:5555")
+            self.factory.get_connector("ADB", adb_serial="127.0.0.1:5555")
             self.factory.mark_invalid("ADB")
 
             _, _, state = self.factory._pool["ADB"]
@@ -323,7 +323,7 @@ class TestPoolManagement:
             mock_conn = Mock(spec=BaseConnector)
             MockAdb.return_value = mock_conn
 
-            conn = self.factory.get_connector("ADB", adb_serial="127.0.0.1:5555")
+            self.factory.get_connector("ADB", adb_serial="127.0.0.1:5555")
 
             # IDLE → VALID
             self.factory.mark_valid("ADB")

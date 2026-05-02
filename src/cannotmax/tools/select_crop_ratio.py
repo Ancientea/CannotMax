@@ -10,7 +10,7 @@ import sys
 import cv2
 import numpy as np
 
-from ..utils.find_monster_zone import find_monster_zone
+from cannotmax.utils.find_monster_zone import find_monster_zone
 
 
 def select_region(image):

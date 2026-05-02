@@ -3,7 +3,7 @@
 import pytest
 from PyQt6.QtWidgets import QApplication
 
-from src.cannotmax.gui.input_panel_ui import InputPanelUI
+from cannotmax.gui.input_panel_ui import InputPanelUI
 
 
 @pytest.fixture(scope="session")

@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT
-from ..config.paths import DATA_DIR
+from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotmax.config.paths import DATA_DIR
 
 
 def cosine_similarity_manual(a, b):

@@ -6,8 +6,8 @@ import cv2
 import numpy as np
 import pytest
 
-from src.cannotmax.core.recognize import RecognizeMonster
-from src.cannotmax.utils.find_monster_zone import find_monster_zone
+from cannotmax.core.recognize import RecognizeMonster
+from cannotmax.utils.find_monster_zone import find_monster_zone
 
 
 def _load_test_image(filename: str) -> np.ndarray | None:

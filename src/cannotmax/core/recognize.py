@@ -20,14 +20,14 @@ import cv2
 import numpy as np
 from rapidocr import EngineType, RapidOCR
 
-from ..config import (
+from cannotmax.config import (
     DEBUG_MODE,
     MONSTER_COUNT,
     MONSTER_DATA,
     MONSTER_IMAGES,
     get_recognition_zones,
 )
-from ..config.paths import TMP_IMAGES_DIR
+from cannotmax.config.paths import TMP_IMAGES_DIR
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -229,7 +229,7 @@ class RecognizeMonster:
         Returns:
             List of 6 recognition results
         """
-        from ..utils import find_monster_zone
+        from cannotmax.utils import find_monster_zone
 
         zones = get_recognition_zones(mode)
         avatar_regs = (

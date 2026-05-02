@@ -8,7 +8,7 @@ import onnxruntime as ort
 import pandas as pd
 from PIL import Image
 
-from ..config.paths import CONFIG_DIR, DATA_DIR, MODELS_DIR
+from cannotmax.config.paths import CONFIG_DIR, DATA_DIR, MODELS_DIR
 
 # ==============================================================================
 # SECTION 1: 游戏画面元素识别模块 (无变更)
@@ -120,8 +120,8 @@ def clean_data(
     data["original_index"] = data.index + 1
     # --- 原始清洗逻辑部分 (无变更) ---
     features = data.iloc[:, :-3]
-    labels = data.iloc[:, -3]
-    pic_names = data.iloc[:, -2]
+    data.iloc[:, -3]
+    data.iloc[:, -2]
     print(f"原始特征总数: {features.shape[1]}")
     # ... (其余清洗逻辑与原脚本完全相同)
     last_row_features = features.iloc[-1].values

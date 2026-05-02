@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.cannotmax.core.auto_fetch import AutoFetch, GameState
+from cannotmax.core.auto_fetch import AutoFetch, GameState
 from tests.mock_connector import MockConnector
 
 

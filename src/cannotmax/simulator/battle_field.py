@@ -7,21 +7,19 @@ import numpy as np
 
 from .vector2d import FastVector
 
-logger = logging.getLogger(__name__)
-
 if TYPE_CHECKING:
     from .monsters import Monster
 
 from .monsters import MonsterFactory
+from .projectiles import ProjectileManager
 from .utils import VIRTUAL_TIME_DELTA, Faction, SpatialHash
 from .zone import PoisonZone
+
+logger = logging.getLogger(__name__)
 
 # 场景参数
 MAP_SIZE = np.array([13, 9])  # 场景宽度（单位：格）
 SPAWN_AREA = 2  # 阵营出生区域宽度
-
-
-from .projectiles import ProjectileManager
 
 
 class Battlefield:
@@ -204,7 +202,7 @@ class Battlefield:
                 time.sleep(1)
 
             result = self.run_one_frame()
-            if result != None:
+            if result is not None:
                 return result
 
     def danger_zone_size(self):

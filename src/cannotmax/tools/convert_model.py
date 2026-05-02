@@ -4,9 +4,9 @@ sys.path.append(".")
 
 import numpy as np
 
-from ..config import MONSTER_COUNT
-from ..config.paths import MODELS_DIR
-from ..core import predict, predict_onnx
+from cannotmax.config import MONSTER_COUNT
+from cannotmax.config.paths import MODELS_DIR
+from cannotmax.core import predict, predict_onnx
 
 model_path = MODELS_DIR / "predictor" / "best_model_full.pth"
 

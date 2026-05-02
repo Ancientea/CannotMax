@@ -20,8 +20,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT, MONSTER_DATA
-from ..config.paths import CONFIG_DIR
+from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT, MONSTER_DATA
+from cannotmax.config.paths import CONFIG_DIR
 
 logger = logging.getLogger(__name__)
 

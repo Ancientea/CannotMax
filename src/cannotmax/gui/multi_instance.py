@@ -34,11 +34,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..config import FIELD_FEATURE_COUNT
-from ..core import auto_fetch
-from ..core.auto_fetch import GameState
-from ..core.connector.adb_connector import AdbConnector
-from ..pipelines import data_package
+from cannotmax.config import FIELD_FEATURE_COUNT
+from cannotmax.core import auto_fetch
+from cannotmax.core.auto_fetch import GameState
+from cannotmax.core.connector.adb_connector import AdbConnector
+from cannotmax.pipelines import data_package
+
 from .login import LoginManager
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -139,11 +140,11 @@ def get_cannot_model():
     if _cannot_model is None:
         logger.info("首次初始化 CannotModel...")
         try:
-            from ..core.predict import CannotModel
+            from cannotmax.core.predict import CannotModel
 
             logger.info("Using PyTorch model for predictions.")
         except Exception:
-            from ..core.predict_onnx import CannotModel
+            from cannotmax.core.predict_onnx import CannotModel
 
             logger.info("Using ONNX model for predictions.")
 
@@ -157,7 +158,7 @@ def get_recognizer():
     global _recognizer
     if _recognizer is None:
         logger.info("首次初始化 RecognizeMonster...")
-        from ..core.recognize import RecognizeMonster
+        from cannotmax.core.recognize import RecognizeMonster
 
         _recognizer = RecognizeMonster()
         logger.info("RecognizeMonster 初始化完成")
@@ -169,7 +170,7 @@ def get_field_recognizer():
     global _field_recognizer
     if _field_recognizer is None:
         logger.info("首次初始化 FieldRecognizer...")
-        from ..core.field_recognition import FieldRecognizer
+        from cannotmax.core.field_recognition import FieldRecognizer
 
         _field_recognizer = FieldRecognizer()
         logger.info("FieldRecognizer 初始化完成")
@@ -384,7 +385,7 @@ class MultiInstanceManager(QMainWindow):
                 raw = Path("multi_ports.txt").read_text().strip()
                 ports = self._parse_ports(raw)
                 self.ports_input.setText(", ".join(ports))
-        except:
+        except Exception:
             pass
         ports_layout.addWidget(self.ports_input)
         layout.addLayout(ports_layout)

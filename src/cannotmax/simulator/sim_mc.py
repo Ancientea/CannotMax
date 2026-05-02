@@ -1,19 +1,21 @@
 import copy
-import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
+import json
 import os
 import queue
-import random  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
-import sys  # Import sys for stdin
+import random
+import sys
 import threading
 import tkinter as tk
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum, auto
+from pathlib import Path
 
 # from tkinter import messagebox # messagebox 已被自定义提示替代，可以注释或移除
 from PIL import Image, ImageTk
 
-from ..config import MONSTER_COUNT
+from cannotmax.config import MONSTER_COUNT
+
 from .battle_field import Battlefield
 
 
@@ -150,7 +152,7 @@ class SandboxSimulator:
 
     def update_ui_state(self):
         """根据当前状态更新所有控件状态"""
-        states = self.state_machine.get_control_states()
+        self.state_machine.get_control_states()
 
     def hide_window(self):
         if self.state_machine.state == AppState.SIMULATING:
@@ -420,7 +422,6 @@ class SandboxSimulator:
             return
 
         # 合并已完成任务的结果
-        merged = False
         still_pending = []
         for fut in self._mc_futures:
             if fut.done():
@@ -431,7 +432,6 @@ class SandboxSimulator:
                 with self.mc_lock:
                     self._mc_counts.update(local_counter)
                     self._mc_total_done += done
-                merged = True
             else:
                 still_pending.append(fut)
         self._mc_futures = still_pending

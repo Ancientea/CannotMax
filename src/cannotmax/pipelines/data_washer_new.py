@@ -350,7 +350,6 @@ def find_where_from(easydata, floder_path):
     for c in csvlist:
         print(f"正在检查：{c}…………………………")
         lines_num = MONSTER_NUM * 2
-        datafull = []
         row_id = 0
         with open(c, "r") as file:
             csv_reader = csv.reader(file)
@@ -471,7 +470,7 @@ def is_list_true_np(fulllist):
 
     # Split the input into left and right parts
     fulllist_np = np.array([i[:112] for i in fulllist], dtype=np.float64)
-    N = fulllist_np.shape[0]
+    fulllist_np.shape[0]
     left_part = fulllist_np[:, :56]
     right_part = fulllist_np[:, 56:112]
 
@@ -822,12 +821,12 @@ def process_floder(
     global black_list_rows
     full_data_list = []
     csvlist = find_csv_files(flodername)
-    for csv in csvlist:
-        print(csv)
-    for csv in csvlist:
-        print(f"正在处理：{csv}…………………………")
+    for csv_file in csvlist:
+        print(csv_file)
+    for csv_file in csvlist:
+        print(f"正在处理：{csv_file}…………………………")
         black_listed, newdata, dl, wrong_type_list = process_full(
-            csv,
+            csv_file,
             do_remove_duplicate_subsequences,
             delete_no_time,
             open_black_list,
@@ -920,10 +919,10 @@ def process_file(
 
 # process_floder(r'D:\Backup\Downloads\arcdata','arcdata_fullaa.csv','arcdata_full_washed_plus.csv')
 
-import queue
-import threading
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+import queue  # noqa: E402
+import threading  # noqa: E402
+import tkinter as tk  # noqa: E402
+from tkinter import filedialog, messagebox, ttk  # noqa: E402
 
 
 class RedirectText(object):

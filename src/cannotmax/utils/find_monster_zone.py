@@ -98,7 +98,7 @@ def _apply_quasi_gamma(gray):
 
 def _apply_quasi_gamma_spare(gray):
     """备用类伽马变换（常数映射）。"""
-    c = np.arange(256.0 / 255, step=1.0 / 255)
+    np.arange(256.0 / 255, step=1.0 / 255)
     table = np.uint8(np.log(51) * 64.9)
     return cv2.LUT(gray, table)
 

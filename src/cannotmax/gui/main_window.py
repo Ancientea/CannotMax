@@ -28,19 +28,20 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..config import MONSTER_COUNT, MONSTER_DATA
-from ..config.paths import IMAGES_DIR
-from ..core import auto_fetch, recognize
-from ..core.connector.factory import ConnectorFactory, ConnectorState
-from ..core.connector.maa_registry import (
+from cannotmax.config import MONSTER_COUNT, MONSTER_DATA
+from cannotmax.config.paths import IMAGES_DIR
+from cannotmax.core import auto_fetch, recognize
+from cannotmax.core.connector.factory import ConnectorFactory, ConnectorState
+from cannotmax.core.connector.maa_registry import (
     ConnectionTypeRegistry,
     InputMethodRegistry,
 )
-from ..core.recognize import ROINotSelectedError
-from ..core.roi_selector import ROISelector
-from ..pipelines import data_package
-from ..utils import similar_history_match
-from ..utils.specialmonster import SpecialMonsterHandler
+from cannotmax.core.recognize import ROINotSelectedError
+from cannotmax.core.roi_selector import ROISelector
+from cannotmax.pipelines import data_package
+from cannotmax.utils import similar_history_match
+from cannotmax.utils.specialmonster import SpecialMonsterHandler
+
 from . import HistoryMatchUI, InputPanelUI
 from .dark_mode_style_fix import DarkModeStyleFix
 from .dialogs.window_picker import WindowPickerDialog
@@ -58,11 +59,11 @@ logger.setLevel(logging.DEBUG)
 
 
 try:
-    from ..core import CannotModel
+    from cannotmax.core import CannotModel
 
     logger.info("Using PyTorch model for predictions.")
 except ImportError:
-    from ..core.predict_onnx import CannotModel
+    from cannotmax.core.predict_onnx import CannotModel
 
     logger.info("Using ONNX model for predictions.")
 
@@ -735,7 +736,7 @@ class ArknightsApp(QMainWindow):
                     hint = f"已切换至窗口：{sel['window_name']}"
                 else:
                     self._win_window_name = ""
-                    idx = max(1, sel["monitor_index"])
+                    max(1, sel["monitor_index"])
                     hint = f"已切换至整屏：显示器 {sel['monitor_index']}"
 
                 self.connector_factory.mark_invalid("WIN")
@@ -1129,7 +1130,7 @@ class ArknightsApp(QMainWindow):
         try:
             # Only use AdbConnector for device list (doesn't require connection)
             if self.connector is not None:
-                from ..core.connector.adb_connector import AdbConnector
+                from cannotmax.core.connector.adb_connector import AdbConnector
 
                 if isinstance(self.connector, AdbConnector):
                     devices = self.connector.get_device_list()

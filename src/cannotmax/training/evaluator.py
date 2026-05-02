@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from ..config.paths import DATA_DIR, MODELS_DIR
-from ..models import ArknightsDataset, UnitAwareTransformer
+from cannotmax.config.paths import DATA_DIR, MODELS_DIR
+from cannotmax.models import ArknightsDataset, UnitAwareTransformer
 
 
 def evaluate(model, data_loader, criterion, device):

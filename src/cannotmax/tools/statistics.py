@@ -3,10 +3,8 @@ from math import sqrt
 
 import pandas as pd
 
-from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT, MONSTER_DATA
-from ..config.paths import CONFIG_DIR
-
-FIELD_FEATURE_COUNT = 0
+from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT, MONSTER_DATA
+from cannotmax.config.paths import CONFIG_DIR
 
 
 def load_data():
@@ -140,7 +138,7 @@ def analyze_monster_combinations(df):
 
     # 计算最佳配合
     results = []
-    total_battles = len(df)
+    len(df)
 
     for (x, y), stats in pair_stats.items():
         if stats["co_occurrences"] < 10:  # 过滤低频组合
@@ -873,7 +871,7 @@ def generate_comprehensive_report():
     combinations = analyze_monster_combinations(df)
 
     print("正在分析被克制关系...")
-    countered = find_countered_monsters(df)
+    find_countered_monsters(df)
 
     if FIELD_FEATURE_COUNT > 0:
         print("正在分析地形效果...")

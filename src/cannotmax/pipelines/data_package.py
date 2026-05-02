@@ -2,10 +2,9 @@ import re
 import shutil
 import zipfile
 from datetime import datetime
-from pathlib import Path
 
-from ..config.paths import DATA_DIR
-from ..config.settings import get_data_package_output_dir
+from cannotmax.config.paths import DATA_DIR
+from cannotmax.config.settings import get_data_package_output_dir
 
 
 def create_zip_package(output_zip_path):

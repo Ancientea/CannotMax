@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PIL import Image, ImageTk
 
-from ..config.paths import DATA_DIR, IMAGES_DIR, PROJECT_ROOT
+from cannotmax.config.paths import DATA_DIR, IMAGES_DIR, PROJECT_ROOT
 
 
 class ArknightsApp:

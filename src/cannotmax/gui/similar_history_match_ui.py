@@ -13,8 +13,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..config import MONSTER_COUNT, MONSTER_DATA
-from ..utils import HistoryMatch
+from cannotmax.config import MONSTER_COUNT, MONSTER_DATA
+from cannotmax.utils import HistoryMatch
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +290,7 @@ class HistoryMatchUI(QFrame):
                             Qt.TransformationMode.SmoothTransformation,
                         )
                         img_label.setPixmap(pixmap)
-                except:
+                except Exception:
                     pass
 
                 # 数量标签

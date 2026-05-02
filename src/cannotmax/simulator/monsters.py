@@ -9,7 +9,7 @@ from .projectiles import AOE炸弹, AOE炸弹锁定, AOEType
 from .vector2d import FastVector
 
 if TYPE_CHECKING:
-    from battle_field import Battlefield
+    from .battle_field import Battlefield
 
 from .elemental import ElementAccumulator, ElementType
 from .utils import (
@@ -627,7 +627,6 @@ class HighEnergySlug(Monster):
 
     def on_death(self):
         # 实现自爆逻辑
-        explosion_radius = 1.25
         debug_print(f"{self.name} 即将自爆！")
 
         self.battlefield.projectiles_manager.spawn_projectile(
@@ -979,7 +978,7 @@ class 矿脉守卫(Monster):
         self.aggro = 1
 
     def on_hit(self, attacker, damage):
-        if attacker == None:
+        if attacker is None:
             return
         damage = self.calculate_damage(attacker, 300)
         if self.apply_damage_to_target(attacker, damage):
@@ -1500,13 +1499,13 @@ class 萨克斯(Monster):
                     smallest_left_target = m
 
         targets = []
-        if smallest_up_target != None:
+        if smallest_up_target is not None:
             targets.append(smallest_up_target)
-        if smallest_down_target != None:
+        if smallest_down_target is not None:
             targets.append(smallest_down_target)
-        if smallest_left_target != None:
+        if smallest_left_target is not None:
             targets.append(smallest_left_target)
-        if smallest_right_target != None:
+        if smallest_right_target is not None:
             targets.append(smallest_right_target)
         # 返回最近的敌人列表
         return targets

@@ -21,8 +21,8 @@ from typing import List, Optional, Tuple
 import numpy as np
 import torch
 
-from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT
-from ..config.paths import MODELS_DIR
+from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotmax.config.paths import MODELS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +118,16 @@ class CannotModel:
                 latest_model_path = valid_models[0][2]
                 logger.info(f"Found latest model: {latest_model_path}")
                 return latest_model_path
-            else:
-                logger.error(f"No models with the expected name format found in {path}")
+
+            # Fallback: pick any .pth file (e.g. initial checkpoint without training stats)
+            if models:
+                fallback = sorted(models, key=lambda p: p.stat().st_mtime, reverse=True)
+                logger.warning(
+                    f"No pattern-matching model found, using fallback: {fallback[0].name}"
+                )
+                return fallback[0]
+
+            logger.error(f"No model files (.pth) found in {path}")
 
         elif path.is_file():
             logger.info(f"Using specified model file: {path}")
@@ -133,7 +141,7 @@ class CannotModel:
         import sys
 
         # 将 UnitAwareTransformer 导入到 __main__ 模块，解决 torch.load 反序列化问题
-        from ..models import UnitAwareTransformer
+        from cannotmax.models import UnitAwareTransformer
 
         sys.modules["__main__"].UnitAwareTransformer = UnitAwareTransformer
 

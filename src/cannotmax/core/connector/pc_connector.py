@@ -86,7 +86,7 @@ class PcConnector(BaseConnector):
             logger.error("QApplication not available for window selection")
             return None
 
-        from ...gui.dialogs.window_picker import WindowPickerDialog
+        from cannotmax.gui.dialogs.window_picker import WindowPickerDialog
 
         parent = app.activeWindow() if hasattr(app, "activeWindow") else None
         dlg = WindowPickerDialog(parent, filter_hwnds=hwnds)
@@ -159,7 +159,7 @@ class PcConnector(BaseConnector):
 
     def _init_maa(self):
         """Initialize MAA Win32Controller if available."""
-        from ...config import DISABLE_MAAFW
+        from cannotmax.config import DISABLE_MAAFW
 
         if DISABLE_MAAFW:
             logger.info("MAA disabled by config (control.disable_maafw)")

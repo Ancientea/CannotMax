@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from ..config.paths import DATA_DIR
+from cannotmax.config.paths import DATA_DIR
 
 
 def clean_data(file_path, output_path):
@@ -19,8 +19,8 @@ def clean_data(file_path, output_path):
 
     # 分离特征、标签和原始行号
     features = data.iloc[:, :-2]  # 不包含标签列和原始行号列
-    labels = data.iloc[:, -2]  # 标签列
-    original_indices = data.iloc[:, -1]  # 原始行号列
+    data.iloc[:, -2]  # 标签列
+    data.iloc[:, -1]  # 原始行号列
 
     # 检查最后一行是否满足条件
     last_row_features = features.iloc[-1].values

@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from src.cannotmax.config import MONSTER_COUNT
-from src.cannotmax.config.paths import MODELS_DIR
-from src.cannotmax.core.predict import CannotModel
+from cannotmax.config import MONSTER_COUNT
+from cannotmax.config.paths import MODELS_DIR
+from cannotmax.core.predict import CannotModel
 
 
 @pytest.fixture(scope="module")

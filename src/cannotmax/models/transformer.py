@@ -5,7 +5,7 @@ Transformer model for Arknights battle prediction.
 import torch
 import torch.nn as nn
 
-from ..config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 
 
 class UnitAwareTransformer(nn.Module):
@@ -101,7 +101,7 @@ class UnitAwareTransformer(nn.Module):
         Returns:
             (batch, 1) probability
         """
-        batch_size = left_counts.size(0)
+        left_counts.size(0)
 
         # 提取 TopK 特征（TopK 天然返回有效索引 0~num_units-1）
         k = min(4, left_counts.shape[1])
