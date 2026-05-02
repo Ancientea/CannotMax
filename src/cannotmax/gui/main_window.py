@@ -1346,7 +1346,7 @@ class ArknightsApp(QMainWindow):
         stats_text = f"总共: {total}, 错误: {incorrect}, 时长: {duration}"
         self.stats_label.setText(stats_text)
 
-     def package_data_and_show(self):
+    def package_data_and_show(self):
         try:
             zip_filename = data_package.package_data()
             if zip_filename:
