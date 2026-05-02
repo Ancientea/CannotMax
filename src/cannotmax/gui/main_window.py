@@ -1346,15 +1346,19 @@ class ArknightsApp(QMainWindow):
         stats_text = f"总共: {total}, 错误: {incorrect}, 时长: {duration}"
         self.stats_label.setText(stats_text)
 
-    def package_data_and_show(self):
+     def package_data_and_show(self):
         try:
             zip_filename = data_package.package_data()
             if zip_filename:
-                # 在文件浏览器中高亮显示文件
                 subprocess.run(f'explorer /select,"{zip_filename}"')
                 QMessageBox.information(self, "成功", f"数据已打包到 {zip_filename}")
             else:
-                QMessageBox.warning(self, "警告", "没有找到可以打包的数据目录。")
+                QMessageBox.warning(
+                    self,
+                    "无数据可打包",
+                    "未在 data/ 目录下找到符合日期格式的数据文件夹。\n"
+                    "请先通过自动获取功能收集数据后再打包。",
+                )
         except Exception as e:
             QMessageBox.critical(self, "错误", f"打包数据时发生错误: {str(e)}")
 

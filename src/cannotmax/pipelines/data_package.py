@@ -2,15 +2,16 @@ import re
 import shutil
 import zipfile
 from datetime import datetime
+from pathlib import Path
 
 from ..config.paths import DATA_DIR
 
+OUTPUT_DIR = Path("output/data")
+
 
 def create_zip_package(output_zip_path):
-    # 定义文件和文件夹路径
     data_folder = DATA_DIR
 
-    # 获取所有符合日期格式的目录
     date_pattern = re.compile(r"^\d{4}_\d{2}_\d{2}__\d{2}_\d{2}_\d{2}$")
     time_folders = [
         folder
@@ -18,20 +19,17 @@ def create_zip_package(output_zip_path):
         if folder.is_dir() and date_pattern.match(folder.name)
     ]
     if not time_folders:
-        print("未找到输出目录！")
-        return
+        return False
 
-    # 创建压缩包
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
     with zipfile.ZipFile(output_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        # 添加所有符合日期格式的目录及其内容
         for folder in time_folders:
             for file_path in folder.rglob("*"):
                 if file_path.is_file():
-                    # 在压缩包中保留相对目录结构
                     arcname = file_path.relative_to(data_folder)
                     zipf.write(file_path, arcname=str(arcname))
 
-    # 打包完成后删除原文件夹
     for folder in time_folders:
         try:
             shutil.rmtree(folder)
@@ -40,16 +38,18 @@ def create_zip_package(output_zip_path):
             print(f"删除文件夹 {folder} 时出错：{e}")
 
     print(f"压缩包已创建：{output_zip_path}")
+    return True
 
 
 def package_data():
-    # 使用当前时间生成输出文件名
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_zip = f"arknights_package_{current_time}.zip"
+    output_zip = OUTPUT_DIR / f"arknights_package_{current_time}.zip"
 
-    # 调用函数创建压缩包
-    create_zip_package(output_zip)
-    return output_zip
+    success = create_zip_package(str(output_zip))
+    if not success:
+        return None
+    return str(output_zip)
 
 
 if __name__ == "__main__":

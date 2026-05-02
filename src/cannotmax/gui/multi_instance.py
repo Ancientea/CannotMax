@@ -527,7 +527,10 @@ class MultiInstanceManager(QMainWindow):
                 QMessageBox.information(self, "成功", f"数据已打包到 {zip_filename}")
             else:
                 QMessageBox.warning(
-                    self, "警告", "没有找到可以打包的数据目录或打包失败。"
+                    self,
+                    "无数据可打包",
+                    "未在 data/ 目录下找到符合日期格式的数据文件夹。\n"
+                    "请先启动实例收集数据后再打包。",
                 )
         except Exception as e:
             QMessageBox.critical(self, "错误", f"打包数据时发生错误: {str(e)}")
