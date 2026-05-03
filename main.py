@@ -20,7 +20,7 @@ import auto_fetch
 from maa_adb_connector import MaaAdbConnector, MaaFrameworkDetector
 from gui.dark_mode_style_fix import DarkModeStyleFix
 from gui.similar_history_match import HistoryMatch
-from gui.simular_history_match_ui import HistoryMatchUI
+from gui.similar_history_match_ui import HistoryMatchUI
 import recognize
 from recognize import MONSTER_COUNT
 from specialmonster import SpecialMonsterHandler
