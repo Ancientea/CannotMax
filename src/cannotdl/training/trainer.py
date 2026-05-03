@@ -12,7 +12,7 @@ import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
 
-from cannotdeeper.models import (
+from cannotdl.models import (
     TOTAL_FEATURE_COUNT,
     ArknightsDataset,
     UnitAwareTransformer,

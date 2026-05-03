@@ -6,17 +6,21 @@ from pathlib import Path
 
 import pandas as pd
 
-from cannotmax.config.paths import COMPRESSED_DIR, DATA_DIR, PROJECT_ROOT
+from cannotmax.config.paths import (
+    ARKNIGHTS_DATA_CSV,
+    COMPRESSED_DIR,
+    DATA_DIR,
+    IMAGES_DATA_DIR,
+    MONSTER_CSV,
+)
 
 # 路径配置
-TARGET_CSV_PATH = DATA_DIR / "arknights.csv"
-TARGET_IMAGES_DIR = DATA_DIR / "images"
+TARGET_CSV_PATH = ARKNIGHTS_DATA_CSV
+TARGET_IMAGES_DIR = IMAGES_DATA_DIR
 
 
 def load_monster_data():
-    monster_data = pd.read_csv(
-        PROJECT_ROOT / "monster_greenvine.csv", index_col="id", encoding="utf-8-sig"
-    )
+    monster_data = pd.read_csv(MONSTER_CSV, index_col="id", encoding="utf-8-sig")
     return monster_data
 
 
@@ -192,7 +196,7 @@ def process_archives(merge_images=True, extract_result_images=False):
             total_sources += 1
 
             # CSV
-            csv_path = date_dir / "arknights.csv"
+            csv_path = ARKNIGHTS_DATA_CSV
             if csv_path.exists():
                 try:
                     with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:

@@ -37,7 +37,7 @@ uv run -m src.cannotsim.main_sim             # PyQt6 simulator
 
 ### Package Structure (actual)
 ```
-├── cannotdeeper/             # 模型训练与数据处理
+├── cannotdl/             # 模型训练与数据处理
 │   ├── config/               # MONSTER_COUNT, FIELD_FEATURE_COUNT, MONSTER_DATA
 │   ├── core/                 # PyTorch 推理（CannotModel）
 │   ├── models/               # UnitAwareTransformer, ArknightsDataset
@@ -129,7 +129,7 @@ uv run pytest tests/test_imports.py       # Import checks only
 3. **cu128 network issues**: Frequent on Chinese networks; provide CPU fallback
 4. **`UnitAwareTransformer` namespace**: Must be importable from `__main__` before `torch.load()`
 5. **Lazy torch imports**: `field_recognition.py` imports torch inside methods — safe for ONNX-only builds
-6. **Packaged build**: `cannotdeeper.core` excluded; `core/__init__.py` has try/except fallback to `predict_onnx`
+6. **Packaged build**: `cannotdl.core` excluded; `core/__init__.py` has try/except fallback to `predict_onnx`
 7. **Multi-instance data**: Stop ALL instances before running data packaging
 8. **`monster_greenvine.csv`**: `MONSTER_COUNT` derives from its row count (currently 78)
 9. **`FIELD_FEATURE_COUNT = 0`**: Set in `config/app.json` — terrain pipeline not active

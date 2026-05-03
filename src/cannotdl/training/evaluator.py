@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from cannotdeeper.models import ArknightsDataset, UnitAwareTransformer
+from cannotdl.models import ArknightsDataset, UnitAwareTransformer
 from cannotmax.config.paths import DATA_DIR, MODELS_DIR
 
 

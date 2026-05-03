@@ -9,11 +9,11 @@ from pathlib import Path
 
 
 def _run_dev_script(category: str, name: str, args: list[str]):
-    import cannotdeeper
+    import cannotdl
     import cannotmax
 
     search_dirs = [
-        Path(cannotdeeper.__file__).parent / category,
+        Path(cannotdl.__file__).parent / category,
         Path(cannotmax.__file__).parent / category,
     ]
 
@@ -40,23 +40,23 @@ def _run_dev_script(category: str, name: str, args: list[str]):
 
 def train_command(args):
     """Train the model."""
-    from cannotdeeper.training.trainer import main as train_main
+    from cannotdl.training.trainer import main as train_main
 
     train_main()
 
 
 def eval_command(args):
     """Evaluate the model."""
-    from cannotdeeper.training.evaluator import main as eval_main
+    from cannotdl.training.evaluator import main as eval_main
 
     eval_main()
 
 
 def convert_command(args):
     """Convert PyTorch model to ONNX."""
-    import cannotdeeper
+    import cannotdl
 
-    script_path = Path(cannotdeeper.__file__).parent / "tools" / "convert_model.py"
+    script_path = Path(cannotdl.__file__).parent / "tools" / "convert_model.py"
     result = subprocess.run([sys.executable, str(script_path)])
     sys.exit(result.returncode)
 
@@ -73,7 +73,7 @@ def pipelines_command(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="cannotdeeper",
+        prog="cannotdl",
         description="CannotDeeper - ML training pipeline for Arknights battle prediction",
     )
 

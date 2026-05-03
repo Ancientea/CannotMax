@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import tqdm
 
-from cannotdeeper.config import MONSTER_COUNT
+from cannotdl.config import MONSTER_COUNT
 from cannotmax.core import recognize
 
 MONSTER_NUM = 56

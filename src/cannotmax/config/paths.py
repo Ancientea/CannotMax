@@ -12,6 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 # 数据相关路径
 DATA_DIR = PROJECT_ROOT / "data"
 COMPRESSED_DIR = DATA_DIR / "compressed"
+IMAGES_DATA_DIR = DATA_DIR / "images"
 ARKNIGHTS_DATA_CSV = DATA_DIR / "arknights.csv"
 
 # 图片资源路径

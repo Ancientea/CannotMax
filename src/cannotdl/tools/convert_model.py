@@ -4,8 +4,8 @@ sys.path.append(".")
 
 import numpy as np
 
-from cannotdeeper.config import MONSTER_COUNT
-from cannotdeeper.core import predict as torch_predict
+from cannotdl.config import MONSTER_COUNT
+from cannotdl.core import predict as torch_predict
 from cannotmax.config.paths import MODELS_DIR
 from cannotmax.core import predict_onnx
 

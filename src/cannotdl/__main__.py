@@ -1,4 +1,4 @@
-"""python -m cannotdeeper."""
+"""python -m cannotdl."""
 
 
 def main():

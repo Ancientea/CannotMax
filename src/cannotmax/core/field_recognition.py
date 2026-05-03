@@ -1,7 +1,7 @@
 """Battlefield terrain recognition stub.
 
 When FIELD_FEATURE_COUNT > 0, terrain features are recognized at runtime.
-For the full PyTorch implementation, see cannotdeeper.core.field_model.TorchFieldRecognizer.
+For the full PyTorch implementation, see cannotdl.core.field_model.TorchFieldRecognizer.
 
 Usage:
     recognizer = FieldRecognizer()
@@ -10,7 +10,7 @@ Usage:
 
 import logging
 
-from cannotdeeper.config import FIELD_FEATURE_COUNT
+from cannotdl.config import FIELD_FEATURE_COUNT
 
 logger = logging.getLogger(__name__)
 
@@ -59,19 +59,19 @@ class FieldRecognizer:
     """Terrain field recognizer stub (torch-free).
 
     Returns empty/default values when FIELD_FEATURE_COUNT=0.
-    For actual recognition, see cannotdeeper.core.field_model.TorchFieldRecognizer.
+    For actual recognition, see cannotdl.core.field_model.TorchFieldRecognizer.
     """
 
     def __init__(self):
         self.is_initialized = False
         if FIELD_FEATURE_COUNT > 0:
             try:
-                from cannotdeeper.core.field_model import TorchFieldRecognizer
+                from cannotdl.core.field_model import TorchFieldRecognizer
 
                 self._torch = TorchFieldRecognizer()
                 self.is_initialized = self._torch.is_initialized
             except ImportError:
-                logger.warning("无法加载 cannotdeeper.core.field_model，场地识别不可用")
+                logger.warning("无法加载 cannotdl.core.field_model，场地识别不可用")
 
     def recognize_field_elements(self, screenshot):
         if not self.is_initialized:

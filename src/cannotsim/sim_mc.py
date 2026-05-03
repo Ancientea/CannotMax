@@ -14,7 +14,7 @@ from pathlib import Path
 # from tkinter import messagebox # messagebox 已被自定义提示替代，可以注释或移除
 from PIL import Image, ImageTk
 
-from cannotdeeper.config import MONSTER_COUNT
+from cannotdl.config import MONSTER_COUNT
 
 from .battle_field import Battlefield
 

@@ -9,7 +9,7 @@ from tkinter import messagebox
 
 from PIL import Image, ImageTk
 
-from cannotdeeper.config import MONSTER_COUNT
+from cannotdl.config import MONSTER_COUNT
 
 from .battle_field import Battlefield
 from .monsters import AttackState, Monster

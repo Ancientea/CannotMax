@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 
-from cannotdeeper.models.transformer import UnitAwareTransformer
+from cannotdl.models.transformer import UnitAwareTransformer
 from cannotmax.config.paths import DATA_DIR, MODELS_DIR
 
 # 配置参数（需要与训练时一致）

@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from cannotdeeper.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotdl.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 
 from .paths import (
     MONSTER_IMAGES_DIR,

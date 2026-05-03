@@ -21,7 +21,7 @@ a_main = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        'cannotdeeper.training', 'cannotdeeper.core',  # PyTorch-dependent
+        'cannotdl.training', 'cannotdl.core',  # PyTorch-dependent
         'torch', 'torchvision', 'matplotlib',
         'sklearn', 'scikit-learn', 'scipy',
         'PyQt6.QtPdf', 'PyQt6.QtNetwork',

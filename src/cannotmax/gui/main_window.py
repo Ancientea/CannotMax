@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from cannotdeeper.pipelines import data_package
+from cannotdl.pipelines import data_package
 from cannotmax.config import MONSTER_COUNT, MONSTER_DATA
 from cannotmax.config.paths import (
     ICO_DIR,

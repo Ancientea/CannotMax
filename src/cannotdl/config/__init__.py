@@ -1,4 +1,4 @@
-"""CannotDeeper 常量配置 — 供训练/评估/管线使用。"""
+"""CannotDL 常量配置 — 供训练/评估/管线使用。"""
 
 import csv
 import json

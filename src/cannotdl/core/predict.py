@@ -21,7 +21,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import torch
 
-from cannotdeeper.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotdl.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 from cannotmax.config.paths import MODELS_DIR
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ class CannotModel:
         import sys
 
         # 将 UnitAwareTransformer 导入到 __main__ 模块，解决 torch.load 反序列化问题
-        from cannotdeeper.models import UnitAwareTransformer
+        from cannotdl.models import UnitAwareTransformer
 
         sys.modules["__main__"].UnitAwareTransformer = UnitAwareTransformer
 

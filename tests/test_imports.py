@@ -57,7 +57,7 @@ class TestImports:
         assert AdbConnector is not None
 
     def test_tools_import(self):
-        from cannotdeeper.tools import package_data
+        from cannotdl.tools import package_data
 
         assert callable(package_data)
 
@@ -77,17 +77,17 @@ class TestEntryPoint:
 
 
 class TestCannotDeeper:
-    """Verify cannotdeeper package integrity."""
+    """Verify cannotdl package integrity."""
 
-    def test_cannotdeeper_imports(self):
-        from cannotdeeper import __version__
-        from cannotdeeper.config import FIELD_FEATURE_COUNT, MONSTER_COUNT, MONSTER_DATA
-        from cannotdeeper.models import (
+    def test_cannotdl_imports(self):
+        from cannotdl import __version__
+        from cannotdl.config import FIELD_FEATURE_COUNT, MONSTER_COUNT, MONSTER_DATA
+        from cannotdl.models import (
             TOTAL_FEATURE_COUNT,
             ArknightsDataset,
             UnitAwareTransformer,
         )
-        from cannotdeeper.tools import package_data
+        from cannotdl.tools import package_data
 
         assert isinstance(__version__, str)
         assert isinstance(MONSTER_COUNT, int) and MONSTER_COUNT > 0

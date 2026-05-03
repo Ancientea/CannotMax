@@ -34,7 +34,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from cannotdeeper.pipelines import data_package
+from cannotdl.pipelines import data_package
 from cannotmax.config import FIELD_FEATURE_COUNT
 from cannotmax.core import auto_fetch
 from cannotmax.core.auto_fetch import GameState
