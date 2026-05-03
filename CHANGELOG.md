@@ -1,5 +1,25 @@
 # CannotMax-Greenvine v2.0.0 更新日志
 
+## Unreleased
+
+### 路径表重构
+- 扩展 `config/paths.py`，新增 14 个路径常量：`ICO_DIR`、`MONSTER_IMAGES_DIR`（修复了之前错误指向 `images/` 的问题）、`PROCESS_IMAGES_DIR`、`LOGIN_IMAGES_DIR`、`SAMPLES_IMAGES_DIR`、`THIRDPARTY_DIR`、`ADB_PATH`、`BATTLEFIELD_RECOGNIZE_DIR`、`ARKNIGHTS_DATA_CSV`、`MONSTER_GREENVINE_CSV`、`MONSTER_CSV`、`MULTI_PORTS_FILE`、`OUTPUT_DIR`
+- 替换 `gui/`、`core/`、`config/` 中所有硬编码路径字符串，改为引用 `paths.py` 常量
+
+### 代码组织
+- `main_window.py` 48 个方法按逻辑分组重排（初始化、连接器、设备列表、截屏、识别、预测、输入展示、自动获取、模拟器、数据打包、设置回调），添加分组注释
+- `login.py` 移除硬编码的 `C:\Program Files\Arknights\` 游戏路径，改为通过 Windows API `QueryFullProcessImageName` 从运行中进程获取 exe 路径
+
+### 修复
+- `adb_connector.py` 中 adb.exe 路径改为绝对路径（`.resolve()`），修复 auto_fetch 中工作目录变化后找不到 adb.exe 的问题
+- PC 端状态模板加载前检查文件存在，消除 OpenCV 对缺失 `pc_{i}.png` 的警告
+- 打包版 exe 不再因 `_ensure_admin()` 通过 `python -m cannotmax` 重新启动而闪退（frozen 环境使用自身 exe 路径重新启动）
+
+### 命令行
+- 新增 `uv run tools <script>` 和 `uv run pipelines <script>` 快捷命令（从 `uv run cannotmax tools/pipelines` 独立）
+
+---
+
 ## 2.0.0-alpha.2 (2026-05-03)
 
 ### 打包与分发
