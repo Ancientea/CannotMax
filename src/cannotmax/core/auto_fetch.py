@@ -23,14 +23,13 @@ import time
 from collections import deque
 from collections.abc import Callable
 from enum import Enum, auto
-from pathlib import Path
 
 import cv2
 import numpy as np
 
 # loadData removed - use core.connector.AdbConnector/PcConnector
 from cannotmax.config import DEBUG_MODE, FIELD_FEATURE_COUNT, MONSTER_COUNT
-from cannotmax.config.paths import DATA_DIR, IMAGES_DIR
+from cannotmax.config.paths import DATA_DIR, PROCESS_IMAGES_DIR
 from cannotmax.gui import LoginManager
 
 logger = logging.getLogger(__name__)
@@ -131,7 +130,7 @@ class AutoFetch:
         for i in range(16):
             templates = []
             # 标准模板
-            img = cv2.imread(IMAGES_DIR / f"process/{i}.png")
+            img = cv2.imread(PROCESS_IMAGES_DIR / f"{i}.png")
             if img is not None:
                 img_resized = cv2.resize(
                     img,
@@ -141,7 +140,7 @@ class AutoFetch:
                 img_quarter = img_resized[self.MATCH_HEIGHT * 3 :, :]
                 templates.append(img_quarter)
             # PC 端模板（UI 比例不同）—— 仅在文件存在时加载，避免 OpenCV 警告
-            pc_path = IMAGES_DIR / f"process/pc_{i}.png"
+            pc_path = PROCESS_IMAGES_DIR / f"pc_{i}.png"
             if pc_path.exists():
                 pc_img = cv2.imread(str(pc_path))
                 if pc_img is not None:
@@ -864,7 +863,7 @@ class AutoFetch:
             start_time = datetime.datetime.fromtimestamp(self.start_time).strftime(
                 r"%Y_%m_%d__%H_%M_%S"
             )
-            self.data_folder = Path(f"data/{start_time}")
+            self.data_folder = DATA_DIR / start_time
             self._log(logging.INFO, f"创建文件夹: {self.data_folder}")
             self.data_folder.mkdir(parents=True, exist_ok=True)  # 创建文件夹
             (self.data_folder / "images").mkdir(parents=True, exist_ok=True)

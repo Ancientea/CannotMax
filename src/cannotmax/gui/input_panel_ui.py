@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT, MONSTER_DATA
-from cannotmax.config.paths import CONFIG_DIR
+from cannotmax.config.paths import CONFIG_DIR, MONSTER_IMAGES_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -373,7 +373,9 @@ class InputPanelUI(QFrame):
             img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             try:
-                pixmap = QPixmap(f"images/monsters/{MONSTER_DATA['原始名称'][i]}.png")
+                pixmap = QPixmap(
+                    str(MONSTER_IMAGES_DIR / f"{MONSTER_DATA['原始名称'][i]}.png")
+                )
                 if not pixmap.isNull():
                     pixmap = pixmap.scaled(
                         50,

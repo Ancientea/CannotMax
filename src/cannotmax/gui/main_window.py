@@ -29,7 +29,11 @@ from PyQt6.QtWidgets import (
 )
 
 from cannotmax.config import MONSTER_COUNT, MONSTER_DATA
-from cannotmax.config.paths import IMAGES_DIR
+from cannotmax.config.paths import (
+    ICO_DIR,
+    MONSTER_IMAGES_DIR,
+    SAMPLES_IMAGES_DIR,
+)
 from cannotmax.core import auto_fetch, recognize
 from cannotmax.core.connector.factory import ConnectorFactory, ConnectorState
 from cannotmax.core.connector.maa_registry import (
@@ -160,11 +164,11 @@ class ArknightsApp(QMainWindow):
         self.setWindowTitle(
             f"铁鲨鱼_Arknights Neural Network - v{version_str} - model: {model_name}"
         )
-        self.setWindowIcon(QIcon("ico/icon.ico"))
+        self.setWindowIcon(QIcon(str(ICO_DIR / "icon.ico")))
         self.setGeometry(100, 100, 570, 570)
         self.setMinimumWidth(570)
         self.setMaximumWidth(570)
-        self.background = QPixmap("ico/background.png")
+        self.background = QPixmap(str(ICO_DIR / "background.png"))
 
         self.size_animation = QPropertyAnimation(self, b"size")
         self.size_animation.setDuration(300)
@@ -723,7 +727,7 @@ class ArknightsApp(QMainWindow):
             screenshot = self.connector.capture_screenshot()
             roi = self.roi_selector.select_roi(
                 screenshot,
-                example_image_path=IMAGES_DIR / "samples/roi_selecting_eg.png",
+                example_image_path=SAMPLES_IMAGES_DIR / "roi_selecting_eg.png",
             )
             if roi:
                 (px1, py1), (px2, py2) = roi
@@ -975,7 +979,7 @@ class ArknightsApp(QMainWindow):
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         try:
             pixmap = QPixmap(
-                f"images/monsters/{MONSTER_DATA['原始名称'][monster_id]}.png"
+                str(MONSTER_IMAGES_DIR / f"{MONSTER_DATA['原始名称'][monster_id]}.png")
             )
             if not pixmap.isNull():
                 pixmap = pixmap.scaled(

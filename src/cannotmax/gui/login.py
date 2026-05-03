@@ -11,6 +11,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from cannotmax.config.paths import LOGIN_IMAGES_DIR, PROCESS_IMAGES_DIR
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -20,7 +22,7 @@ class LoginManager:
 
     def __init__(self, connector, max_restart_count=3):
         self.connector = connector
-        self.template_dir = Path("images") / "login"
+        self.template_dir = LOGIN_IMAGES_DIR
         self.template_dir.mkdir(parents=True, exist_ok=True)
         self.restart_count = 0
         self.max_restart_count = max_restart_count
@@ -303,7 +305,7 @@ class LoginManager:
                         if not check_stop():
                             return False
 
-                        template_path = Path(f"images/process/{template_name}.png")
+                        template_path = PROCESS_IMAGES_DIR / f"{template_name}.png"
                         if template_path.exists():
                             template = cv2.imread(str(template_path))
                             if template is not None:
