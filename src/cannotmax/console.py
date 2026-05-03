@@ -75,6 +75,22 @@ def pipelines_command(args):
     _run_dev_script("pipelines", args.script)
 
 
+def tools_main():
+    """uv run tools <script> — run a dev tool script."""
+    if len(sys.argv) < 2:
+        _run_dev_script("tools", "")
+    else:
+        _run_dev_script("tools", sys.argv[1])
+
+
+def pipelines_main():
+    """uv run pipelines <script> — run a data pipeline script."""
+    if len(sys.argv) < 2:
+        _run_dev_script("pipelines", "")
+    else:
+        _run_dev_script("pipelines", sys.argv[1])
+
+
 def _ensure_admin():
     """Ensure the process is running with administrator privileges for PC mode."""
     import ctypes
