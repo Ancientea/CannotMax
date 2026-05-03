@@ -38,6 +38,28 @@ class LoginManager:
         else:
             logger.log(level, message)
 
+    @staticmethod
+    def _get_process_path(pid: int) -> str | None:
+        """Get executable path from process ID using Windows API."""
+        import ctypes
+        from ctypes import wintypes
+
+        try:
+            handle = ctypes.windll.kernel32.OpenProcess(
+                0x0400 | 0x0010, False, pid
+            )  # PROCESS_QUERY_INFORMATION | PROCESS_VM_READ
+            if not handle:
+                return None
+            buf = ctypes.create_unicode_buffer(260)
+            size = wintypes.DWORD(260)
+            ctypes.windll.kernel32.QueryFullProcessImageNameW(
+                handle, 0, buf, ctypes.byref(size)
+            )
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return buf.value
+        except Exception:
+            return None
+
     def reset_restart_count(self):
         """重置重启计数器"""
         self.restart_count = 0
@@ -128,13 +150,15 @@ class LoginManager:
         # 关闭游戏进程
         try:
             if is_pc:
-                # 对于PC端，关闭游戏进程
+                # 对于PC端，关闭游戏进程，同时保存进程路径用于重启
                 import win32api
                 import win32process
 
                 _, process_id = win32process.GetWindowThreadProcessId(
                     self.connector.hwnd
                 )
+                # 先从运行中的进程获取 exe 路径（最可靠的方式）
+                game_exe_path = self._get_process_path(process_id)
                 process = win32api.OpenProcess(1, False, process_id)
                 win32api.TerminateProcess(process, 0)
                 win32api.CloseHandle(process)
@@ -156,8 +180,13 @@ class LoginManager:
 
         try:
             if is_pc:
-                # 对于PC端，重新启动游戏
-                # 尝试从注册表获取游戏路径
+                # 优先使用关闭前保存的进程路径
+                if game_exe_path and Path(game_exe_path).exists():
+                    subprocess.Popen(game_exe_path)
+                    self._log(logging.INFO, f"从进程路径启动游戏: {game_exe_path}")
+                else:
+                    started = False
+                    # 回退：尝试从注册表获取游戏路径
                 try:
                     import winreg
 
@@ -166,44 +195,27 @@ class LoginManager:
                         r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
                     )
                     for i in range(winreg.QueryInfoKey(key)[0]):
-                        subkey_name = winreg.EnumKey(key, i)
-                        subkey = winreg.OpenKey(key, subkey_name)
                         try:
-                            display_name = winreg.QueryValueEx(subkey, "DisplayName")[0]
-                            if "Arknights" in display_name:
-                                install_location = winreg.QueryValueEx(
-                                    subkey, "InstallLocation"
-                                )[0]
-                                game_path = Path(install_location) / "Arknights.exe"
+                            subkey = winreg.OpenKey(key, winreg.EnumKey(key, i))
+                            dn = winreg.QueryValueEx(subkey, "DisplayName")[0]
+                            if "Arknights" in dn:
+                                loc = winreg.QueryValueEx(subkey, "InstallLocation")[0]
+                                game_path = Path(loc) / "Arknights.exe"
                                 if game_path.exists():
                                     subprocess.Popen(str(game_path))
                                     self._log(
                                         logging.INFO,
-                                        f"从注册表获取游戏路径并启动: {game_path}",
+                                        f"从注册表启动游戏: {game_path}",
                                     )
+                                    started = True
                                     break
                         except Exception:
                             pass
-                    else:
-                        # 如果从注册表获取失败，使用默认路径
-                        game_path = Path("C:\\Program Files\\Arknights\\Arknights.exe")
-                        if game_path.exists():
-                            subprocess.Popen(str(game_path))
-                            self._log(
-                                logging.INFO, f"使用默认路径启动游戏: {game_path}"
-                            )
-                        else:
-                            self._log(logging.ERROR, "无法找到游戏可执行文件")
-                            return False
                 except Exception:
-                    # 如果注册表操作失败，使用默认路径
-                    game_path = Path("C:\\Program Files\\Arknights\\Arknights.exe")
-                    if game_path.exists():
-                        subprocess.Popen(str(game_path))
-                        self._log(logging.INFO, f"使用默认路径启动游戏: {game_path}")
-                    else:
-                        self._log(logging.ERROR, "无法找到游戏可执行文件")
-                        return False
+                    pass
+                if not started:
+                    self._log(logging.ERROR, "无法找到游戏可执行文件")
+                    return False
             else:
                 # 对于ADB端，重新启动游戏
                 adb_path = getattr(self.connector, "adb_path", "adb")
