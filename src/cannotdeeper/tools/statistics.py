@@ -3,7 +3,7 @@ from math import sqrt
 
 import pandas as pd
 
-from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT, MONSTER_DATA
+from cannotdeeper.config import FIELD_FEATURE_COUNT, MONSTER_COUNT, MONSTER_DATA
 from cannotmax.config.paths import CONFIG_DIR
 
 

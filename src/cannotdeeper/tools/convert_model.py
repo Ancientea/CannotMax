@@ -4,9 +4,10 @@ sys.path.append(".")
 
 import numpy as np
 
-from cannotmax.config import MONSTER_COUNT
+from cannotdeeper.config import MONSTER_COUNT
+from cannotdeeper.core import predict as torch_predict
 from cannotmax.config.paths import MODELS_DIR
-from cannotmax.core import predict, predict_onnx
+from cannotmax.core import predict_onnx
 
 model_path = MODELS_DIR / "predictor" / "best_model_full.pth"
 
@@ -21,7 +22,7 @@ def replace_suffix(s):
 
 output_path = replace_suffix(model_path)
 
-model = predict.CannotModel(model_path)
+model = torch_predict.CannotModel(model_path)
 model.load_model()  # 加载原始 PyTorch 模型
 model.export_onnx(output_path)  # 导出 ONNX 模型
 print(f"模型已成功导出为 ONNX 格式，保存路径: {output_path}")

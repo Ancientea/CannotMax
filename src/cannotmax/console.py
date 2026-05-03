@@ -3,6 +3,7 @@ Command-line interface for CannotMax training and evaluation.
 """
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -47,48 +48,59 @@ def multi_instance_command(args):
     _sys.exit(app.exec())
 
 
-def _run_dev_script(category: str, script_name: str):
-    """Run a development script from tools/ or pipelines/ via subprocess."""
-    script_path = Path(__file__).parent / category / f"{script_name}.py"
-    if not script_path.exists():
-        available = [
-            p.stem
-            for p in (Path(__file__).parent / category).glob("*.py")
-            if p.stem != "__init__"
-        ]
-        print(f"Unknown {category} script: {script_name}")
-        print(f"Available: {', '.join(sorted(available))}")
-        sys.exit(1)
-    import subprocess
+def _run_dev_script(category: str, name: str, args: list[str]):
+    import cannotdeeper
 
-    result = subprocess.run([sys.executable, str(script_path)])
+    search_dirs = [
+        Path(cannotdeeper.__file__).parent / category,
+        Path(__file__).parent / category,
+    ]
+
+    script = None
+    for d in search_dirs:
+        candidate = d / f"{name}.py"
+        if candidate.exists():
+            script = candidate
+            break
+
+    if script is None:
+        candidates = []
+        for d in search_dirs:
+            if d.exists():
+                candidates.extend(p.stem for p in d.glob("*.py"))
+        print(f"错误: 找不到脚本 '{name}'")
+        if candidates:
+            print(f"可用脚本: {', '.join(sorted(set(candidates)))}")
+        sys.exit(1)
+
+    result = subprocess.run([sys.executable, str(script), *args])
     sys.exit(result.returncode)
 
 
 def tools_command(args):
     """Run a development tool script."""
-    _run_dev_script("tools", args.script)
+    _run_dev_script("tools", args.script, [])
 
 
 def pipelines_command(args):
     """Run a data pipeline script."""
-    _run_dev_script("pipelines", args.script)
+    _run_dev_script("pipelines", args.script, [])
 
 
 def tools_main():
     """uv run tools <script> — run a dev tool script."""
     if len(sys.argv) < 2:
-        _run_dev_script("tools", "")
+        _run_dev_script("tools", "", [])
     else:
-        _run_dev_script("tools", sys.argv[1])
+        _run_dev_script("tools", sys.argv[1], sys.argv[2:])
 
 
 def pipelines_main():
     """uv run pipelines <script> — run a data pipeline script."""
     if len(sys.argv) < 2:
-        _run_dev_script("pipelines", "")
+        _run_dev_script("pipelines", "", [])
     else:
-        _run_dev_script("pipelines", sys.argv[1])
+        _run_dev_script("pipelines", sys.argv[1], sys.argv[2:])
 
 
 def _ensure_admin():
