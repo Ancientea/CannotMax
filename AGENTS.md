@@ -13,8 +13,8 @@ uv run cannotmax train     # Train model
 uv run cannotmax eval      # Evaluate model
 uv run cannotmax convert -i model.pth -o model.onnx  # PyTorch → ONNX
 
-uv run cannotmax tools <script>      # Run a dev tool (e.g., statistics)
-uv run cannotmax pipelines <script>  # Run a data pipeline (e.g., merge_data)
+uv run tools <script>      # Run a dev tool (e.g., statistics)
+uv run pipelines <script>  # Run a data pipeline (e.g., merge_data)
 
 uv run pytest tests/       # Run all tests
 uv run pytest tests/ -m "not e2e"  # Skip e2e (needs emulator)

@@ -86,8 +86,8 @@ uv run -m src.cannotmax.simulator.sim_mc            # Tkinter 模拟器
 uv run -m src.cannotmax.simulator.main_sim          # PyQt6 模拟器
 
 # 开发命令
-uv run cannotmax tools statistics                   # 统计分析
-uv run cannotmax pipelines merge_data               # 合并数据
+uv run tools statistics                   # 统计分析
+uv run pipelines merge_data               # 合并数据
 ```
 
 ### 2. 捕获模式选择
