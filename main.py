@@ -18,15 +18,15 @@ import PyQt6.QtCore as QtCore
 import loadData
 import auto_fetch
 from maa_adb_connector import MaaAdbConnector, MaaFrameworkDetector
-from dark_mode_style_fix import DarkModeStyleFix
-import similar_history_match
+from gui.dark_mode_style_fix import DarkModeStyleFix
+from gui.similar_history_match import HistoryMatch
+from gui.simular_history_match_ui import HistoryMatchUI
 import recognize
 from recognize import MONSTER_COUNT
 from specialmonster import SpecialMonsterHandler
 import data_package
 import winrt_capture
 from config import FIELD_FEATURE_COUNT, MONSTER_DATA
-from simular_history_match_ui import HistoryMatchUI
 from input_panel_ui import InputPanelUI
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -42,12 +42,12 @@ logger.setLevel(logging.DEBUG)
 
 
 try:
-    from predict import CannotModel
+    from core.predict import CannotModel
     from train import UnitAwareTransformer
 
     logger.info("Using PyTorch model for predictions.")
 except:
-    from predict_onnx import CannotModel
+    from core.predict_onnx import CannotModel
 
     logger.info("Using ONNX model for predictions.")
 
@@ -123,7 +123,7 @@ class ArknightsApp(QMainWindow):
         # 初始化UI后加载历史数据
         logger.info("尝试获取错题本")
         self.history_match = None
-        self.history_match = similar_history_match.HistoryMatch()
+        self.history_match = HistoryMatch()
         # Ensure feat_past and N_history are initialized
         try:
             self.history_match.feat_past = np.hstack([self.history_match.past_left, self.history_match.past_right])
