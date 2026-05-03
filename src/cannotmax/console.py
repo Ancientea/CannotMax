@@ -92,10 +92,16 @@ def pipelines_main():
 
 
 def _ensure_admin():
-    """Ensure the process is running with administrator privileges for PC mode."""
+    """Ensure the process is running with administrator privileges for PC mode.
+
+    Skipped in frozen (PyInstaller) builds — the user should run the exe
+    as administrator manually (right-click → Run as Administrator).
+    """
     import ctypes
     import os
 
+    if getattr(sys, "frozen", False):
+        return
     try:
         if ctypes.windll.shell32.IsUserAnAdmin():
             return
