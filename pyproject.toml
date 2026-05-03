@@ -93,8 +93,8 @@ explicit = true
 
 [project.scripts]
 cannotmax = "cannotmax.console:main"
-tools = "cannotmax.console:tools_main"
-pipelines = "cannotmax.console:pipelines_main"
+cannotdeeper = "cannotdeeper.console:main"
+cannotsim = "cannotsim.console:main"
 
 [tool.pytest.ini_options]
 markers = [

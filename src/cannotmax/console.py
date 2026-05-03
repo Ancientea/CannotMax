@@ -1,37 +1,9 @@
 """
-Command-line interface for CannotMax training and evaluation.
+Command-line interface for CannotMax runtime (GUI + automation).
 """
 
 import argparse
-import subprocess
 import sys
-from pathlib import Path
-
-
-def train_command(args):
-    """Train the model."""
-    from cannotdeeper.training.trainer import main as train_main
-
-    train_main()
-
-
-def eval_command(args):
-    """Evaluate the model."""
-    from cannotdeeper.training.evaluator import main as eval_main
-
-    eval_main()
-
-
-def convert_model_command(args):
-    """Convert PyTorch model to ONNX."""
-    import subprocess
-
-    script_path = Path(__file__).parent / "tools" / "convert_model.py"
-    result = subprocess.run(
-        [sys.executable, str(script_path)],
-        cwd=args.cwd if hasattr(args, "cwd") else None,
-    )
-    sys.exit(result.returncode)
 
 
 def multi_instance_command(args):
@@ -46,61 +18,6 @@ def multi_instance_command(args):
     window = MultiInstanceManager()
     window.show()
     _sys.exit(app.exec())
-
-
-def _run_dev_script(category: str, name: str, args: list[str]):
-    import cannotdeeper
-
-    search_dirs = [
-        Path(cannotdeeper.__file__).parent / category,
-        Path(__file__).parent / category,
-    ]
-
-    script = None
-    for d in search_dirs:
-        candidate = d / f"{name}.py"
-        if candidate.exists():
-            script = candidate
-            break
-
-    if script is None:
-        candidates = []
-        for d in search_dirs:
-            if d.exists():
-                candidates.extend(p.stem for p in d.glob("*.py"))
-        print(f"错误: 找不到脚本 '{name}'")
-        if candidates:
-            print(f"可用脚本: {', '.join(sorted(set(candidates)))}")
-        sys.exit(1)
-
-    result = subprocess.run([sys.executable, str(script), *args])
-    sys.exit(result.returncode)
-
-
-def tools_command(args):
-    """Run a development tool script."""
-    _run_dev_script("tools", args.script, [])
-
-
-def pipelines_command(args):
-    """Run a data pipeline script."""
-    _run_dev_script("pipelines", args.script, [])
-
-
-def tools_main():
-    """uv run tools <script> — run a dev tool script."""
-    if len(sys.argv) < 2:
-        _run_dev_script("tools", "", [])
-    else:
-        _run_dev_script("tools", sys.argv[1], sys.argv[2:])
-
-
-def pipelines_main():
-    """uv run pipelines <script> — run a data pipeline script."""
-    if len(sys.argv) < 2:
-        _run_dev_script("pipelines", "", [])
-    else:
-        _run_dev_script("pipelines", sys.argv[1], sys.argv[2:])
 
 
 def _ensure_admin():
@@ -143,55 +60,17 @@ def main():
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Train command
-    train_parser = subparsers.add_parser("train", help="Train the model")
-    train_parser.set_defaults(func=train_command)
-
-    # Evaluate command
-    eval_parser = subparsers.add_parser("eval", help="Evaluate the model")
-    eval_parser.set_defaults(func=eval_command)
-
-    # Convert model command
-    convert_parser = subparsers.add_parser("convert", help="Convert PyTorch to ONNX")
-    convert_parser.add_argument(
-        "--input",
-        "-i",
-        required=True,
-        help="Input PyTorch model path (.pth)",
-    )
-    convert_parser.add_argument(
-        "--output",
-        "-o",
-        required=True,
-        help="Output ONNX model path (.onnx)",
-    )
-    convert_parser.set_defaults(func=convert_model_command)
-
-    # Multi-instance command
     multi_parser = subparsers.add_parser("multi", help="Launch multi-instance manager")
     multi_parser.set_defaults(func=multi_instance_command)
-
-    # Tools command (dev only)
-    tools_parser = subparsers.add_parser("tools", help="Run a development tool script")
-    tools_parser.add_argument("script", help="Tool script name (without .py)")
-    tools_parser.set_defaults(func=tools_command)
-
-    # Pipelines command (dev only)
-    pipelines_parser = subparsers.add_parser(
-        "pipelines", help="Run a data pipeline script"
-    )
-    pipelines_parser.add_argument("script", help="Pipeline script name (without .py)")
-    pipelines_parser.set_defaults(func=pipelines_command)
 
     args = parser.parse_args()
 
     if args.command is None:
-        # 无命令时启动 GUI
         import sys as _sys
 
         from PyQt6.QtWidgets import QApplication
 
-        app = QApplication(_sys.argv)  # PyQt6 默认启用 High DPI
+        app = QApplication(_sys.argv)
         from cannotmax.gui.main_window import ArknightsApp
 
         window = ArknightsApp()
