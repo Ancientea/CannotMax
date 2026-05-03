@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotdeeper.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 
 TOTAL_FEATURE_COUNT = (MONSTER_COUNT + FIELD_FEATURE_COUNT) * 2
 

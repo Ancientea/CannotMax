@@ -141,7 +141,7 @@ class CannotModel:
         import sys
 
         # 将 UnitAwareTransformer 导入到 __main__ 模块，解决 torch.load 反序列化问题
-        from cannotmax.models import UnitAwareTransformer
+        from cannotdeeper.models import UnitAwareTransformer
 
         sys.modules["__main__"].UnitAwareTransformer = UnitAwareTransformer
 
