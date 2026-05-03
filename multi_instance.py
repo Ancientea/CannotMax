@@ -5,7 +5,7 @@ import logging
 import subprocess
 from pathlib import Path
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QPlainTextEdit, QSpinBox, QComboBox, QCheckBox,
     QMessageBox, QSplitter, QScrollArea, QFrame, QLineEdit
 )
@@ -109,10 +109,10 @@ def get_cannot_model():
     if _cannot_model is None:
         logger.info("首次初始化 CannotModel...")
         try:
-            from predict import CannotModel
+            from core.predict import CannotModel
             logger.info("Using PyTorch model for predictions.")
         except Exception:
-            from predict_onnx import CannotModel
+            from core.predict_onnx import CannotModel
             logger.info("Using ONNX model for predictions.")
         
         _cannot_model = CannotModel()
