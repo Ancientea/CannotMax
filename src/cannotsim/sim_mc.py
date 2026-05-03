@@ -14,7 +14,7 @@ from pathlib import Path
 # from tkinter import messagebox # messagebox 已被自定义提示替代，可以注释或移除
 from PIL import Image, ImageTk
 
-from cannotmax.config import MONSTER_COUNT
+from cannotdeeper.config import MONSTER_COUNT
 
 from .battle_field import Battlefield
 
@@ -209,7 +209,7 @@ class SandboxSimulator:
 
     def _normalize_outcome(self, outcome):
         try:
-            from simulator.utils import Faction
+            from .utils import Faction
 
             if outcome == Faction.LEFT:
                 return "LEFT"
@@ -298,7 +298,7 @@ class SandboxSimulator:
             outcome = "DRAW"
         else:
             try:
-                from simulator.utils import Faction
+                from .utils import Faction
 
                 if result == Faction.LEFT:
                     outcome = "LEFT"

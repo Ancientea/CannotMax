@@ -39,7 +39,7 @@ class TestImports:
         assert HistoryMatch is not None
 
     def test_simulator_import(self):
-        from cannotmax.simulator import (
+        from cannotsim import (
             Battlefield,
         )
 

@@ -1121,7 +1121,7 @@ class ArknightsApp(QMainWindow):
 
     def get_monster_name_by_id(self, monster_id: int):
         try:
-            from simulator.utils import MONSTER_MAPPING
+            from cannotsim.utils import MONSTER_MAPPING
 
             return MONSTER_MAPPING.get(monster_id - 1)
         except ImportError:

@@ -8,7 +8,7 @@ from .main_sim import SandboxSimulator, StateMachine
 from .monsters import Monster
 from .projectiles import Projectile
 from .unit import Unit
-from .utils import *
+from .utils import *  # noqa: F403
 from .vector2d import FastVector
 from .zone import EffectZone
 

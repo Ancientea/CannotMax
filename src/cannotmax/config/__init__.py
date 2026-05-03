@@ -6,7 +6,6 @@ import pandas as pd
 
 from cannotdeeper.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 
-from .constants import UNIT_CONFIG
 from .paths import (
     MONSTER_IMAGES_DIR,
     PROJECT_ROOT,
@@ -70,7 +69,6 @@ def load_monster_data() -> pd.DataFrame:
 MONSTER_DATA: pd.DataFrame = load_monster_data()
 
 __all__ = [
-    "UNIT_CONFIG",
     "MONSTER_DATA",
     "MONSTER_COUNT",
     "MONSTER_IMAGES",

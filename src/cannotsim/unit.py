@@ -1,4 +1,4 @@
-from cannotmax.config import UNIT_CONFIG
+from cannotsim.config import UNIT_CONFIG
 
 
 class Unit:
