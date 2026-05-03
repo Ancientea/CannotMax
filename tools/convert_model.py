@@ -1,9 +1,9 @@
 import sys
 sys.path.append(".")
 
-import predict
+import core.predict
 from train import UnitAwareTransformer
-import predict_onnx
+import core.predict_onnx
 import numpy as np
 from recognize import MONSTER_COUNT
 
