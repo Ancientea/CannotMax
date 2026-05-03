@@ -21,7 +21,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import torch
 
-from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotdeeper.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 from cannotmax.config.paths import MODELS_DIR
 
 logger = logging.getLogger(__name__)
