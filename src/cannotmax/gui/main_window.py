@@ -69,12 +69,15 @@ except ImportError:
 
 
 class ArknightsApp(QMainWindow):
-    # 添加自定义信号
-    update_button_signal = pyqtSignal(str)  # 用于更新按钮文本
+    """Arknights battle prediction and auto-fetch GUI."""
+
+    # Signals
+    update_button_signal = pyqtSignal(str)
     update_monster_signal = pyqtSignal(list)
     update_prediction_signal = pyqtSignal(float)
-    update_statistics_signal = pyqtSignal()  # 用于更新统计信息
-    update_package_button_signal = pyqtSignal(bool)  # 用于更新打包按钮启用状态
+    update_statistics_signal = pyqtSignal()
+    update_package_button_signal = pyqtSignal(bool)
+
     qt_button_style = """
         QPushButton {
             background-color: #313131;
@@ -92,33 +95,26 @@ class ArknightsApp(QMainWindow):
         }
     """
 
+    # ── Initialization ────────────────────────────────────────────────
+
     def __init__(self):
         super().__init__()
-        # 捕获模式：ADB, PC, WIN
         self.current_capture_mode = "ADB"
 
-        # Single connector managed by factory
         self.connector_factory = ConnectorFactory()
         self._auto_fetch_mutex = QtCore.QMutex()
-        self._mode_switch_mutex = (
-            QtCore.QMutex()
-        )  # Qt thread-safe mutex  # Qt thread-safe mutex
+        self._mode_switch_mutex = QtCore.QMutex()
 
         self.auto_fetch_running = False
         self.is_invest = False
         self.game_mode = "单人"
 
-        # 模型
         self.cannot_model = CannotModel()
-
-        # Recognizer (single instance, no method parameter)
         self.recognizer = recognize.RecognizeMonster()
         self.roi_selector = ROISelector()
 
-        # 初始化UI后加载历史数据
         logger.info("尝试获取错题本")
         self.history_match = similar_history_match.HistoryMatch()
-        # Ensure feat_past and N_history are initialized
         try:
             self.history_match.feat_past = np.hstack(
                 [self.history_match.past_left, self.history_match.past_right]
@@ -134,142 +130,21 @@ class ArknightsApp(QMainWindow):
             self.history_match.N_history = 0
             logger.warning("错题本加载失败")
 
-        # 初始化特殊怪物语言触发处理程序
         self.special_monster_handler = SpecialMonsterHandler()
-
         self.init_ui()
 
-        # Initialize to ADB mode (lazy connection, no blocking)
-        # Set default serial before getting connector to avoid empty string
         default_serial = "127.0.0.1:5555"
         self.serial_entry.addItem(default_serial)
         self.serial_entry.setCurrentText(default_serial)
-        kwargs = {"adb_serial": self.serial_entry.currentText()}
-        self.connector = self.connector_factory.get_connector("ADB", **kwargs)
+        self.connector = self.connector_factory.get_connector(
+            "ADB", adb_serial=default_serial
+        )
 
-        # 如果模型未加载，显示提示并禁用预测相关按钮
         if not self.cannot_model.is_model_loaded:
             self.recognize_button.setEnabled(False)
             self.recognize_button.setToolTip("模型未加载，无法使用此功能")
             self.input_panel.predict_button.setEnabled(False)
             self.input_panel.predict_button.setToolTip("模型未加载，无法使用此功能")
-
-    def _get_connector_kwargs(self, mode: str) -> dict:
-        """Get constructor kwargs for connector based on mode."""
-        if mode == "ADB":
-            return {"adb_serial": self.serial_entry.currentText()}
-        elif mode == "PC":
-            return {"window_name": "明日方舟"}
-        elif mode == "WIN":
-            # Try to get last selected window name if available
-            return {"window_name": getattr(self, "_win_window_name", "")}
-        return {}
-
-    def _get_current_state(self):
-        """Get current connector state from factory."""
-        if self.current_capture_mode not in self.connector_factory._pool:
-            return None
-        _, _, state = self.connector_factory._pool[self.current_capture_mode]
-        return state
-
-    def on_mode_changed(self, mode: str):
-        """Switch capture mode. Uses state-based lazy pooling.
-
-        Args:
-            mode: Capture mode (ADB/PC/WIN)
-        """
-        # Qt mutex with RAII-style locking (auto-unlock on scope exit)
-        _ = QtCore.QMutexLocker(self._mode_switch_mutex)
-
-        old_mode = self.current_capture_mode
-        self.current_capture_mode = mode
-        logger.info(f"Switching mode: {old_mode} → {mode}")
-
-        # Block mode switch during auto-fetch
-        if hasattr(self, "auto_fetch") and getattr(
-            self.auto_fetch, "auto_fetch_running", False
-        ):
-            self.current_capture_mode = old_mode
-            QMessageBox.warning(self, "提示", "自动获取数据运行中，请先停止再切换模式")
-            return
-
-        # Reset recognizer custom settings (mode defaults kick in via process_regions)
-        self.recognizer.crop_ratio = None
-        self.recognizer.avatar_regions = None
-        self.recognizer.number_regions = None
-
-        # Update UI controls visibility
-        is_win_mode = mode == "WIN"
-        is_adb_mode = mode == "ADB"
-
-        self.choose_window_button.setEnabled(is_win_mode)
-        self.reselect_button.setEnabled(is_win_mode)
-        self.serial_label.setEnabled(is_adb_mode)
-        self.serial_entry.setEnabled(is_adb_mode)
-        self.serial_button.setEnabled(is_adb_mode)
-        self.connection_type_label.setEnabled(is_adb_mode)
-        self.connection_type_combo.setEnabled(is_adb_mode)
-        self.input_method_label.setEnabled(is_adb_mode)
-        self.input_method_combo.setEnabled(is_adb_mode)
-        # Auto-fetch only available in ADB mode (MAA click broken on PC, WIN requires manual ROI)
-        self.auto_fetch_button.setEnabled(True)
-
-        # Get connector (state-based lazy pooling, no connection test)
-        kwargs = self._get_connector_kwargs(mode)
-        new_connector = self.connector_factory.get_connector(mode, **kwargs)
-
-        # Return old connector to pool if it exists in the pool
-        if (
-            self.connector is not None
-            and self.connector is not new_connector
-            and old_mode in self.connector_factory._pool
-        ):
-            self.connector_factory.return_connector(old_mode, self.connector)
-
-        self.connector = new_connector
-
-        # Update UI based on factory state
-        self._update_ui_from_factory_state()
-
-    def _update_ui_from_factory_state(self):
-        """Update UI based on ConnectorFactory state (IDLE/VALID/INVALID)."""
-        mode = self.current_capture_mode
-        if mode not in self.connector_factory._pool:
-            self.maa_status_label.setText("未连接")
-            self.maa_status_label.setStyleSheet("color: #999999; font-size: 10px;")
-            return
-
-        _, _, state = self.connector_factory._pool[mode]
-
-        if state == ConnectorState.IDLE:
-            # 首次使用或已归还，未验证
-            self.maa_status_label.setText("未连接")
-            self.maa_status_label.setStyleSheet("color: #999999; font-size: 10px;")
-        elif state == ConnectorState.VALID:
-            # 已验证可用，显示绿色
-            self._update_connector_ready_ui()
-        else:  # INVALID
-            # 已知失效，显示红色
-            self.maa_status_label.setText(f"{mode} 连接失败")
-            self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
-            self.recognize_button.setEnabled(False)
-            self.auto_fetch_button.setEnabled(False)
-
-    def _update_connector_ready_ui(self):
-        """Update UI after successful connection (called from get_recognize)."""
-        self.recognize_button.setEnabled(True)
-        self.auto_fetch_button.setEnabled(True)
-
-        # Update MAA status
-        if hasattr(self.connector, "is_maa_available"):
-            if self.connector.is_maa_available:
-                self.maa_status_label.setText("MAA Framework 已连接")
-                self.maa_status_label.setStyleSheet("color: #00aa00; font-size: 10px;")
-            else:
-                self.maa_status_label.setText("使用自有实现")
-                self.maa_status_label.setStyleSheet("color: #996600; font-size: 10px;")
-
-        logger.info(f"Connected to {self.current_capture_mode} mode")
 
     def init_ui(self):
         try:
@@ -291,17 +166,15 @@ class ArknightsApp(QMainWindow):
         self.setMaximumWidth(570)
         self.background = QPixmap("ico/background.png")
 
-        # 初始化动画对象
         self.size_animation = QPropertyAnimation(self, b"size")
         self.size_animation.setDuration(300)
         self.size_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-        # 主布局
         main_widget = QWidget()
         main_layout = QHBoxLayout(main_widget)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        # 输入面板
+        # Input panel
         self.input_panel = InputPanelUI()
         self.input_panel.setFixedWidth(640)
         self.input_panel.predict_requested.connect(self.predict)
@@ -309,33 +182,30 @@ class ArknightsApp(QMainWindow):
         self.input_panel.input_changed.connect(self.update_input_display)
         self.input_panel.terrain_changed.connect(self.predict)
 
-        # 中央面板 - 结果和控制区
+        # Center panel
         center_panel = QWidget()
-        center_panel.setFixedWidth(550)  # 固定右侧面板宽度
+        center_panel.setFixedWidth(550)
         center_layout = QVBoxLayout(center_panel)
 
-        # 顶部区域 - 输入显示
+        # ── Input display area ──
         input_display = QGroupBox()
-        input_display.setStyleSheet(
-            """
-                QGroupBox {
-                    background-color: rgba(0, 0, 0, 120);
-                    border-radius: 15px;
-                    border: 5px solid #F5EA2D;
-                    margin-top: 10px;
-                    padding: 10px 0;
-                }
-                QGroupBox::title {
-                    color: white;
-                    subcontrol-origin: margin;
-                    left: 15px;
-                    padding: 0 5px;
-                }
-            """
-        )
+        input_display.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(0, 0, 0, 120);
+                border-radius: 15px;
+                border: 5px solid #F5EA2D;
+                margin-top: 10px;
+                padding: 10px 0;
+            }
+            QGroupBox::title {
+                color: white;
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 5px;
+            }
+        """)
         input_layout = QHBoxLayout(input_display)
 
-        # 左侧人物显示
         left_input_group = QWidget()
         left_input_layout = QHBoxLayout(left_input_group)
         self.left_input_content = QWidget()
@@ -343,7 +213,6 @@ class ArknightsApp(QMainWindow):
         self.left_input_layout.setSpacing(5)
         left_input_layout.addWidget(self.left_input_content)
 
-        # 右侧人物显示
         right_input_group = QWidget()
         right_input_layout = QHBoxLayout(right_input_group)
         self.right_input_content = QWidget()
@@ -351,23 +220,19 @@ class ArknightsApp(QMainWindow):
         self.right_input_layout.setSpacing(5)
         right_input_layout.addWidget(self.right_input_content)
 
-        # 将左右两部分添加到主输入布局
         input_layout.addWidget(left_input_group)
         input_layout.addWidget(right_input_group)
-
         center_layout.addWidget(input_display)
 
-        # 中部区域 - 预测结果
+        # ── Result area ──
         result_group = QGroupBox()
-        result_group.setStyleSheet(
-            """
+        result_group.setStyleSheet("""
             QGroupBox {
                 background-color: rgba(120, 120, 120, 10);
                 border-radius: 15px;
                 border: 1px solid #747474;
             }
-            """
-        )
+        """)
         result_layout = QVBoxLayout(result_group)
         result_layout.setSpacing(10)
         result_layout.setContentsMargins(10, 10, 10, 10)
@@ -378,7 +243,6 @@ class ArknightsApp(QMainWindow):
         self.result_label.setStyleSheet("color: #313131;")
         result_layout.addWidget(self.result_label)
 
-        # 添加模型名称显示
         model_name = (
             Path(self.cannot_model.model_path).name
             if self.cannot_model.model_path
@@ -392,56 +256,43 @@ class ArknightsApp(QMainWindow):
         self.model_name_label.setStyleSheet("color: #666666;")
         result_layout.addWidget(self.model_name_label)
 
-        # 第二行按钮result_identify_group
         result_identify_group = QWidget()
         result_identify_layout = QHBoxLayout(result_identify_group)
-
         self.recognize_button = QPushButton("识别并预测")
         self.recognize_button.clicked.connect(self.recognize_and_predict)
         self.recognize_button.setStyleSheet(self.qt_button_style)
         result_identify_layout.addWidget(self.recognize_button)
-
         self.recognize_only_button = QPushButton("仅识别")
         self.recognize_only_button.clicked.connect(self.recognize_only)
         self.recognize_only_button.setStyleSheet(self.qt_button_style)
-        self.recognize_only_button.setFixedWidth(80)  # 小按钮
+        self.recognize_only_button.setFixedWidth(80)
         result_identify_layout.addWidget(self.recognize_only_button)
-
         result_layout.addWidget(result_identify_group)
-
         center_layout.addWidget(result_group)
 
-        # 底部区域 - 控制面板和连接设置
+        # ── Bottom area: controls + connection ──
         self.bottom_group = QWidget()
         self.bottom_layout = QHBoxLayout(self.bottom_group)
-
-        # 左侧垂直布局：控制面板 + 连接设置
         left_column = QVBoxLayout()
 
-        # --- 控制面板 ---
+        # Control panel
         control_group = QGroupBox("控制面板")
         control_layout = QVBoxLayout(control_group)
 
-        # 第一行按钮 - 基础设置
         row1 = QWidget()
         row1_layout = QHBoxLayout(row1)
         row1_layout.setContentsMargins(0, 0, 0, 0)
-
         self.duration_label = QLabel("训练时长(小时):")
         self.duration_entry = QLineEdit("325")
         self.duration_entry.setFixedWidth(50)
-
         self.mode_menu = QComboBox()
         self.mode_menu.addItems(["单人", "30人"])
         self.mode_menu.currentTextChanged.connect(self.update_game_mode)
-
         self.predict_enabled_checkbox = QCheckBox("预测")
         self.predict_enabled_checkbox.setChecked(True)
         self.predict_enabled_checkbox.toggled.connect(self._on_predict_toggled)
-
         self.invest_checkbox = QCheckBox("投资")
         self.invest_checkbox.stateChanged.connect(self.update_invest_status)
-
         row1_layout.addWidget(self.duration_label)
         row1_layout.addWidget(self.duration_entry)
         row1_layout.addWidget(self.mode_menu)
@@ -449,31 +300,23 @@ class ArknightsApp(QMainWindow):
         row1_layout.addWidget(self.invest_checkbox)
         row1_layout.addStretch()
 
-        # 第二行按钮 - 自动获取数据配置
         row_config = QWidget()
         row_config_layout = QHBoxLayout(row_config)
         row_config_layout.setContentsMargins(0, 0, 0, 0)
-
         self.auto_fetch_button = QPushButton("自动获取数据")
         self.auto_fetch_button.clicked.connect(self.toggle_auto_fetch)
-
         row_config_layout.addWidget(self.auto_fetch_button)
 
-        # 第二行按钮 - 数据操作和统计
         row2 = QWidget()
         row2_layout = QHBoxLayout(row2)
         row2_layout.setContentsMargins(0, 0, 0, 0)
-
         self.package_data_button = QPushButton("数据打包")
         self.package_data_button.clicked.connect(self.package_data_and_show)
         row2_layout.addWidget(self.package_data_button)
-
-        # 统计信息显示
         self.stats_label = QLabel()
         self.stats_label.setFont(QFont("Microsoft YaHei", 10))
         row2_layout.addWidget(self.stats_label)
 
-        # GitHub链接
         github_label = QLabel(
             '<a href="https://github.com/Ancientea/CannotMax" style="color: #2196F3; text-decoration: none;">https://github.com/Ancientea/CannotMax</a>'
         )
@@ -483,62 +326,45 @@ class ArknightsApp(QMainWindow):
         github_label.setFont(QFont("Microsoft YaHei", 9))
         github_label.setContentsMargins(0, 0, 0, 0)
 
-        # 添加到控制布局
         control_layout.addWidget(row1)
         control_layout.addWidget(row_config)
         control_layout.addWidget(row2)
         control_layout.addWidget(github_label)
 
-        # --- 连接设置 ---
+        # Connection settings
         connection_group = QGroupBox("连接设置")
         connection_layout = QVBoxLayout(connection_group)
 
-        # 模式选择行
         mode_row = QWidget()
         mode_row_layout = QHBoxLayout(mode_row)
         mode_row_layout.setContentsMargins(0, 0, 0, 0)
-
         self.mode_group = QButtonGroup(self)
         self.mode_group.setExclusive(True)
-
         self.adb_mode_btn = QPushButton("安卓端-ADB")
         self.pc_mode_btn = QPushButton("PC端(UI比例100%)")
         self.win_mode_btn = QPushButton("窗口截取")
-
-        mode_btns = [self.adb_mode_btn, self.pc_mode_btn, self.win_mode_btn]
         mode_style = """
             QPushButton {
-                background-color: #313131;
-                color: #F3F31F;
-                border-radius: 10px;
-                padding: 5px;
-                font-weight: bold;
+                background-color: #313131; color: #F3F31F;
+                border-radius: 10px; padding: 5px; font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #414141;
-            }
-            QPushButton:checked {
-                background-color: #F5EA2D;
-                color: #313131;
-            }
+            QPushButton:hover { background-color: #414141; }
+            QPushButton:checked { background-color: #F5EA2D; color: #313131; }
         """
-        for btn in mode_btns:
+        for btn in [self.adb_mode_btn, self.pc_mode_btn, self.win_mode_btn]:
             btn.setCheckable(True)
             btn.setStyleSheet(mode_style)
             self.mode_group.addButton(btn)
             mode_row_layout.addWidget(btn)
-
         self.adb_mode_btn.setChecked(True)
         self.adb_mode_btn.clicked.connect(lambda: self.on_mode_changed("ADB"))
         self.pc_mode_btn.clicked.connect(lambda: self.on_mode_changed("PC"))
         self.win_mode_btn.clicked.connect(lambda: self.on_mode_changed("WIN"))
         connection_layout.addWidget(mode_row)
 
-        # MAA连接方式行
         maa_row = QWidget()
         maa_row_layout = QHBoxLayout(maa_row)
         maa_row_layout.setContentsMargins(0, 0, 0, 0)
-
         self.connection_type_label = QLabel("连接方式:")
         self.connection_type_combo = QComboBox()
         for ct in ConnectionTypeRegistry.get_all_types():
@@ -546,7 +372,6 @@ class ArknightsApp(QMainWindow):
         self.connection_type_combo.currentIndexChanged.connect(
             self.on_connection_type_changed
         )
-
         self.input_method_label = QLabel("输入方式:")
         self.input_method_combo = QComboBox()
         default_method = InputMethodRegistry.get_default_method()
@@ -558,157 +383,300 @@ class ArknightsApp(QMainWindow):
         self.input_method_combo.currentIndexChanged.connect(
             self.on_input_method_changed
         )
-
         maa_row_layout.addWidget(self.connection_type_label)
         maa_row_layout.addWidget(self.connection_type_combo)
         maa_row_layout.addWidget(self.input_method_label)
         maa_row_layout.addWidget(self.input_method_combo)
         connection_layout.addWidget(maa_row)
 
-        # 序列号行
         conn_row1 = QWidget()
         conn_row1_layout = QHBoxLayout(conn_row1)
         conn_row1_layout.setContentsMargins(0, 0, 0, 0)
-
         self.serial_label = QLabel("模拟器序列号:")
         self.serial_entry = QComboBox()
         self.serial_entry.setEditable(True)
         self.serial_entry.setFixedWidth(200)
         self.serial_entry.lineEdit().setPlaceholderText("127.0.0.1:5555")
-
         self.serial_button = QPushButton("更新")
         self.serial_button.clicked.connect(self.update_device_serial)
-
         conn_row1_layout.addWidget(self.serial_label)
         conn_row1_layout.addWidget(self.serial_entry)
         conn_row1_layout.addWidget(self.serial_button)
-
-        # MAA状态行
         self.maa_status_label = QLabel("未连接")
         self.maa_status_label.setStyleSheet("color: #999999; font-size: 10px;")
         self.maa_status_label.setWordWrap(True)
-
         connection_layout.addWidget(conn_row1)
         connection_layout.addWidget(self.maa_status_label)
 
-        # 捕获设置行
         conn_row2 = QWidget()
         conn_row2_layout = QHBoxLayout(conn_row2)
         conn_row2_layout.setContentsMargins(0, 0, 0, 0)
-
         self.choose_window_button = QPushButton("选择截屏窗口")
         self.choose_window_button.clicked.connect(self.choose_capture_window)
         self.reselect_button = QPushButton("选择范围")
         self.reselect_button.clicked.connect(self.reselect_roi)
-
-        # 初始为 ADB 模式，禁用窗口捕获相关按钮
         self.choose_window_button.setEnabled(False)
         self.reselect_button.setEnabled(False)
-
         conn_row2_layout.addWidget(self.choose_window_button)
         conn_row2_layout.addWidget(self.reselect_button)
-
         connection_layout.addWidget(conn_row1)
         connection_layout.addWidget(conn_row2)
 
-        # 将两个组框添加到左侧列
         left_column.addWidget(control_group)
         left_column.addWidget(connection_group)
 
-        # 第五行按钮 (纵向排列的功能按钮)
+        # Side buttons
         row5 = QWidget()
         row5_layout = QVBoxLayout(row5)
-
         self.simulate_button = QPushButton("显示沙盒模拟")
         self.simulate_button.clicked.connect(self.run_simulation)
         self.simulate_button.setStyleSheet(self.qt_button_style)
         row5_layout.addWidget(self.simulate_button)
-
-        # 在右侧面板添加显示输入面板按钮
         self.toggle_input_button = QPushButton("显示输入面板")
         self.toggle_input_button.clicked.connect(self.toggle_input_panel)
         self.toggle_input_button.setStyleSheet(self.qt_button_style)
         row5_layout.addWidget(self.toggle_input_button)
-
-        # 在右侧面板添加历史对局按钮
         self.history_button = QPushButton("显示历史对局")
         self.history_button.clicked.connect(self.toggle_history_panel)
         self.history_button.setStyleSheet(self.qt_button_style)
         row5_layout.addWidget(self.history_button)
-
-        # 窗口置顶按钮
         self.always_on_top_button = QPushButton("窗口置顶")
         self.always_on_top_button.clicked.connect(self.toggle_always_on_top)
         self.always_on_top_button.setStyleSheet(self.qt_button_style)
         row5_layout.addWidget(self.always_on_top_button)
 
-        # 排布底部布局
         self.bottom_layout.addLayout(left_column)
         self.bottom_layout.addWidget(row5)
-
         center_layout.addWidget(self.bottom_group)
 
-        # 创建并添加HistoryMatchUI实例
         self.history_match_ui = HistoryMatchUI(self.history_match)
-        self.history_match_ui.setVisible(False)  # 初始隐藏
+        self.history_match_ui.setVisible(False)
 
         main_layout.addWidget(center_panel, 1)
         main_layout.addWidget(self.input_panel)
-        main_layout.addWidget(self.history_match_ui)  # 添加到主布局
-
+        main_layout.addWidget(self.history_match_ui)
         self.setCentralWidget(main_widget)
-        # 初始化输入面板状态
-        self.input_panel_visible = False
-        self.input_panel.setVisible(False)  # 默认折叠左侧输入面板
 
-        # 连接AutoFetch信号到槽
+        self.input_panel_visible = False
+        self.input_panel.setVisible(False)
+
         self.update_button_signal.connect(self.auto_fetch_button.setText)
         self.update_monster_signal.connect(self.update_monster)
         self.update_prediction_signal.connect(self.update_prediction)
         self.update_statistics_signal.connect(self.update_statistics)
         self.update_package_button_signal.connect(self.package_data_button.setEnabled)
 
-        # Refresh device list asynchronously using QTimer to avoid blocking UI
         from PyQt6.QtCore import QTimer
 
         QTimer.singleShot(0, self._load_device_list_async)
 
         DarkModeStyleFix.apply(QApplication.instance())
 
-    def toggle_input_panel(self):
-        """切换输入面板的显示"""
-        target_width = self.width()
-        is_visible = self.input_panel.isVisible()
-        self.input_panel.setVisible(not is_visible)
-        if not is_visible:
-            self.toggle_input_button.setText("隐藏输入面板")
-            target_width += self.input_panel.width()
+    # ── Qt overrides ──────────────────────────────────────────────────
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        scaled_pixmap = self.background.scaled(
+            self.size(),
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        painter.drawPixmap(
+            (self.width() - scaled_pixmap.width()) // 2,
+            (self.height() - scaled_pixmap.height()) // 2,
+            scaled_pixmap,
+        )
+
+    def closeEvent(self, event):
+        if hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running:
+            self.auto_fetch.stop_auto_fetch()
+        event.accept()
+
+    # ── Connector / mode switching ───────────────────────────────────
+
+    def _get_connector_kwargs(self, mode: str) -> dict:
+        if mode == "ADB":
+            return {"adb_serial": self.serial_entry.currentText()}
+        elif mode == "PC":
+            return {"window_name": "明日方舟"}
+        elif mode == "WIN":
+            return {"window_name": getattr(self, "_win_window_name", "")}
+        return {}
+
+    def _get_current_state(self):
+        if self.current_capture_mode not in self.connector_factory._pool:
+            return None
+        _, _, state = self.connector_factory._pool[self.current_capture_mode]
+        return state
+
+    def on_mode_changed(self, mode: str):
+        _ = QtCore.QMutexLocker(self._mode_switch_mutex)
+        old_mode = self.current_capture_mode
+        self.current_capture_mode = mode
+        logger.info(f"Switching mode: {old_mode} → {mode}")
+
+        if hasattr(self, "auto_fetch") and getattr(
+            self.auto_fetch, "auto_fetch_running", False
+        ):
+            self.current_capture_mode = old_mode
+            QMessageBox.warning(self, "提示", "自动获取数据运行中，请先停止再切换模式")
+            return
+
+        self.recognizer.crop_ratio = None
+        self.recognizer.avatar_regions = None
+        self.recognizer.number_regions = None
+
+        is_win = mode == "WIN"
+        is_adb = mode == "ADB"
+        self.choose_window_button.setEnabled(is_win)
+        self.reselect_button.setEnabled(is_win)
+        self.serial_label.setEnabled(is_adb)
+        self.serial_entry.setEnabled(is_adb)
+        self.serial_button.setEnabled(is_adb)
+        self.connection_type_label.setEnabled(is_adb)
+        self.connection_type_combo.setEnabled(is_adb)
+        self.input_method_label.setEnabled(is_adb)
+        self.input_method_combo.setEnabled(is_adb)
+        self.auto_fetch_button.setEnabled(True)
+
+        kwargs = self._get_connector_kwargs(mode)
+        new_connector = self.connector_factory.get_connector(mode, **kwargs)
+
+        if (
+            self.connector is not None
+            and self.connector is not new_connector
+            and old_mode in self.connector_factory._pool
+        ):
+            self.connector_factory.return_connector(old_mode, self.connector)
+
+        self.connector = new_connector
+        self._update_ui_from_factory_state()
+
+    def _update_ui_from_factory_state(self):
+        mode = self.current_capture_mode
+        if mode not in self.connector_factory._pool:
+            self.maa_status_label.setText("未连接")
+            self.maa_status_label.setStyleSheet("color: #999999; font-size: 10px;")
+            return
+
+        _, _, state = self.connector_factory._pool[mode]
+        if state == ConnectorState.IDLE:
+            self.maa_status_label.setText("未连接")
+            self.maa_status_label.setStyleSheet("color: #999999; font-size: 10px;")
+        elif state == ConnectorState.VALID:
+            self._update_connector_ready_ui()
         else:
-            self.toggle_input_button.setText("显示输入面板")
-            target_width -= self.input_panel.width()
-        self.animate_size_change(target_width)
+            self.maa_status_label.setText(f"{mode} 连接失败")
+            self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
+            self.recognize_button.setEnabled(False)
+            self.auto_fetch_button.setEnabled(False)
 
-    def animate_size_change(self, target_width, target_height=None):
-        """通用的尺寸动画方法"""
-        if target_height is None:
-            target_height = self.height()
-        if self.size_animation.state() == QPropertyAnimation.State.Running:
-            self.size_animation.stop()
+    def _update_connector_ready_ui(self):
+        self.recognize_button.setEnabled(True)
+        self.auto_fetch_button.setEnabled(True)
+        if hasattr(self.connector, "is_maa_available"):
+            if self.connector.is_maa_available:
+                self.maa_status_label.setText("MAA Framework 已连接")
+                self.maa_status_label.setStyleSheet("color: #00aa00; font-size: 10px;")
+            else:
+                self.maa_status_label.setText("使用自有实现")
+                self.maa_status_label.setStyleSheet("color: #996600; font-size: 10px;")
+        logger.info(f"Connected to {self.current_capture_mode} mode")
 
-        self.setMinimumWidth(min(self.width(), target_width))
-        self.setMaximumWidth(max(self.width(), target_width))
+    # ── Device list ──────────────────────────────────────────────────
 
-        self.size_animation.setStartValue(self.size())
-        self.size_animation.setEndValue(QtCore.QSize(target_width, target_height))
-        self.size_animation.start()
+    def _load_device_list_async(self):
+        try:
+            if self.connector is not None:
+                from cannotmax.core.connector.adb_connector import AdbConnector
 
-        def set_fixed_after_animation():
-            self.setFixedWidth(self.width())
+                if isinstance(self.connector, AdbConnector):
+                    devices = self.connector.get_device_list()
+                    self._populate_serial_combo(devices)
+                    return
+        except Exception as e:
+            logger.warning(f"Failed to load device list: {e}")
+        self._populate_serial_combo(["127.0.0.1:5555"])
 
-        self.size_animation.finished.connect(set_fixed_after_animation)
+    def _populate_serial_combo(self, devices):
+        current_text = self.serial_entry.currentText()
+        self.serial_entry.clear()
+        if devices:
+            self.serial_entry.addItems(devices)
+            if current_text in devices:
+                self.serial_entry.setCurrentText(current_text)
+            else:
+                self.serial_entry.setCurrentIndex(0)
+        else:
+            self.serial_entry.addItem("127.0.0.1:5555")
+            self.serial_entry.setCurrentText(
+                current_text if current_text else "127.0.0.1:5555"
+            )
+
+    def refresh_device_list(self):
+        current_text = self.serial_entry.currentText()
+        connector = getattr(self, "_device_list_connector", None) or self.connector
+        if connector is None:
+            self.serial_entry.clear()
+            self.serial_entry.addItem("127.0.0.1:5555")
+            self.serial_entry.setCurrentText(
+                current_text if current_text else "127.0.0.1:5555"
+            )
+            return
+        try:
+            devices = connector.get_device_list()
+        except Exception as e:
+            logger.warning(f"Failed to get device list: {e}")
+            devices = None
+        self._populate_serial_combo(devices if devices else [])
+
+    def on_connection_type_changed(self, index):
+        type_id = self.connection_type_combo.currentData()
+        if not type_id:
+            return
+        default_address = ConnectionTypeRegistry.get_default_address(type_id)
+        if default_address:
+            self.serial_entry.setCurrentText(default_address)
+        if self.connector:
+            try:
+                self.connector.update_device_serial(default_address)
+            except Exception as e:
+                logger.warning(f"Update device serial failed: {e}")
+            self.connector_factory.mark_invalid(self.current_capture_mode)
+            self.connector.disconnect()
+            self._update_ui_from_factory_state()
+
+    def on_input_method_changed(self, index):
+        method_id = self.input_method_combo.currentData()
+        if not method_id:
+            return
+        if self.connector:
+            self.connector.set_input_method(method_id)
+        if self.connector and self.current_capture_mode in self.connector_factory._pool:
+            _, _, state = self.connector_factory._pool[self.current_capture_mode]
+            if state == ConnectorState.VALID:
+                QMessageBox.information(
+                    self, "提示", "输入方式已更改，请重新连接以生效"
+                )
+
+    def update_device_serial(self):
+        if self.connector is None:
+            QMessageBox.warning(self, "提示", "请先选择连接方式并连接设备")
+            return
+        new_serial = self.serial_entry.currentText()
+        device_serial = self.connector.update_device_serial(new_serial)
+        self.connector_factory.mark_invalid(self.current_capture_mode)
+        kwargs = self._get_connector_kwargs(self.current_capture_mode)
+        self.connector = self.connector_factory.get_connector(
+            self.current_capture_mode, **kwargs
+        )
+        self.serial_entry.setCurrentText(device_serial)
+        self._update_ui_from_factory_state()
+        QMessageBox.information(self, "提示", f"已更新模拟器序列号为：{device_serial}")
+
+    # ── Capture / window ─────────────────────────────────────────────
 
     def choose_capture_window(self):
-        """弹出对话框选择窗口作为 WinRT 截屏源，用于窗口捕获模式"""
         import traceback
 
         import cv2
@@ -722,7 +690,6 @@ class ArknightsApp(QMainWindow):
                 cv2.destroyAllWindows()
             except Exception:
                 pass
-
             dlg = WindowPickerDialog(self)
             if dlg.exec():
                 sel = dlg.get_selection()
@@ -738,7 +705,6 @@ class ArknightsApp(QMainWindow):
                     self._win_window_name = ""
                     max(1, sel["monitor_index"])
                     hint = f"已切换至整屏：显示器 {sel['monitor_index']}"
-
                 self.connector_factory.mark_invalid("WIN")
                 kwargs = self._get_connector_kwargs("WIN")
                 self.connector = self.connector_factory.get_connector("WIN", **kwargs)
@@ -752,247 +718,109 @@ class ArknightsApp(QMainWindow):
             self._switching_source = False
             self.choose_window_button.setEnabled(self.current_capture_mode == "WIN")
 
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        # 缩放图片以适应窗口（保持宽高比）
-        scaled_pixmap = self.background.scaled(
-            self.size(),
-            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        # 居中绘制
-        painter.drawPixmap(
-            (self.width() - scaled_pixmap.width()) // 2,
-            (self.height() - scaled_pixmap.height()) // 2,
-            scaled_pixmap,
-        )
-
-    def update_input_display(self):
-        left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-
-        def update_input_display_half(input_layout, monsters_dict):
-            # 清除现有显示
-            for i in reversed(range(input_layout.count())):
-                widget = input_layout.itemAt(i).widget()
-                if widget:
-                    widget.setParent(None)
-            has_input = False
-            for i in range(1, MONSTER_COUNT + 1):
-                value = monsters_dict[str(i)].text()
-                if value.isdigit() and int(value) > 0:
-                    has_input = True
-                    monster_widget = self.create_monster_display_widget(i, value)
-                    input_layout.addWidget(monster_widget)
-            # 如果没有输入，显示提示
-            if not has_input:
-                input_layout.addWidget(QLabel("无"))
-
-        update_input_display_half(self.left_input_layout, left_monsters_dict)
-        update_input_display_half(self.right_input_layout, right_monsters_dict)
-
-    def create_monster_display_widget(self, monster_id, count):
-        """创建人物显示组件"""
-        widget = QWidget()
-        widget.setFixedWidth(67)
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(0)  # 模糊半径（控制发光范围）
-        shadow.setColor(QColor("#313131"))  # 发光颜色
-        shadow.setOffset(2)  # 偏移量（0表示均匀四周发光）
-        widget.setGraphicsEffect(shadow)
-
-        widget.setStyleSheet(
-            """
-                QWidget {
-                    border-radius: 0px;
-                }
-            """
-        )
-
-        layout = QVBoxLayout(widget)
-        layout.setSpacing(2)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # 人物图片
-        img_label = QLabel()
-        img_label.setFixedSize(70, 70)
-        img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
+    def reselect_roi(self):
         try:
-            pixmap = QPixmap(
-                f"images/monsters/{MONSTER_DATA['原始名称'][monster_id]}.png"
+            screenshot = self.connector.capture_screenshot()
+            roi = self.roi_selector.select_roi(
+                screenshot,
+                example_image_path=IMAGES_DIR / "samples/roi_selecting_eg.png",
             )
-            if not pixmap.isNull():
-                pixmap = pixmap.scaled(
-                    70,
-                    70,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
+            if roi:
+                (px1, py1), (px2, py2) = roi
+                h, w = screenshot.shape[:2]
+                self.recognizer.crop_ratio = (
+                    (px1 / w, py1 / h),
+                    (px2 / w, py2 / h),
                 )
-                img_label.setPixmap(pixmap)
+                logger.info("已设置自定义 ROI: %s", roi)
         except Exception as e:
-            logger.error(f"加载人物{monster_id}图片错误: {str(e)}")
-            pass
+            logger.exception("ROI 选择失败：%s", e)
+            QMessageBox.warning(self, "错误", f"无法获取截图进行 ROI 选择：{e}")
 
-        # 添加鼠标悬浮提示
-        if monster_id in MONSTER_DATA.index:
-            data = MONSTER_DATA.loc[monster_id].to_dict()
-            tooltip_text = ""
-            for key, value in data.items():
-                tooltip_text += f"{key}: {value}\n"
-            img_label.setToolTip(tooltip_text.strip())
-
-        # 数量标签
-        count_label = QLabel(count)
-        count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        count_label.setStyleSheet(
-            """
-            color: #EDEDED;
-            font: bold 20px SimHei;
-            border-radius: 5px;
-            padding: 2px 5px;
-            min-width: 20px;
-        """
-        )
-
-        layout.addWidget(img_label)
-        layout.addWidget(count_label)
-
-        return widget
-
-    def reset_entries(self):
-        self.result_label.setText("预测结果将显示在这里")
-        self.result_label.setStyleSheet("color: black;")
-        self.update_input_display()
-
-    def get_prediction(self):
-        try:
-            left_monsters_dict, right_monsters_dict = (
-                self.input_panel.get_monster_counts()
-            )
-            left_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
-            right_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
-
-            for name, entry in left_monsters_dict.items():
-                value = entry.text()
-                left_counts[int(name) - 1] = int(value) if value.isdigit() else 0
-
-            for name, entry in right_monsters_dict.items():
-                value = entry.text()
-                right_counts[int(name) - 1] = int(value) if value.isdigit() else 0
-
-            # 构建包含地形的完整特征向量
-            full_features = self.input_panel.build_terrain_features(
-                left_counts, right_counts
-            )
-
-            prediction = self.cannot_model.get_prediction_with_terrain(full_features)
-            return prediction
-        except FileNotFoundError:
-            QMessageBox.critical(self, "错误", "未找到模型文件，请先训练")
-        except RuntimeError as e:
-            if "size mismatch" in str(e):
-                QMessageBox.critical(
-                    self, "错误", "模型结构不匹配！请删除旧模型并重新训练"
-                )
-            else:
-                QMessageBox.critical(self, "错误", f"模型加载失败: {str(e)}")
-        except ValueError:
-            QMessageBox.critical(self, "错误", "请输入有效的数字（0或正整数）")
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"预测时发生错误: {str(e)}")
-
-        return 0.5
-
-    def update_prediction(self, prediction):
-        """更新预测结果显示"""
-        # 模型结果处理
-        right_win_prob = prediction
-        left_win_prob = 1 - right_win_prob
-
-        # 判断胜负方向
-        winner = "左方" if left_win_prob > 0.5 else "右方"
-        if 0.6 > left_win_prob > 0.4:
-            winner = "难说"
-
-        # 设置结果标签样式
-        if winner == "左方":
-            self.result_label.setStyleSheet("color: #E23F25; font: bold,14px;")
+    def toggle_input_panel(self):
+        target_width = self.width()
+        is_visible = self.input_panel.isVisible()
+        self.input_panel.setVisible(not is_visible)
+        if not is_visible:
+            self.toggle_input_button.setText("隐藏输入面板")
+            target_width += self.input_panel.width()
         else:
-            self.result_label.setStyleSheet("color: #25ace2; font: bold,14px;")
+            self.toggle_input_button.setText("显示输入面板")
+            target_width -= self.input_panel.width()
+        self.animate_size_change(target_width)
 
-        left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-        # 生成结果文本
-        if winner != "难说":
-            result_text = (
-                f"预测胜方: {winner}\n"
-                f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
-            )
+    def toggle_history_panel(self):
+        target_width = self.width()
+        if self.history_match is None:
+            QMessageBox.warning(self, "警告", "历史数据加载失败，无法显示历史对局")
+            return
+        is_visible = self.history_match_ui.isVisible()
+        self.history_match_ui.setVisible(not is_visible)
+        if not is_visible:
+            self.history_button.setText("隐藏历史对局")
+            left, right = self.input_panel.get_monster_counts()
+            self.history_match_ui.render_similar_matches(left, right)
+            target_width += 540
         else:
-            result_text = (
-                f"这一把{winner}\n"
-                f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
-                f"难道说？难道说？难道说？\n"
+            self.history_button.setText("显示历史对局")
+            target_width -= 540
+        self.animate_size_change(target_width)
+
+    def toggle_always_on_top(self):
+        if self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint:
+            self.setWindowFlags(
+                self.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint
             )
-            self.result_label.setStyleSheet("color: black; font: bold,24px;")
+            self.always_on_top_button.setText("窗口置顶")
+        else:
+            self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            self.always_on_top_button.setText("取消置顶")
+        self.show()
 
-        # 添加特殊干员提示
-        special_messages = self.special_monster_handler.check_special_monsters(
-            left_monsters_dict, right_monsters_dict, winner
-        )
-        if special_messages:
-            result_text += "\n" + special_messages
+    def animate_size_change(self, target_width, target_height=None):
+        if target_height is None:
+            target_height = self.height()
+        if self.size_animation.state() == QPropertyAnimation.State.Running:
+            self.size_animation.stop()
+        self.setMinimumWidth(min(self.width(), target_width))
+        self.setMaximumWidth(max(self.width(), target_width))
+        self.size_animation.setStartValue(self.size())
+        self.size_animation.setEndValue(QtCore.QSize(target_width, target_height))
+        self.size_animation.start()
 
-        self.result_label.setText(result_text)
+        def set_fixed_after_animation():
+            self.setFixedWidth(self.width())
 
-    def predict(self):
-        prediction = self.get_prediction()
-        self.update_prediction(prediction)
-        self.update_input_display()
+        self.size_animation.finished.connect(set_fixed_after_animation)
 
-        if self.history_match_ui.isVisible():
-            left_monsters_dict, right_monsters_dict = (
-                self.input_panel.get_monster_counts()
-            )
-            self.history_match_ui.render_similar_matches(
-                left_monsters_dict, right_monsters_dict
-            )
+    # ── Recognition ──────────────────────────────────────────────────
 
     def get_recognize(self):
-        """Recognize monsters from screenshot (state-based lazy pooling)."""
         if self.connector is None:
             QMessageBox.warning(self, "未连接", "请先切换模式并连接设备/窗口")
             return
-
         try:
-            # 1. Get full-screen screenshot (lazy connection happens here if IDLE)
             screenshot = self.connector.capture_screenshot()
             if screenshot is None:
-                # Mark as invalid if screenshot failed (likely connection issue)
                 self.connector_factory.mark_invalid(self.current_capture_mode)
                 self._update_ui_from_factory_state()
                 raise Exception("截图失败，请检查设备连接")
 
-            # 2. Recognizer handles: detect → crop → split → recognize
             mode = self.current_capture_mode
             auto_fb = mode in ("ADB", "PC")
             results = self.recognizer.process_regions(
                 screenshot, auto_fallback=auto_fb, mode=mode
             )
-
             if not results:
                 raise Exception("未检测到怪物条")
 
-            # 3. Success: mark VALID and update UI (IDLE→VALID transition)
             self.connector_factory.mark_valid(self.current_capture_mode)
             self._update_connector_ready_ui()
             self.update_monster(results)
-
         except ROINotSelectedError:
             QMessageBox.warning(self, "错误", "请先选择怪物条范围")
         except Exception as e:
             logger.exception(f"Recognition failed: {e}")
-            # Check if it's a connection error
             error_msg = str(e).lower()
             if (
                 "connection" in error_msg
@@ -1004,9 +832,6 @@ class ArknightsApp(QMainWindow):
             QMessageBox.warning(self, "识别失败", str(e))
 
     def update_monster(self, results):
-        """
-        根据识别结果更新怪物面板
-        """
         left_counts = {}
         right_counts = {}
         for res in results:
@@ -1028,57 +853,162 @@ class ArknightsApp(QMainWindow):
         self.get_recognize()
         prediction = self.get_prediction()
         self.update_prediction(prediction)
-        # 历史对局
         if self.history_match_ui.isVisible():
-            left_monsters_dict, right_monsters_dict = (
-                self.input_panel.get_monster_counts()
-            )
-            self.history_match_ui.render_similar_matches(
-                left_monsters_dict, right_monsters_dict
-            )
+            left, right = self.input_panel.get_monster_counts()
+            self.history_match_ui.render_similar_matches(left, right)
 
-    def toggle_history_panel(self):
-        """切换历史对局面板的显示"""
-        target_width = self.width()
-        if self.history_match is None:
-            QMessageBox.warning(self, "警告", "历史数据加载失败，无法显示历史对局")
-            return
+    # ── Prediction ───────────────────────────────────────────────────
 
-        is_visible = self.history_match_ui.isVisible()
-        self.history_match_ui.setVisible(not is_visible)
-        if not is_visible:
-            self.history_button.setText("隐藏历史对局")
-            left_monsters_dict, right_monsters_dict = (
-                self.input_panel.get_monster_counts()
-            )
-            self.history_match_ui.render_similar_matches(
-                left_monsters_dict, right_monsters_dict
-            )
-            target_width += 540
-        else:
-            self.history_button.setText("显示历史对局")
-            target_width -= 540
-        self.animate_size_change(target_width)
-
-    def reselect_roi(self):
-        """Re-select ROI interactively."""
+    def get_prediction(self):
         try:
-            screenshot = self.connector.capture_screenshot()
-            roi = self.roi_selector.select_roi(
-                screenshot,
-                example_image_path=IMAGES_DIR / "samples/roi_selecting_eg.png",
+            left_monsters_dict, right_monsters_dict = (
+                self.input_panel.get_monster_counts()
             )
-            if roi:
-                (px1, py1), (px2, py2) = roi
-                h, w = screenshot.shape[:2]
-                self.recognizer.crop_ratio = (
-                    (px1 / w, py1 / h),
-                    (px2 / w, py2 / h),
+            left_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
+            right_counts = np.zeros(MONSTER_COUNT, dtype=np.int16)
+            for name, entry in left_monsters_dict.items():
+                value = entry.text()
+                left_counts[int(name) - 1] = int(value) if value.isdigit() else 0
+            for name, entry in right_monsters_dict.items():
+                value = entry.text()
+                right_counts[int(name) - 1] = int(value) if value.isdigit() else 0
+            full_features = self.input_panel.build_terrain_features(
+                left_counts, right_counts
+            )
+            return self.cannot_model.get_prediction_with_terrain(full_features)
+        except FileNotFoundError:
+            QMessageBox.critical(self, "错误", "未找到模型文件，请先训练")
+        except RuntimeError as e:
+            if "size mismatch" in str(e):
+                QMessageBox.critical(
+                    self, "错误", "模型结构不匹配！请删除旧模型并重新训练"
                 )
-                logger.info("已设置自定义 ROI: %s", roi)
+            else:
+                QMessageBox.critical(self, "错误", f"模型加载失败: {str(e)}")
+        except ValueError:
+            QMessageBox.critical(self, "错误", "请输入有效的数字（0或正整数）")
         except Exception as e:
-            logger.exception("ROI 选择失败：%s", e)
-            QMessageBox.warning(self, "错误", f"无法获取截图进行 ROI 选择：{e}")
+            QMessageBox.critical(self, "错误", f"预测时发生错误: {str(e)}")
+        return 0.5
+
+    def update_prediction(self, prediction):
+        right_win_prob = prediction
+        left_win_prob = 1 - right_win_prob
+        winner = "左方" if left_win_prob > 0.5 else "右方"
+        if 0.6 > left_win_prob > 0.4:
+            winner = "难说"
+
+        if winner == "左方":
+            self.result_label.setStyleSheet("color: #E23F25; font: bold,14px;")
+        else:
+            self.result_label.setStyleSheet("color: #25ace2; font: bold,14px;")
+
+        left, right = self.input_panel.get_monster_counts()
+        if winner != "难说":
+            result_text = (
+                f"预测胜方: {winner}\n"
+                f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
+            )
+        else:
+            result_text = (
+                f"这一把{winner}\n"
+                f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
+                "难道说？难道说？难道说？\n"
+            )
+            self.result_label.setStyleSheet("color: black; font: bold,24px;")
+
+        special_messages = self.special_monster_handler.check_special_monsters(
+            left, right, winner
+        )
+        if special_messages:
+            result_text += "\n" + special_messages
+        self.result_label.setText(result_text)
+
+    def predict(self):
+        prediction = self.get_prediction()
+        self.update_prediction(prediction)
+        self.update_input_display()
+        if self.history_match_ui.isVisible():
+            left, right = self.input_panel.get_monster_counts()
+            self.history_match_ui.render_similar_matches(left, right)
+
+    # ── Input display ────────────────────────────────────────────────
+
+    def update_input_display(self):
+        left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
+
+        def update_half(input_layout, monsters_dict):
+            for i in reversed(range(input_layout.count())):
+                widget = input_layout.itemAt(i).widget()
+                if widget:
+                    widget.setParent(None)
+            has_input = False
+            for i in range(1, MONSTER_COUNT + 1):
+                value = monsters_dict[str(i)].text()
+                if value.isdigit() and int(value) > 0:
+                    has_input = True
+                    widget = self.create_monster_display_widget(i, value)
+                    input_layout.addWidget(widget)
+            if not has_input:
+                input_layout.addWidget(QLabel("无"))
+
+        update_half(self.left_input_layout, left_monsters_dict)
+        update_half(self.right_input_layout, right_monsters_dict)
+
+    def create_monster_display_widget(self, monster_id, count):
+        widget = QWidget()
+        widget.setFixedWidth(67)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(0)
+        shadow.setColor(QColor("#313131"))
+        shadow.setOffset(2)
+        widget.setGraphicsEffect(shadow)
+        widget.setStyleSheet("QWidget { border-radius: 0px; }")
+
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(2)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        img_label = QLabel()
+        img_label.setFixedSize(70, 70)
+        img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        try:
+            pixmap = QPixmap(
+                f"images/monsters/{MONSTER_DATA['原始名称'][monster_id]}.png"
+            )
+            if not pixmap.isNull():
+                pixmap = pixmap.scaled(
+                    70,
+                    70,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                img_label.setPixmap(pixmap)
+        except Exception as e:
+            logger.error(f"加载人物{monster_id}图片错误: {str(e)}")
+
+        if monster_id in MONSTER_DATA.index:
+            data = MONSTER_DATA.loc[monster_id].to_dict()
+            tooltip_text = "".join(f"{k}: {v}\n" for k, v in data.items())
+            img_label.setToolTip(tooltip_text.strip())
+
+        count_label = QLabel(count)
+        count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        count_label.setStyleSheet(
+            "color: #EDEDED; font: bold 20px SimHei; border-radius: 5px; "
+            "padding: 2px 5px; min-width: 20px;"
+        )
+        layout.addWidget(img_label)
+        layout.addWidget(count_label)
+        return widget
+
+    def reset_entries(self):
+        self.result_label.setText("预测结果将显示在这里")
+        self.result_label.setStyleSheet("color: black;")
+        self.update_input_display()
+
+    # ── Auto-fetch ───────────────────────────────────────────────────
 
     def toggle_auto_fetch(self):
         _ = QtCore.QMutexLocker(self._auto_fetch_mutex)
@@ -1118,115 +1048,6 @@ class ArknightsApp(QMainWindow):
         )
         self.stats_label.setText(stats_text)
 
-    def _load_device_list_async(self):
-        """Load device list asynchronously (called via QTimer.singleShot)."""
-        try:
-            # Only use AdbConnector for device list (doesn't require connection)
-            if self.connector is not None:
-                from cannotmax.core.connector.adb_connector import AdbConnector
-
-                if isinstance(self.connector, AdbConnector):
-                    devices = self.connector.get_device_list()
-                    self._populate_serial_combo(devices)
-                    return
-        except Exception as e:
-            logger.warning(f"Failed to load device list: {e}")
-
-        # Fallback to default
-        self._populate_serial_combo(["127.0.0.1:5555"])
-
-    def _populate_serial_combo(self, devices):
-        """Populate serial entry with device list"""
-        current_text = self.serial_entry.currentText()
-        self.serial_entry.clear()
-        if devices:
-            self.serial_entry.addItems(devices)
-            if current_text in devices:
-                self.serial_entry.setCurrentText(current_text)
-            else:
-                self.serial_entry.setCurrentIndex(0)
-        else:
-            self.serial_entry.addItem("127.0.0.1:5555")
-            self.serial_entry.setCurrentText(
-                current_text if current_text else "127.0.0.1:5555"
-            )
-
-    def refresh_device_list(self):
-        """刷新并更新模拟器序列号下拉列表"""
-        current_text = self.serial_entry.currentText()
-
-        # Try pre-initialized connector first, then active connector
-        connector = getattr(self, "_device_list_connector", None) or self.connector
-
-        if connector is None:
-            # No connector available, show default
-            self.serial_entry.clear()
-            self.serial_entry.addItem("127.0.0.1:5555")
-            self.serial_entry.setCurrentText(
-                current_text if current_text else "127.0.0.1:5555"
-            )
-            return
-
-        try:
-            devices = connector.get_device_list()
-        except Exception as e:
-            logger.warning(f"Failed to get device list: {e}")
-            devices = None
-
-        self._populate_serial_combo(devices if devices else [])
-
-    def on_connection_type_changed(self, index):
-        type_id = self.connection_type_combo.currentData()
-        if not type_id:
-            return
-        default_address = ConnectionTypeRegistry.get_default_address(type_id)
-        if default_address:
-            self.serial_entry.setCurrentText(default_address)
-
-        if self.connector:
-            # Update device serial first (preserves connection if possible)
-            try:
-                self.connector.update_device_serial(default_address)
-            except Exception as e:
-                logger.warning(f"Update device serial failed: {e}")
-
-            # Mark as INVALID and disconnect (state-based)
-            self.connector_factory.mark_invalid(self.current_capture_mode)
-            self.connector.disconnect()
-            self._update_ui_from_factory_state()
-
-    def on_input_method_changed(self, index):
-        method_id = self.input_method_combo.currentData()
-        if not method_id:
-            return
-        if self.connector:
-            self.connector.set_input_method(method_id)
-        # Check if currently VALID (connected)
-        if self.connector and self.current_capture_mode in self.connector_factory._pool:
-            _, _, state = self.connector_factory._pool[self.current_capture_mode]
-            if state == ConnectorState.VALID:
-                QMessageBox.information(
-                    self, "提示", "输入方式已更改，请重新连接以生效"
-                )
-
-    def update_device_serial(self):
-        if self.connector is None:
-            QMessageBox.warning(self, "提示", "请先选择连接方式并连接设备")
-            return
-
-        new_serial = self.serial_entry.currentText()
-        device_serial = self.connector.update_device_serial(new_serial)
-        # Force reconnect by marking invalid and getting new connector
-        self.connector_factory.mark_invalid(self.current_capture_mode)
-        kwargs = self._get_connector_kwargs(self.current_capture_mode)
-        self.connector = self.connector_factory.get_connector(
-            self.current_capture_mode, **kwargs
-        )
-        self.serial_entry.setCurrentText(device_serial)
-        # Update UI to reflect new connector state (IDLE)
-        self._update_ui_from_factory_state()
-        QMessageBox.information(self, "提示", f"已更新模拟器序列号为：{device_serial}")
-
     def start_callback(self):
         self.update_button_signal.emit("停止自动获取数据")
         self.update_package_button_signal.emit(False)
@@ -1244,23 +1065,17 @@ class ArknightsApp(QMainWindow):
     def update_statistics_callback(self):
         self.update_statistics_signal.emit()
 
+    # ── Simulation ───────────────────────────────────────────────────
+
     def run_simulation(self):
-        """
-        获取左右怪物信息，转换为JSON格式，并通过stdin传递给main_sim.py子进程。
-        """
         left_monsters_data = {}
         right_monsters_data = {}
-
         left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
 
-        # 获取左侧怪物信息
         for monster_id, entry in left_monsters_dict.items():
             count = entry.text()
             if count.isdigit() and int(count) > 0:
-                # Need to map monster_id (string) to monster name
-                # Assuming MONSTER_MAPPING is accessible or can be imported
                 try:
-                    # Convert monster_id string to int for mapping
                     monster_name = self.get_monster_name_by_id(int(monster_id))
                     if monster_name:
                         left_monsters_data[monster_name] = int(count)
@@ -1269,12 +1084,10 @@ class ArknightsApp(QMainWindow):
                 except Exception as e:
                     logger.error(f"Error getting monster name for ID {monster_id}: {e}")
 
-        # 获取右侧怪物信息
         for monster_id, entry in right_monsters_dict.items():
             count = entry.text()
             if count.isdigit() and int(count) > 0:
                 try:
-                    # Convert monster_id string to int for mapping
                     monster_name = self.get_monster_name_by_id(int(monster_id))
                     if monster_name:
                         right_monsters_data[monster_name] = int(count)
@@ -1286,20 +1099,15 @@ class ArknightsApp(QMainWindow):
                     logger.error(f"Error getting monster name for ID {monster_id}: {e}")
 
         simulation_data = {"left": left_monsters_data, "right": right_monsters_data}
-
         json_data = json.dumps(simulation_data, ensure_ascii=False)
         logger.info(f"Simulation data JSON: {json_data}")
-
         try:
-            # 启动main_sim.py子进程 (非阻塞)
-            # Use sys.executable to ensure the same Python interpreter is used
             process = subprocess.Popen(
                 [sys.executable, "main_sim.py"],
                 stdin=subprocess.PIPE,
                 text=True,
                 encoding="utf-8",
             )
-            # 通过stdin传递JSON数据并关闭stdin
             process.stdin.write(json_data)
             process.stdin.close()
         except FileNotFoundError:
@@ -1308,37 +1116,15 @@ class ArknightsApp(QMainWindow):
             QMessageBox.critical(self, "错误", f"启动模拟器时发生错误: {str(e)}")
 
     def get_monster_name_by_id(self, monster_id: int):
-        """根据怪物ID获取怪物名称"""
-        # Need to import MONSTER_MAPPING from simulator.utils
         try:
             from simulator.utils import MONSTER_MAPPING
 
-            # Adjust for 1-based UI IDs vs 0-based mapping keys
-            monster_name = MONSTER_MAPPING.get(monster_id - 1)
-            if not monster_name:
-                logger.error(f"Monster ID {monster_id} not found in MONSTER_MAPPING.")
-            return monster_name
+            return MONSTER_MAPPING.get(monster_id - 1)
         except ImportError:
             logger.error("Error importing MONSTER_MAPPING from simulator.utils")
             return None
 
-    def update_game_mode(self, mode):
-        self.game_mode = mode
-
-    def update_invest_status(self, state):
-        self.is_invest = state == Qt.CheckState.Checked.value
-
-    def _on_predict_toggled(self, checked):
-        self.invest_checkbox.setEnabled(checked)
-        if not checked:
-            self.invest_checkbox.setChecked(False)
-
-    def update_result(self, text):
-        self.result_label.setText(text)
-
-    def update_stats(self, total, incorrect, duration):
-        stats_text = f"总共: {total}, 错误: {incorrect}, 时长: {duration}"
-        self.stats_label.setText(stats_text)
+    # ── Data packaging ───────────────────────────────────────────────
 
     def package_data_and_show(self):
         try:
@@ -1356,26 +1142,21 @@ class ArknightsApp(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"打包数据时发生错误: {str(e)}")
 
-    def toggle_always_on_top(self):
-        if self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint:
-            self.setWindowFlags(
-                self.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint
-            )
-            self.always_on_top_button.setText("窗口置顶")
-        else:
-            self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            self.always_on_top_button.setText("取消置顶")
-        self.show()  # Reapply window flags
+    # ── Settings callbacks ───────────────────────────────────────────
 
-    def closeEvent(self, event):
-        """窗口关闭时的处理"""
-        if hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running:
-            self.auto_fetch.stop_auto_fetch()
-        event.accept()
+    def update_game_mode(self, mode):
+        self.game_mode = mode
 
+    def update_invest_status(self, state):
+        self.is_invest = state == Qt.CheckState.Checked.value
 
-if __name__ == "__main__":
-    app = QApplication([])
-    window = ArknightsApp()
-    window.show()
-    app.exec()
+    def _on_predict_toggled(self, checked):
+        self.invest_checkbox.setEnabled(checked)
+        if not checked:
+            self.invest_checkbox.setChecked(False)
+
+    def update_result(self, text):
+        self.result_label.setText(text)
+
+    def update_stats(self, total, incorrect, duration):
+        self.stats_label.setText(f"总共: {total}, 错误: {incorrect}, 时长: {duration}")
