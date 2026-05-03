@@ -78,18 +78,24 @@ def pipelines_command(args):
 def _ensure_admin():
     """Ensure the process is running with administrator privileges for PC mode."""
     import ctypes
+    import os
 
     try:
         if ctypes.windll.shell32.IsUserAnAdmin():
             return
     except Exception:
         return
+
+    args = sys.argv[1:]
+    params = "-m cannotmax"
+    if args:
+        params += " " + " ".join(args)
     ctypes.windll.shell32.ShellExecuteW(
         None,
         "runas",
         sys.executable,
-        " ".join([f'"{arg}"' for arg in sys.argv]),
-        None,
+        params,
+        os.getcwd(),
         1,
     )
     sys.exit(0)
