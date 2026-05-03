@@ -4,7 +4,8 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from . import constants
+from cannotdeeper.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+
 from .paths import (
     MONSTER_IMAGES_DIR,
     PROJECT_ROOT,
@@ -18,10 +19,6 @@ from .settings import (
 _app_config = get_app_config()
 DEBUG_MODE: bool = _app_config["debug_mode"]
 DISABLE_MAAFW: bool = _app_config["control"]["disable_maafw"]
-
-# 从 constants 导入
-FIELD_FEATURE_COUNT: int = _app_config["recognition"]["field_feature_count"]
-UNIT_CONFIG = constants.UNIT_CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -71,15 +68,11 @@ def load_monster_data() -> pd.DataFrame:
 
 MONSTER_DATA: pd.DataFrame = load_monster_data()
 
-# 全局变量
-MONSTER_COUNT: int = len(MONSTER_DATA)
-
 __all__ = [
     "MONSTER_DATA",
     "MONSTER_COUNT",
     "MONSTER_IMAGES",
     "FIELD_FEATURE_COUNT",
-    "UNIT_CONFIG",
     "DEBUG_MODE",
     "DISABLE_MAAFW",
     "get_recognition_zones",
