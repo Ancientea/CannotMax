@@ -76,18 +76,16 @@ uv sync --group dev
 
 ```bash
 uv run cannotmax          # 启动 GUI
-uv run cannotmax multi    # 多开管理器
-uv run cannotmax train    # 训练模型
-uv run cannotmax eval     # 评估模型
-uv run cannotmax convert -i model.pth -o model.onnx  # PyTorch → ONNX
+uv run cannotmax multi   # 多开管理器
 
-# 独立运行模块
-uv run -m src.cannotmax.simulator.sim_mc            # Tkinter 模拟器
-uv run -m src.cannotmax.simulator.main_sim          # PyQt6 模拟器
+uv run cannotdl train    # 训练模型
+uv run cannotdl eval     # 评估模型
+uv run cannotdl convert -i model.pth -o model.onnx  # PyTorch → ONNX
+uv run cannotdl tools statistics   # 统计分析
+uv run cannotdl pipelines merge_data  # 合并数据
 
-# 开发命令
-uv run tools statistics                   # 统计分析
-uv run pipelines merge_data               # 合并数据
+uv run cannotsim sim      # PyQt6 战斗模拟器
+uv run cannotsim sim_mc   # Tkinter 多核模拟器
 ```
 
 ### 2. 捕获模式选择
@@ -120,7 +118,7 @@ uv run pipelines merge_data               # 合并数据
 建议先收集足够数据后再训练：
 
 ```bash
-uv run cannotmax train
+uv run cannotdl train
 ```
 
 训练完成后模型保存至 `models/predictor/`，GUI 重启后自动选择最新模型。
@@ -128,25 +126,39 @@ uv run cannotmax train
 ## 目录结构
 
 ```
-src/cannotmax/
-├── console.py             # CLI 入口（uv run cannotmax）
-├── config/                # 配置层（app.json、路径、常量）
-├── core/                  # 核心功能
-│   ├── connector/         # 设备连接器（ADB/PC/WinRT）
-│   ├── recognize.py       # 怪物识别（模板匹配 + OCR）
-│   ├── predict.py         # PyTorch 推理
-│   ├── predict_onnx.py    # ONNX 推理（打包版默认）
-│   └── auto_fetch.py      # 自动获取状态机
-├── gui/                   # PyQt6 GUI
-│   ├── main_window.py     # 主窗口
-│   ├── multi_instance.py  # 多开管理器
-│   └── login.py           # 登录管理器
-├── models/                # 神经网络模型
-├── training/              # 训练模块
-├── pipelines/             # 数据处理流水线
-├── simulator/             # 战斗模拟引擎
-├── tools/                 # 实用工具（打包、统计、转换）
-└── utils/                 # 公共工具（历史匹配、怪物区域检测）
+src/cannotmax/                # 主包（GUI + 运行时）
+├── console.py               # CLI 入口（uv run cannotmax）
+├── config/                   # 配置层（app.json、路径常量）
+├── core/                     # 核心功能
+│   ├── connector/            # 设备连接器（ADB/PC/WinRT）
+│   ├── recognize.py          # 怪物识别（模板匹配 + OCR）
+│   ├── predict_onnx.py       # ONNX 推理（打包版默认）
+│   ├── auto_fetch.py         # 自动获取状态机
+│   └── field_recognition.py  # 地形识别（torch 懒加载）
+├── gui/                      # PyQt6 GUI
+│   ├── main_window.py        # 主窗口
+│   ├── multi_instance.py     # 多开管理器
+│   └── login.py              # 登录管理器
+├── utils/                    # 公共工具
+│   ├── images.py             # 怪物头像加载（延迟加载）
+│   ├── monster_data.py       # 怪物数据 DataFrame（延迟加载）
+│   ├── find_monster_zone.py  # 怪物条 ROI 检测
+│   └── similar_history_match.py  # 历史对局匹配
+
+src/cannotdl/                 # 模型训练与 ML 管线
+├── config/                   # MONSTER_COUNT, FIELD_FEATURE_COUNT, MONSTER_DATA
+├── core/                     # PyTorch 推理引擎 + TorchFieldRecognizer
+├── models/                   # UnitAwareTransformer, ArknightsDataset
+├── training/                 # trainer.py, evaluator.py, muon.py
+├── pipelines/                # 数据清洗、合并、打包
+└── tools/                    # 统计、模型转换
+
+src/cannotsim/                # 战斗模拟引擎
+├── battle_field.py           # 战场状态与帧模拟
+├── main_sim.py               # PyQt6 模拟器 GUI
+├── sim_mc.py                 # Tkinter 多核模拟器
+├── monsters.py               # 怪物行为定义
+└── utils.py                  # MONSTER_MAPPING, REVERSE_MONSTER_MAPPING
 ```
 
 ## 测试

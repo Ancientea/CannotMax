@@ -32,16 +32,21 @@ uv sync --group dev
 ```bash
 uv run cannotmax              # 启动 GUI
 uv run cannotmax multi        # 多开管理器
-uv run cannotmax train        # 训练模型
-uv run cannotmax eval         # 评估模型
 
-uv run pytest tests/          # 全部测试
+uv run cannotdl train         # 训练模型
+uv run cannotdl eval           # 评估模型
+uv run cannotdl convert -i model.pth -o model.onnx  # 模型转换
+
+uv run cannotsim sim           # PyQt6 战斗模拟器
+uv run cannotsim sim_mc        # Tkinter 多核模拟器
+
+uv run pytest tests/           # 全部测试
 uv run pytest tests/ -m "not e2e"  # 跳过端到端测试
 
 # 开发工具
-uv run tools statistics       # 数据分析
-uv run pipelines merge_data   # 合并数据
-uv run tools package          # 打包 exe
+uv run cannotdl tools statistics    # 数据分析
+uv run cannotdl pipelines merge_data  # 合并数据
+uv run cannotdl tools package       # 打包 exe
 ```
 
 ### 代码质量
@@ -79,16 +84,18 @@ type: description
 所有文件/目录路径必须在 `config/paths.py` 中定义常量，代码中引用常量而非硬编码字符串：
 
 ```python
-from cannotmax.config.paths import MONSTER_IMAGES_DIR, ADB_PATH
+from cannotmax.config.paths import MONSTER_IMAGES_DIR, TMP_IMAGES_DIR
+from cannotmax.utils.monster_data import get_monster_avatar_path
 
 # 正确
-pixmap = QPixmap(str(MONSTER_IMAGES_DIR / f"{name}.png"))
-adb = ADB_PATH.resolve()
+pixmap = QPixmap(str(get_monster_avatar_path(monster_id)))
+adb = ADB_EXE.resolve()
 
 # 错误
 pixmap = QPixmap(f"images/monsters/{name}.png")
-adb = Path("3rdparty/platform-tools/adb.exe")
 ```
+
+命名规则：目录以 `DIR` 结尾，文件以格式结尾（如 `MONSTER_CSV`、`APP_CONFIG_JSON`）。
 
 ### 预提交钩子
 
@@ -124,8 +131,8 @@ uv run python src/cannotmax/tools/package.py
 打包配置在 `cannotmax.spec` 和 `tools/package.py`。
 
 关键排除项（`cannotmax.spec` 中）：
-- `cannotmax.training` — 训练模块
-- `cannotmax.core.predict` — PyTorch 推理（用 ONNX 替代）
+- `cannotdl.training` — 训练模块
+- `cannotdl.core.predict` — PyTorch 推理（用 ONNX 替代）
 - `torch`, `torchvision` — 深度学习框架
 - `matplotlib`, `sklearn`, `scipy` — 科学计算
 
