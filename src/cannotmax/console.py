@@ -4,6 +4,20 @@ Command-line interface for CannotMax runtime (GUI + automation).
 
 import argparse
 import sys
+from pathlib import Path
+
+
+def tools_command(args):
+    """Run a development tool."""
+    import subprocess
+    import sys as _sys
+
+    script = Path(__file__).parent / "tools" / f"{args.script}.py"
+    if not script.exists():
+        print(f"错误：找不到工具脚本 {args.script}.py")
+        _sys.exit(1)
+    result = subprocess.run([_sys.executable, str(script)])
+    _sys.exit(result.returncode)
 
 
 def multi_instance_command(args):
@@ -62,6 +76,10 @@ def main():
 
     multi_parser = subparsers.add_parser("multi", help="Launch multi-instance manager")
     multi_parser.set_defaults(func=multi_instance_command)
+
+    tools_parser = subparsers.add_parser("tools", help="Run a development tool")
+    tools_parser.add_argument("script", help="Tool script name (without .py)")
+    tools_parser.set_defaults(func=tools_command)
 
     args = parser.parse_args()
 
