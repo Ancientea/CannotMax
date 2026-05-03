@@ -7,12 +7,12 @@ from tkinter import messagebox
 import numpy as np
 import math
 from PIL import Image, ImageTk
-from predict import CannotModel
+from core.predict import CannotModel
 import loadData
 import recognize
 from train import UnitAwareTransformer
 from recognize import MONSTER_COUNT
-from similar_history_match import HistoryMatch
+from gui.similar_history_match import HistoryMatch
 from auto_fetch import AutoFetch
 
 logging.getLogger().setLevel(logging.DEBUG)
