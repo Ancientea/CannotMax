@@ -5,6 +5,10 @@ venv/
 .venv/
 __pycache__/
 .mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+*.pyo
 
 # ===========================
 # 2. Pixi 包管理环境
@@ -21,19 +25,19 @@ __pycache__/
 # ===========================
 # 4. AI 辅助工具配置
 # ===========================
+.agnets/
 .claude/
 .codex/
 .copilot/
 .codeartsdoer
+docs/superpowers/
 
 # ===========================
 # 5. 模型权重与构建产物
 # ===========================
 # 模型文件
-models/*.png
-*.pth
-*.onnx
-*.onnx.data
+models
+!models/update.md
 # 构建与输出目录
 build/
 output/
@@ -44,17 +48,7 @@ outputs/
 # ===========================
 data/*
 !data/compressed/.gitkeep
-images/nums/
-
-arknights_package_[0-9][0-9][0-9][0-9][0-1][0-9][0-3][0-9]_[0-2][0-9][0-5][0-9][0-5][0-9].zip
-
-# 训练相关数据
-data_train/tmp/
-data_train/package/*.zip
-data_train/data_images/
-
-# 单独的截图文件
-screenshot.png
+images/tmp/
 
 # ===========================
 # 7. 日志与临时文件
@@ -62,7 +56,5 @@ screenshot.png
 log.txt
 *.log
 
-tmp
-arknights.csv
 multi_ports.txt
 *.bak
