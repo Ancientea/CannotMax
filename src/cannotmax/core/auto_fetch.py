@@ -140,16 +140,18 @@ class AutoFetch:
                 )
                 img_quarter = img_resized[self.MATCH_HEIGHT * 3 :, :]
                 templates.append(img_quarter)
-            # PC 端模板（UI 比例不同）
-            pc_img = cv2.imread(f"images/process/pc_{i}.png")
-            if pc_img is not None:
-                pc_resized = cv2.resize(
-                    pc_img,
-                    (self.MATCH_WIDTH, self.MATCH_HEIGHT * 4),
-                    interpolation=cv2.INTER_NEAREST,
-                )
-                pc_quarter = pc_resized[self.MATCH_HEIGHT * 3 :, :]
-                templates.append(pc_quarter)
+            # PC 端模板（UI 比例不同）—— 仅在文件存在时加载，避免 OpenCV 警告
+            pc_path = Path(f"images/process/pc_{i}.png")
+            if pc_path.exists():
+                pc_img = cv2.imread(str(pc_path))
+                if pc_img is not None:
+                    pc_resized = cv2.resize(
+                        pc_img,
+                        (self.MATCH_WIDTH, self.MATCH_HEIGHT * 4),
+                        interpolation=cv2.INTER_NEAREST,
+                    )
+                    pc_quarter = pc_resized[self.MATCH_HEIGHT * 3 :, :]
+                    templates.append(pc_quarter)
             self.processed_template.append(templates if templates else None)
 
     def match_images(self, screenshot):
