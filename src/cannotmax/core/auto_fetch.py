@@ -30,7 +30,7 @@ import numpy as np
 
 # loadData removed - use core.connector.AdbConnector/PcConnector
 from cannotmax.config import DEBUG_MODE, FIELD_FEATURE_COUNT, MONSTER_COUNT
-from cannotmax.config.paths import DATA_DIR
+from cannotmax.config.paths import DATA_DIR, IMAGES_DIR
 from cannotmax.gui import LoginManager
 
 logger = logging.getLogger(__name__)
@@ -131,7 +131,7 @@ class AutoFetch:
         for i in range(16):
             templates = []
             # 标准模板
-            img = cv2.imread(f"images/process/{i}.png")
+            img = cv2.imread(IMAGES_DIR / f"process/{i}.png")
             if img is not None:
                 img_resized = cv2.resize(
                     img,
@@ -141,7 +141,7 @@ class AutoFetch:
                 img_quarter = img_resized[self.MATCH_HEIGHT * 3 :, :]
                 templates.append(img_quarter)
             # PC 端模板（UI 比例不同）—— 仅在文件存在时加载，避免 OpenCV 警告
-            pc_path = Path(f"images/process/pc_{i}.png")
+            pc_path = IMAGES_DIR / f"process/pc_{i}.png"
             if pc_path.exists():
                 pc_img = cv2.imread(str(pc_path))
                 if pc_img is not None:
