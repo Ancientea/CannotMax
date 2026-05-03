@@ -1,6 +1,5 @@
 """CannotSim 模拟器配置。"""
 
-# UNIT_CONFIG copied from cannotmax/config/constants.py
 UNIT_CONFIG = {
     1: {
         "name": "酸液源石虫·α",
@@ -13,6 +12,5 @@ UNIT_CONFIG = {
         "move_speed": 1 / 2,
         "attack_radius": 2.75,
         "effect": "破甲 15",
-        "icon": "images/1.png",
     },
 }

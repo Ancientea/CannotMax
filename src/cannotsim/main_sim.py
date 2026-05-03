@@ -10,6 +10,7 @@ from tkinter import messagebox
 from PIL import Image, ImageTk
 
 from cannotdl.config import MONSTER_COUNT
+from cannotmax.config.paths import MONSTER_IMAGES_DIR
 
 from .battle_field import Battlefield
 from .monsters import AttackState, Monster
@@ -184,7 +185,7 @@ class SandboxSimulator:
 
         for unit_id, name in MONSTER_MAPPING.items():
             try:
-                image = Image.open(f"images/monsters/{name}.png")
+                image = Image.open(MONSTER_IMAGES_DIR / f"{name}.png")
                 self.icons[unit_id] = {
                     "red": ImageTk.PhotoImage(image.resize((40, 40))),
                     "blue": ImageTk.PhotoImage(
