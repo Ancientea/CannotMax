@@ -1,7 +1,3 @@
-import sys
-
-sys.path.append(".")
-
 import numpy as np
 
 from cannotdl.config import MONSTER_COUNT
@@ -12,12 +8,8 @@ from cannotmax.core import predict_onnx
 model_path = MODELS_DIR / "predictor" / "best_model_full.pth"
 
 
-def replace_suffix(s):
-    idx = s.rfind(".")
-    if idx == -1:
-        return s + ".onnx"
-    else:
-        return s[:idx] + ".onnx"
+def replace_suffix(path):
+    return path.with_suffix(".onnx")
 
 
 output_path = replace_suffix(model_path)
