@@ -21,8 +21,8 @@ uv run pytest tests/ -m "not e2e"  # Skip e2e (needs emulator)
 
 # Standalone modules
 uv run -m cannotmax.gui.multi_instance           # Multi-instance GUI
-uv run -m src.cannotmax.simulator.sim_mc         # Tkinter multi-core
-uv run -m src.cannotmax.simulator.main_sim       # PyQt6 simulator
+uv run -m src.cannotsim.sim_mc               # Tkinter multi-core
+uv run -m src.cannotsim.main_sim             # PyQt6 simulator
 ```
 
 ## Critical Environment Constraints
@@ -37,49 +37,26 @@ uv run -m src.cannotmax.simulator.main_sim       # PyQt6 simulator
 
 ### Package Structure (actual)
 ```
-src/cannotmax/
-├── __init__.py / __main__.py / console.py   # Entry points (+ _multi.py for multi exe wrapper)
-├── config/
-│   ├── __init__.py        # MONSTER_COUNT, MONSTER_DATA, FIELD_FEATURE_COUNT, etc.
-│   ├── settings.py        # Loads config/app.json, auto-creates if missing
-│   ├── constants.py       # UNIT_CONFIG (simulator unit stats)
-│   └── paths.py           # PROJECT_ROOT, DATA_DIR, MODELS_DIR, etc.
-├── core/
-│   ├── recognize.py       # Monster recognition (template matching + OCR)
-│   ├── predict.py         # PyTorch inference (CannotModel)
-│   ├── predict_onnx.py    # ONNX fallback
-│   ├── auto_fetch.py      # Auto-fetch state machine with multi-template matching
-│   ├── field_recognition.py # Terrain features (torch lazy-imported, not in packaged build)
-│   ├── roi_selector.py
-│   └── connector/         # Device connectors
-│       ├── base_connector.py
-│       ├── adb_connector.py   # MAA Framework ADB (emu: LDPlayer, MuMu, BlueStacks)
-│       ├── pc_connector.py    # Arknights PC client (admin required for click)
-│       ├── winrt_capture.py   # WinRT screen capture
-│       ├── factory.py         # ConnectorFactory
-│       └── maa_registry.py
-├── gui/                   # PyQt6 GUI
-│   ├── main_window.py     # ArknightsApp (main window)
-│   ├── multi_instance.py  # Multi-instance automation manager
-│   ├── login.py           # LoginManager
-│   ├── input_panel_ui.py
-│   ├── similar_history_match_ui.py
-│   ├── dark_mode_style_fix.py
-│   └── dialogs/           # Window picker dialog
-├── models/                # Neural network models
-│   ├── transformer.py     # UnitAwareTransformer
-│   └── dataset.py         # ArknightsDataset, TOTAL_FEATURE_COUNT
-├── training/              # Training module
-│   ├── __init__.py / __main__.py
-│   ├── trainer.py
-│   ├── evaluator.py
-│   └── muon.py            # Muon+Lion dual optimizer
-├── pipelines/             # Data processing
-│   ├── data_cleaning.py, data_package.py, merge_data.py
-│   └── data_washer_new.py
-├── tools/                 # Utilities (statistics, convert_model, package, etc.)
-├── utils/                 # History matching, monster zone detection
-└── simulator/             # Battlefield simulation engine
+├── cannotdeeper/             # 模型训练与数据处理
+│   ├── config/               # MONSTER_COUNT, FIELD_FEATURE_COUNT, MONSTER_DATA
+│   ├── core/                 # PyTorch 推理（CannotModel）
+│   ├── models/               # UnitAwareTransformer, ArknightsDataset
+│   ├── training/             # 训练器、评估器、Muon+Lion 优化器
+│   ├── pipelines/            # 数据清洗、合并、打包流水线
+│   └── tools/                # 统计、模型转换、数据审查
+
+├── cannotsim/                # 战斗模拟引擎
+│   ├── config.py             # UNIT_CONFIG（模拟器单位属性）
+│   ├── battle_field.py       # 战场状态与帧模拟
+│   ├── main_sim.py           # PyQt6 模拟器 GUI
+│   └── sim_mc.py             # Tkinter 多核模拟器
+
+├── cannotmax/                # 主包 (GUI + 运行时)
+│   ├── config/               # settings.py, paths.py
+│   ├── core/                 # 识别(ONNX)、自动获取、连接器
+│   ├── gui/                  # PyQt6 图形界面
+│   ├── tools/                # 打包(package.py) + ROI 选取
+│   └── utils/                # 历史匹配、怪物区域检测
 ```
 
 ### Entry Points
@@ -152,7 +129,7 @@ uv run pytest tests/test_imports.py       # Import checks only
 3. **cu128 network issues**: Frequent on Chinese networks; provide CPU fallback
 4. **`UnitAwareTransformer` namespace**: Must be importable from `__main__` before `torch.load()`
 5. **Lazy torch imports**: `field_recognition.py` imports torch inside methods — safe for ONNX-only builds
-6. **Packaged build**: `cannotmax.core.predict` excluded; `core/__init__.py` has try/except fallback to `predict_onnx`
+6. **Packaged build**: `cannotdeeper.core` excluded; `core/__init__.py` has try/except fallback to `predict_onnx`
 7. **Multi-instance data**: Stop ALL instances before running data packaging
 8. **`monster_greenvine.csv`**: `MONSTER_COUNT` derives from its row count (currently 78)
 9. **`FIELD_FEATURE_COUNT = 0`**: Set in `config/app.json` — terrain pipeline not active

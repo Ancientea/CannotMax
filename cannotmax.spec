@@ -21,9 +21,11 @@ a_main = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        'cannotmax.training', 'torch', 'torchvision', 'matplotlib', 'sklearn',
-        'scikit-learn', 'scipy', 'PyQt6.QtPdf', 'PyQt6.QtNetwork',
-        'cannotmax.core.predict', 'onnxscript',
+        'cannotdeeper.training', 'cannotdeeper.core',  # PyTorch-dependent
+        'torch', 'torchvision', 'matplotlib',
+        'sklearn', 'scikit-learn', 'scipy',
+        'PyQt6.QtPdf', 'PyQt6.QtNetwork',
+        'onnxscript',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
