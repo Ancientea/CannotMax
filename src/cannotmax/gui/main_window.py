@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from cannotdeeper.pipelines import data_package
 from cannotmax.config import MONSTER_COUNT, MONSTER_DATA
 from cannotmax.config.paths import (
     ICO_DIR,
@@ -42,7 +43,6 @@ from cannotmax.core.connector.maa_registry import (
 )
 from cannotmax.core.recognize import ROINotSelectedError
 from cannotmax.core.roi_selector import ROISelector
-from cannotmax.pipelines import data_package
 from cannotmax.utils import similar_history_match
 from cannotmax.utils.specialmonster import SpecialMonsterHandler
 

@@ -9,14 +9,14 @@ from pathlib import Path
 
 def train_command(args):
     """Train the model."""
-    from cannotmax.training.trainer import main as train_main
+    from cannotdeeper.training.trainer import main as train_main
 
     train_main()
 
 
 def eval_command(args):
     """Evaluate the model."""
-    from cannotmax.training.evaluator import main as eval_main
+    from cannotdeeper.training.evaluator import main as eval_main
 
     eval_main()
 

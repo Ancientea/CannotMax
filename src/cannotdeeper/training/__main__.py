@@ -1,9 +1,8 @@
-"""python -m cannotdeeper.training."""
-
-
-def main():
-    print("使用: python -m cannotdeeper.training.trainer 或 .evaluator")
-
+"""
+Entry point for python -m src.cannotmax.training
+"""
 
 if __name__ == "__main__":
+    from .trainer import main
+
     main()
