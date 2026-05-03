@@ -35,7 +35,7 @@ class AdbConnector(BaseConnector):
     """
 
     def __init__(self, adb_serial: Optional[str] = None):
-        self._adb_path = Path(r".\3rdparty\platform-tools\adb.exe")
+        self._adb_path = Path(r".\3rdparty\platform-tools\adb.exe").resolve()
         self._device_serial = adb_serial or "127.0.0.1:5555"
         self._screen_width = 0
         self._screen_height = 0
