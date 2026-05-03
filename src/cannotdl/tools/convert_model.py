@@ -2,10 +2,10 @@ import numpy as np
 
 from cannotdl.config import MONSTER_COUNT
 from cannotdl.core import predict as torch_predict
-from cannotmax.config.paths import MODELS_DIR
+from cannotmax.config.paths import DEFAULT_PREDICTOR_PTH
 from cannotmax.core import predict_onnx
 
-model_path = MODELS_DIR / "predictor" / "best_model_full.pth"
+model_path = DEFAULT_PREDICTOR_PTH
 
 
 def replace_suffix(path):

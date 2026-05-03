@@ -10,10 +10,25 @@
 - `main_window.py` 48 个方法按逻辑分组重排（初始化、连接器、设备列表、截屏、识别、预测、输入展示、自动获取、模拟器、数据打包、设置回调），添加分组注释
 - `login.py` 移除硬编码的 `C:\Program Files\Arknights\` 游戏路径，改为通过 Windows API `QueryFullProcessImageName` 从运行中进程获取 exe 路径
 
+### 重构
+- **CLI 三入口**: `uv run cannotmax`（GUI/运行时）、`uv run cannotdl`（训练/ML 管线）、`uv run cannotsim`（战斗模拟器）独立入口，移除了 `cannotmax console.py` 中的 train/eval/convert/tools/pipelines 子命令
+- **cannotdeeper → cannotdl 包重命名**: 目录、导入、pyproject.toml entry point、文档引用全面更新
+- **config 包精简**: `config/__init__.py` 只保留运行时配置（`DEBUG_MODE`、`DISABLE_MAAFW`），删除 `MONSTER_IMAGES`、`MONSTER_DATA`、`load_images`、`load_monster_data`；删除空的 `constants.py`
+- **settings.py 清理**: 移除 `data` 配置段及 `get_package_format()`、`get_data_package_output_dir()` 函数；`_DEFAULT_CONFIG` 不再包含 `data` 段
+- **路径常量集中**: `PACKAGE_OUTPUT_DIR`（`output/data`）、`PACKAGE_FORMAT`（zip 格式）移至 `paths.py`，`app.json` 不再包含 `data` 段
+
+### 怪物数据与图像
+- **utils 模块化**: `MONSTER_IMAGES` / `MONSTER_DATA` 从 `config` 移至 `utils/images.py` 和 `utils/monster_data.py`，支持延迟加载
+- **新增 `get_monster_avatar_path(id)`**: 根据怪物 ID 返回头像 PNG 路径，统一替代 `MONSTER_IMAGES_DIR / f"{MONSTER_DATA['原始名称'][id]}.png"` 模式
+- **修复 recognize.py 怪物名错位 bug**: `MONSTER_DATA["原始名称"][i]` 用整数位置访问改为 `.at[id, "原始名称"]` 标签访问
+- **图标路径修复**: `cannotsim` 加载图标从 `images/{id}.png` 改为 `images/monsters/{原始名称}.png`（匹配实际文件名）
+- **REVERSE_MONSTER_MAPPING 修复**: 同时包含 CSV 的 `名称` 和 `原始名称` 列，补充 `小喷蛛` → 大喷蛛 ID 映射
+
 ### 修复
 - `adb_connector.py` 中 adb.exe 路径改为绝对路径（`.resolve()`），修复 auto_fetch 中工作目录变化后找不到 adb.exe 的问题
 - PC 端状态模板加载前检查文件存在，消除 OpenCV 对缺失 `pc_{i}.png` 的警告
 - 打包版 exe 不再因 `_ensure_admin()` 通过 `python -m cannotmax` 重新启动而闪退（frozen 环境使用自身 exe 路径重新启动）
+- `find_monster_zone.py` 修复 `TMP_IMAGE_DIR` 拼写错误（应为 `TMP_IMAGES_DIR`）
 
 ### 命令行
 - 新增 `uv run tools <script>` 和 `uv run pipelines <script>` 快捷命令（从 `uv run cannotmax tools/pipelines` 独立）
@@ -138,4 +153,3 @@
 - 模型维度不匹配：旧模型训练时 `num_units=60`，当前 `MONSTER_COUNT=78`。`predict.py` 通过填充/截断临时修复，但需要重新训练
 - 52 个遗留 lint 警告（模拟器、数据处理流水线、旧工具脚本）
 - `FIELD_FEATURE_COUNT=0` — 地形特征流水线尚未激活
-- 部分图片路径仍使用相对字符串（`images/process/`、`ico/`）
