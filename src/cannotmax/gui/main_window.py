@@ -1105,7 +1105,7 @@ class ArknightsApp(QMainWindow):
         logger.info(f"Simulation data JSON: {json_data}")
         try:
             process = subprocess.Popen(
-                [sys.executable, "main_sim.py"],
+                [sys.executable, "-m", "cannotsim.main_sim"],
                 stdin=subprocess.PIPE,
                 text=True,
                 encoding="utf-8",

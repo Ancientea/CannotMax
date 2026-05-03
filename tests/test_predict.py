@@ -21,7 +21,7 @@ def model():
 class TestCannotModel:
     def test_model_loads(self, model):
         assert model.is_model_loaded
-        assert model.model is not None
+        assert model.session is not None
 
     def test_prediction_returns_float(self, model):
         left = np.zeros(MONSTER_COUNT, dtype=np.int16)

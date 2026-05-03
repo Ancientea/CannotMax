@@ -1,1 +1,1 @@
-from .window_picker import WindowPickerDialog
+from .window_picker import WindowPickerDialog as WindowPickerDialog

@@ -231,17 +231,23 @@ class RecognizeMonster:
         """
         from cannotmax.utils import find_monster_zone
 
-        zones = RECOGNITION_PARAMS[mode]
+        zones = RECOGNITION_PARAMS.get(mode) if mode != "WIN" else None
         avatar_regs = (
             self.avatar_regions
             if self.avatar_regions is not None
             else zones["avatar_regions"]
+            if zones
+            else None
         )
         number_regs = (
             self.number_regions
             if self.number_regions is not None
             else zones["number_regions"]
+            if zones
+            else None
         )
+
+        detected_zones = None  # (d_avatar, d_nums) from find_monster_zone
 
         # Save original screenshot for debugging
         if DEBUG_MODE:
@@ -252,12 +258,14 @@ class RecognizeMonster:
         ratio = self._resolve_crop_ratio(auto_fallback, mode)
         cropped = self._crop_by_ratio(screenshot, ratio)
 
-        # 2. WIN mode: find_monster_zone secondary refinement
+        # 2. Custom ROI + no fallback: find_monster_zone provides precise zone coordinates
         if self.crop_ratio is not None and auto_fallback is False:
             try:
                 d_avatar, d_nums = find_monster_zone.find_monster_zone(cropped)
                 if d_avatar is not None:
                     h, w = cropped.shape[:2]
+                    if mode == "WIN":
+                        detected_zones = (d_avatar, d_nums)
                     avatar_px = np.round(d_avatar * [w, h, w, h]).astype(int)
                     x_min = max(0, int(avatar_px[:, 0].min()))
                     y_min = max(0, int(avatar_px[:, 1].min()))
@@ -284,19 +292,36 @@ class RecognizeMonster:
 
         # 4. Split into 6 regions using precise coordinates and recognize
         results = []
-        for idx in range(6):
-            ax1, ay1, ax2, ay2 = avatar_regs[idx]
-            avatar_img = monster_bar[
-                int(ay1 * 119) : int(ay2 * 119),
-                int(ax1 * 975) : int(ax2 * 975),
-            ]
-            nx1, ny1, nx2, ny2 = number_regs[idx]
-            num_img = monster_bar[
-                int(ny1 * 119) : int(ny2 * 119),
-                int(nx1 * 975) : int(nx2 * 975),
-            ]
-            result = self._recognize_region(avatar_img, num_img, idx)
-            results.append(result)
+        if detected_zones is not None:
+            d_avatar, d_nums = detected_zones
+            h, w = monster_bar.shape[:2]
+            for idx in range(6):
+                ax1, ay1, ax2, ay2 = d_avatar[idx]
+                avatar_img = monster_bar[
+                    int(ay1 * h) : int(ay2 * h),
+                    int(ax1 * w) : int(ax2 * w),
+                ]
+                nx1, ny1, nx2, ny2 = d_nums[idx]
+                num_img = monster_bar[
+                    int(ny1 * h) : int(ny2 * h),
+                    int(nx1 * w) : int(nx2 * w),
+                ]
+                result = self._recognize_region(avatar_img, num_img, idx)
+                results.append(result)
+        else:
+            for idx in range(6):
+                ax1, ay1, ax2, ay2 = avatar_regs[idx]
+                avatar_img = monster_bar[
+                    int(ay1 * 119) : int(ay2 * 119),
+                    int(ax1 * 975) : int(ax2 * 975),
+                ]
+                nx1, ny1, nx2, ny2 = number_regs[idx]
+                num_img = monster_bar[
+                    int(ny1 * 119) : int(ny2 * 119),
+                    int(nx1 * 975) : int(nx2 * 975),
+                ]
+                result = self._recognize_region(avatar_img, num_img, idx)
+                results.append(result)
 
         return results
 
