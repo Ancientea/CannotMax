@@ -1,25 +1,19 @@
-"""Battlefield terrain recognition using ONNX/PyTorch.
+"""Battlefield terrain recognition stub.
 
-Recognizes battlefield terrain features (wind, terrain type, etc.) from screenshots
-using YOLO-based detection. Maps detected elements to feature indices.
+When FIELD_FEATURE_COUNT > 0, terrain features are recognized at runtime.
+For the full PyTorch implementation, see cannotdeeper.core.field_model.TorchFieldRecognizer.
 
 Usage:
-    recognizer = FieldRecognizer(onnx_path, class_map_path)
-    field_data = recognizer.recognize_field(screenshot)
+    recognizer = FieldRecognizer()
+    field_data = recognizer.recognize_field(screenshot)  # returns {} when deactivated
 """
 
-import json
 import logging
-import re
-from collections import defaultdict
-from pathlib import Path
 
-import cv2
-from PIL import Image
+from cannotdeeper.config import FIELD_FEATURE_COUNT
 
 logger = logging.getLogger(__name__)
 
-# 场地识别ROI坐标
 ROI_COORDINATES = {
     "altar_vertical": [
         {"x": 910, "y": 174, "width": 95, "height": 104},
@@ -62,187 +56,32 @@ ROI_COORDINATES = {
 
 
 class FieldRecognizer:
+    """Terrain field recognizer stub (torch-free).
+
+    Returns empty/default values when FIELD_FEATURE_COUNT=0.
+    For actual recognition, see cannotdeeper.core.field_model.TorchFieldRecognizer.
+    """
+
     def __init__(self):
-        self.field_model = None
-        self.field_transform = None
-        self.field_device = None
-        self.idx_to_class = {}
-        self.grouped_elements = {}
-        self.image_feature_columns = []
         self.is_initialized = False
+        if FIELD_FEATURE_COUNT > 0:
+            try:
+                from cannotdeeper.core.field_model import TorchFieldRecognizer
 
-        # 初始化场地识别模型
-        self._init_field_recognition()
-
-    def _init_field_recognition(self):
-        """初始化场地识别模型和相关组件"""
-        import torch
-        from torchvision import transforms
-
-        try:
-            # 设置设备
-            self.field_device = torch.device(
-                "cuda" if torch.cuda.is_available() else "cpu"
-            )
-            logger.info(f"场地识别将使用设备: {self.field_device}")
-
-            # 加载类别映射
-            model_dir = (
-                Path(__file__).parent.parent / "tools" / "field_recognition_model"
-            )
-            class_map_path = model_dir / "class_to_idx.json"
-            pth_model_path = model_dir / "field_recognize.pth"
-
-            if not class_map_path.exists():
-                logger.warning("找不到场地识别类别映射文件，跳过场地识别初始化")
-                return
-
-            with open(class_map_path, "r", encoding="utf-8") as f:
-                class_to_idx = json.load(f)
-            self.idx_to_class = {v: k for k, v in class_to_idx.items()}
-            num_classes = len(class_to_idx)
-
-            # 准备特征列
-            self.grouped_elements = defaultdict(list)
-            for class_name in class_to_idx.keys():
-                if class_name.endswith("_none"):
-                    continue
-                condensed_name = re.sub(r"_left_", "_", class_name)
-                condensed_name = re.sub(r"_right_", "_", condensed_name)
-                self.grouped_elements[condensed_name].append(class_name)
-            self.image_feature_columns = sorted(self.grouped_elements.keys())
-
-            if not pth_model_path.exists():
-                logger.warning("找不到场地识别模型文件，跳过场地识别初始化")
-                return
-
-            # 加载模型
-            self.field_model = self._load_pytorch_model(
-                str(pth_model_path), num_classes, self.field_device
-            )
-
-            # 设置图像变换
-            self.field_transform = transforms.Compose(
-                [
-                    transforms.Resize((224, 224)),
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-                ]
-            )
-
-            self.is_initialized = True
-            logger.info(
-                f"场地识别初始化成功，将生成 {len(self.image_feature_columns)} 个特征列"
-            )
-
-        except Exception as e:
-            logger.error(f"场地识别初始化失败: {e}")
-            self.is_initialized = False
-
-    def _load_pytorch_model(self, model_path: str, num_classes: int, device):
-        """加载 PyTorch 模型并设置为评估模式"""
-        import torch
-        import torch.nn as nn
-        from torchvision import models
-
-        logger.info(f"正在加载 PyTorch 模型: {model_path}")
-        model = models.mobilenet_v3_small(weights=None)
-        num_ftrs = model.classifier[-1].in_features
-        model.classifier[-1] = nn.Linear(num_ftrs, num_classes)
-        model.load_state_dict(torch.load(model_path, map_location=device))
-        model.to(device)
-        model.eval()
-        logger.info("模型加载成功并已切换到评估模式。")
-        return model
-
-    def _predict_scene_pytorch(
-        self, image_path: str, threshold: float = 0.5
-    ) -> list[str]:
-        """使用 PyTorch 模型对给定图片的所有 ROI 进行分类预测"""
-        import torch
-
-        try:
-            full_image = Image.open(image_path).convert("RGB")
-        except Exception:
-            return []
-
-        if full_image.size != (1920, 1080):
-            return []
-
-        detected_classes = []
-        with torch.no_grad():
-            for location, boxes in ROI_COORDINATES.items():
-                for i, box in enumerate(boxes):
-                    x, y, w, h = box["x"], box["y"], box["width"], box["height"]
-                    roi_pil = full_image.crop((x, y, x + w, y + h))
-                    input_tensor = self.field_transform(roi_pil).unsqueeze(0)
-                    input_tensor = input_tensor.to(self.field_device)
-                    outputs = self.field_model(input_tensor)
-                    probabilities = torch.nn.functional.softmax(outputs, dim=1)[0]
-                    max_prob, predicted_index_tensor = torch.max(probabilities, 0)
-                    predicted_index = predicted_index_tensor.item()
-
-                    if max_prob.item() >= threshold:
-                        predicted_class = self.idx_to_class[predicted_index]
-                        if not predicted_class.endswith("_none"):
-                            detected_classes.append(predicted_class)
-        return detected_classes
+                self._torch = TorchFieldRecognizer()
+                self.is_initialized = self._torch.is_initialized
+            except ImportError:
+                logger.warning("无法加载 cannotdeeper.core.field_model，场地识别不可用")
 
     def recognize_field_elements(self, screenshot):
-        """识别场地元素"""
-        if not self.is_initialized or self.field_model is None:
-            logger.debug("场地识别模型未初始化，跳过场地识别")
+        if not self.is_initialized:
             return {}
-
-        try:
-            # 将OpenCV图像转换为PIL图像
-            screenshot_rgb = cv2.cvtColor(screenshot, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(screenshot_rgb)
-
-            # 保存临时文件用于识别
-            temp_image_path = "temp_screenshot.png"
-            pil_image.save(temp_image_path)
-
-            # 进行场地识别
-            detected_full_names = set(
-                self._predict_scene_pytorch(temp_image_path, threshold=0.5)
-            )
-
-            # 删除临时文件
-            if Path(temp_image_path).exists():
-                Path(temp_image_path).unlink()
-
-            # 处理识别结果
-            field_data = {}
-            for condensed_name, full_names in self.grouped_elements.items():
-                num_positions = len(full_names)
-                if num_positions == 1:
-                    field_data[condensed_name] = (
-                        1 if full_names[0] in detected_full_names else 0
-                    )
-                else:
-                    detections_in_group = [
-                        fn in detected_full_names for fn in full_names
-                    ]
-                    num_detected = sum(detections_in_group)
-                    if num_detected == num_positions:
-                        field_data[condensed_name] = 1
-                    elif num_detected == 0:
-                        field_data[condensed_name] = 0
-                    else:
-                        field_data[condensed_name] = -1
-
-            logger.debug(f"场地识别完成，检测到元素: {list(detected_full_names)}")
-            return field_data
-
-        except Exception as e:
-            logger.error(f"场地识别失败: {e}")
-            return {}
+        return self._torch.recognize_field_elements(screenshot)
 
     def get_feature_columns(self):
-        """获取场地特征列名列表"""
-        return self.image_feature_columns.copy()
+        if not self.is_initialized:
+            return []
+        return self._torch.get_feature_columns()
 
     def is_ready(self):
-        """检查场地识别器是否已准备就绪"""
         return self.is_initialized
