@@ -10,6 +10,7 @@ import sys
 import cv2
 import numpy as np
 
+from cannotmax.config.paths import TMP_IMAGES_DIR
 from cannotmax.utils.find_monster_zone import find_monster_zone
 
 
@@ -148,7 +149,7 @@ def normalize_coords(coords, ref_w, ref_h):
 
 def main():
     img_path = (
-        sys.argv[1] if len(sys.argv) > 1 else "images/tmp/original_screenshot.png"
+        sys.argv[1] if len(sys.argv) > 1 else TMP_IMAGES_DIR / "original_screenshot.png"
     )
     img = cv2.imread(img_path)
     if img is None:

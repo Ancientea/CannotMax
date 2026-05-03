@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
-from cannotmax.config.paths import DATA_DIR
+from cannotdl.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotmax.config.paths import ARKNIGHTS_DATA_CSV
 
 
 def cosine_similarity_manual(a, b):
@@ -19,7 +19,7 @@ def cosine_similarity_manual(a, b):
 class HistoryMatch:
     """错题本数据集的读取和处理类"""
 
-    def __init__(self, csv_path=DATA_DIR / "arknights.csv"):
+    def __init__(self, csv_path=ARKNIGHTS_DATA_CSV):
         # 初始化时加载历史对局数据
         self.csv_path = csv_path
         self.load_history_data()

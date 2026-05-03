@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PIL import Image, ImageTk
 
-from cannotmax.config.paths import DATA_DIR, IMAGES_DIR, PROJECT_ROOT
+from cannotmax.config.paths import DATA_DIR, IMAGES_DIR, MONSTER_CSV
 
 
 class ArknightsApp:
@@ -94,7 +94,7 @@ class ArknightsApp:
     def load_all_images(self):
         """加载所有图片"""
         images = {}
-        monster_csv_path = PROJECT_ROOT / "monster_greenvine.csv"
+        monster_csv_path = MONSTER_CSV
 
         # 单次读取，建立 id -> {primary, alt} 映射
         id_to_names = {}

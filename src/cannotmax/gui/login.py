@@ -338,7 +338,7 @@ class LoginManager:
                     if not check_stop():
                         return False
 
-                    template_path = Path(f"images/process/{template_name}.png")
+                    template_path = Path(PROCESS_IMAGES_DIR) / f"{template_name}.png"
                     if template_path.exists():
                         try:
                             template = cv2.imread(str(template_path))

@@ -8,7 +8,13 @@ import onnxruntime as ort
 import pandas as pd
 from PIL import Image
 
-from cannotmax.config.paths import CONFIG_DIR, DATA_DIR, MODELS_DIR
+from cannotmax.config.paths import (
+    ARKNIGHTS_DATA_CSV,
+    ARKNIGHTS_DATA_CSV_WITH_FIELD_RECOGNIZE,
+    DEFAULT_FIELD_RECOGNIZER_ONNX,
+    FIELD_RECOGNITION_CLASS2IDX_JSON,
+    IMAGES_DATA_DIR,
+)
 
 # ==============================================================================
 # SECTION 1: 游戏画面元素识别模块 (无变更)
@@ -281,12 +287,12 @@ def clean_data(
 
 if __name__ == "__main__":
     # 路径配置与之前保持一致
-    input_file = DATA_DIR / "arknights.csv"
-    output_file = DATA_DIR / "arknights_with_field_recognize_v2.csv"
-    screenshots_base_path = DATA_DIR / "images"
+    input_file = ARKNIGHTS_DATA_CSV
+    output_file = ARKNIGHTS_DATA_CSV_WITH_FIELD_RECOGNIZE
+    screenshots_base_path = IMAGES_DATA_DIR
 
-    onnx_model_path = MODELS_DIR / "battlefield_recognizer" / "field_recognize.onnx"
-    class_map_path = CONFIG_DIR / "battlefield_recognize" / "class_to_idx.json"
+    onnx_model_path = DEFAULT_FIELD_RECOGNIZER_ONNX
+    class_map_path = FIELD_RECOGNITION_CLASS2IDX_JSON
     clean_data(
         input_file, output_file, screenshots_base_path, onnx_model_path, class_map_path
     )

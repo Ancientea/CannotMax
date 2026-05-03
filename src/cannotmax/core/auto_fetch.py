@@ -28,7 +28,8 @@ import cv2
 import numpy as np
 
 # loadData removed - use core.connector.AdbConnector/PcConnector
-from cannotmax.config import DEBUG_MODE, FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotdl.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotmax.config import DEBUG_MODE
 from cannotmax.config.paths import DATA_DIR, PROCESS_IMAGES_DIR
 from cannotmax.gui import LoginManager
 

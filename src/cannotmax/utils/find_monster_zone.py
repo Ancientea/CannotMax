@@ -663,7 +663,9 @@ def find_monster_zone(image):
 # ──────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    image = cv2.imread("images/tmp/zone1.png")
+    from cannotmax.config.paths import TMP_IMAGES_DIR
+
+    image = cv2.imread(TMP_IMAGES_DIR / "zone1.png")
     height, width, _ = image.shape
 
     # 独立运行一次检测并可视化

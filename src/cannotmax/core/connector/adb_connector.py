@@ -20,7 +20,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from cannotmax.config.paths import ADB_PATH
+from cannotmax.config.paths import ADB_EXE
 
 from .base_connector import BaseConnector
 
@@ -37,7 +37,7 @@ class AdbConnector(BaseConnector):
     """
 
     def __init__(self, adb_serial: Optional[str] = None):
-        self._adb_path = ADB_PATH.resolve()
+        self._adb_path = ADB_EXE.resolve()
         self._device_serial = adb_serial or "127.0.0.1:5555"
         self._screen_width = 0
         self._screen_height = 0
@@ -190,6 +190,8 @@ class AdbConnector(BaseConnector):
 
     def _capture_maa(self) -> Optional[np.ndarray]:
         """Capture using MAA Framework (fast, raw format)."""
+        if not self._maa_controller:
+            return None
         try:
             self._maa_controller.post_screencap().wait()
             return self._maa_controller.cached_image

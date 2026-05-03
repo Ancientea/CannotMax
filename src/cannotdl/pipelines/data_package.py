@@ -3,8 +3,7 @@ import shutil
 import zipfile
 from datetime import datetime
 
-from cannotmax.config.paths import DATA_DIR
-from cannotmax.config.settings import get_data_package_output_dir
+from cannotmax.config.paths import DATA_DIR, PACKAGE_FORMAT, PACKAGE_OUTPUT_DIR
 
 
 def create_zip_package(output_zip_path):
@@ -19,7 +18,7 @@ def create_zip_package(output_zip_path):
     if not time_folders:
         return False
 
-    output_dir = get_data_package_output_dir()
+    output_dir = output_zip_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
     with zipfile.ZipFile(output_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
@@ -40,13 +39,12 @@ def create_zip_package(output_zip_path):
     return True
 
 
-def package_data():
-    output_dir = get_data_package_output_dir()
+def package_data(format: str = PACKAGE_FORMAT) -> str | None:
+    output_dir = PACKAGE_OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_zip = output_dir / f"arknights_package_{current_time}.zip"
+    output_zip = output_dir / datetime.now().strftime(format)
 
-    success = create_zip_package(str(output_zip))
+    success = create_zip_package(output_zip)
     if not success:
         return None
     return str(output_zip)

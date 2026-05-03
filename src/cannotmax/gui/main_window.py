@@ -28,11 +28,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from cannotdl.config import MONSTER_COUNT
 from cannotdl.pipelines import data_package
-from cannotmax.config import MONSTER_COUNT, MONSTER_DATA
 from cannotmax.config.paths import (
     ICO_DIR,
-    MONSTER_IMAGES_DIR,
     SAMPLES_IMAGES_DIR,
 )
 from cannotmax.core import auto_fetch, recognize
@@ -44,6 +43,7 @@ from cannotmax.core.connector.maa_registry import (
 from cannotmax.core.recognize import ROINotSelectedError
 from cannotmax.core.roi_selector import ROISelector
 from cannotmax.utils import similar_history_match
+from cannotmax.utils.monster_data import get_monster_avatar_path, get_monster_data
 from cannotmax.utils.specialmonster import SpecialMonsterHandler
 
 from . import HistoryMatchUI, InputPanelUI
@@ -978,9 +978,7 @@ class ArknightsApp(QMainWindow):
         img_label.setFixedSize(70, 70)
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         try:
-            pixmap = QPixmap(
-                str(MONSTER_IMAGES_DIR / f"{MONSTER_DATA['原始名称'][monster_id]}.png")
-            )
+            pixmap = QPixmap(str(get_monster_avatar_path(monster_id)))
             if not pixmap.isNull():
                 pixmap = pixmap.scaled(
                     70,
@@ -992,8 +990,8 @@ class ArknightsApp(QMainWindow):
         except Exception as e:
             logger.error(f"加载人物{monster_id}图片错误: {str(e)}")
 
-        if monster_id in MONSTER_DATA.index:
-            data = MONSTER_DATA.loc[monster_id].to_dict()
+        if monster_id in get_monster_data().index:
+            data = get_monster_data().loc[monster_id].to_dict()
             tooltip_text = "".join(f"{k}: {v}\n" for k, v in data.items())
             img_label.setToolTip(tooltip_text.strip())
 

@@ -20,14 +20,10 @@ import cv2
 import numpy as np
 from rapidocr import EngineType, RapidOCR
 
-from cannotmax.config import (
-    DEBUG_MODE,
-    MONSTER_COUNT,
-    MONSTER_DATA,
-    MONSTER_IMAGES,
-    get_recognition_zones,
-)
+from cannotmax.config import DEBUG_MODE
 from cannotmax.config.paths import TMP_IMAGES_DIR
+from cannotmax.config.settings import RECOGNITION_PARAMS
+from cannotmax.utils.images import get_monster_images
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -56,12 +52,16 @@ def get_rapidocr_engine(prefer_gpu=False):
 
 def load_ref_images():
     """Load reference monster images."""
+    from cannotdl.config import MONSTER_COUNT
+    from cannotmax.utils.monster_data import get_monster_avatar_path
+
     ref_images = {}
+    monster_images = get_monster_images()
     for i in range(MONSTER_COUNT + 1):
         if i == 0:
-            img = MONSTER_IMAGES.get("empty")
+            img = monster_images.get("empty")
         else:
-            img = MONSTER_IMAGES.get(MONSTER_DATA["原始名称"][i])
+            img = monster_images.get(get_monster_avatar_path(i).stem)
 
         if img is None:
             logger.error("无法加载参考图片 i=%d", i)
@@ -196,7 +196,7 @@ class RecognizeMonster:
         if self.crop_ratio is not None:
             return self.crop_ratio
         if auto_fallback:
-            cr = get_recognition_zones(mode)["crop_ratio"]
+            cr = RECOGNITION_PARAMS[mode]["crop_regions"]
             return tuple(tuple(p) for p in cr)
         raise ROINotSelectedError("请先选择怪物条范围")
 
@@ -231,7 +231,7 @@ class RecognizeMonster:
         """
         from cannotmax.utils import find_monster_zone
 
-        zones = get_recognition_zones(mode)
+        zones = RECOGNITION_PARAMS[mode]
         avatar_regs = (
             self.avatar_regions
             if self.avatar_regions is not None

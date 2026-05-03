@@ -4,12 +4,17 @@ import torch
 from tqdm import tqdm
 
 from cannotdl.models.transformer import UnitAwareTransformer
-from cannotmax.config.paths import DATA_DIR, MODELS_DIR
+from cannotmax.config.paths import (
+    ARKNIGHTS_DATA_CSV,
+    ARKNIGHTS_DATA_CSV_CLEANED,
+    DEFAULT_PREDICTOR_PTH,
+)
 
 # 配置参数（需要与训练时一致）
 CONFIG = {
-    "csv_path": DATA_DIR / "arknights.csv",
-    "model_path": MODELS_DIR / "predictor" / "best_model_full.pth",
+    "csv_path": ARKNIGHTS_DATA_CSV,
+    "model_path": DEFAULT_PREDICTOR_PTH,
+    "clean_csv_path": ARKNIGHTS_DATA_CSV_CLEANED,
     "max_feature_value": 300,
     "embed_dim": 128,
     "num_heads": 8,
@@ -23,7 +28,7 @@ class SafetyChecker:
         self.model = self._load_model()
         self.model.eval()
         # 创建输出路径
-        self.clean_csv_path = CONFIG["csv_path"].replace(".csv", "_clean.csv")
+        self.clean_csv_path = CONFIG["clean_csv_path"]
 
     def _load_model(self):
         """加载训练好的模型"""

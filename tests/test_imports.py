@@ -11,7 +11,7 @@ class TestImports:
     """Test that all package imports work correctly."""
 
     def test_config_import(self):
-        from cannotmax.config import (
+        from cannotdl.config import (
             FIELD_FEATURE_COUNT,
             MONSTER_COUNT,
         )

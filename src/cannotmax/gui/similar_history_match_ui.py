@@ -13,9 +13,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from cannotmax.config import MONSTER_COUNT, MONSTER_DATA
-from cannotmax.config.paths import MONSTER_IMAGES_DIR
+from cannotdl.config import MONSTER_COUNT
 from cannotmax.utils import HistoryMatch
+from cannotmax.utils.monster_data import get_monster_avatar_path
 
 logger = logging.getLogger(__name__)
 
@@ -280,12 +280,7 @@ class HistoryMatchUI(QFrame):
                 img_label.setFixedSize(60, 60)
                 img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 try:
-                    pixmap = QPixmap(
-                        str(
-                            MONSTER_IMAGES_DIR
-                            / f"{MONSTER_DATA['原始名称'][i + 1]}.png"
-                        )
-                    )
+                    pixmap = QPixmap(str(get_monster_avatar_path(i + 1)))
                     if not pixmap.isNull():
                         pixmap = pixmap.scaled(
                             60,

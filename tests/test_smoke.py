@@ -38,9 +38,11 @@ def test_core_modules_import():
 def test_config_loaded():
     """Test that config data loads correctly."""
     try:
-        from cannotmax.config import MONSTER_COUNT, MONSTER_DATA
+        from cannotdl.config import MONSTER_COUNT
+        from cannotmax.utils import get_monster_data
 
-        assert len(MONSTER_DATA) > 0
+        monster_data = get_monster_data()
+        assert len(monster_data) > 0
         assert MONSTER_COUNT > 0
     except Exception as e:
         pytest.skip(f"Config load failed: {e}")

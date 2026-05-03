@@ -12,12 +12,12 @@ import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
 
+from cannotdl.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 from cannotdl.models import (
     TOTAL_FEATURE_COUNT,
     ArknightsDataset,
     UnitAwareTransformer,
 )
-from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 from cannotmax.config.paths import DATA_DIR, MODELS_DIR
 
 from .muon import get_muon_lion_optimizers

@@ -20,8 +20,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from cannotmax.config import FIELD_FEATURE_COUNT, MONSTER_COUNT, MONSTER_DATA
-from cannotmax.config.paths import CONFIG_DIR, MONSTER_IMAGES_DIR
+from cannotdl.config import FIELD_FEATURE_COUNT, MONSTER_COUNT
+from cannotmax.config.paths import FIELD_RECOGNITION_CLASS2IDX_JSON
+from cannotmax.utils.monster_data import get_monster_avatar_path, get_monster_data
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class InputPanelUI(QFrame):
 
         try:
             # 加载类别映射
-            class_map_path = CONFIG_DIR / "battlefield_recognize/class_to_idx.json"
+            class_map_path = FIELD_RECOGNITION_CLASS2IDX_JSON
             with open(class_map_path, "r", encoding="utf-8") as f:
                 class_to_idx = json.load(f)
 
@@ -373,9 +374,7 @@ class InputPanelUI(QFrame):
             img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             try:
-                pixmap = QPixmap(
-                    str(MONSTER_IMAGES_DIR / f"{MONSTER_DATA['原始名称'][i]}.png")
-                )
+                pixmap = QPixmap(str(get_monster_avatar_path(i)))
                 if not pixmap.isNull():
                     pixmap = pixmap.scaled(
                         50,
@@ -388,8 +387,8 @@ class InputPanelUI(QFrame):
                 logger.error(f"Error loading character {i} image: {str(e)}")
 
             # 添加鼠标悬浮提示
-            if i in MONSTER_DATA.index:
-                data = MONSTER_DATA.loc[i].to_dict()
+            if i in get_monster_data().index:
+                data = get_monster_data().loc[i].to_dict()
                 tooltip_text = ""
                 for key, value in data.items():
                     tooltip_text += f"{key}: {value}\n"

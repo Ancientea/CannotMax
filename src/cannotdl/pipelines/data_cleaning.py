@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from cannotmax.config.paths import DATA_DIR
+from cannotmax.config.paths import ARKNIGHTS_DATA_CSV, ARKNIGHTS_DATA_CSV_CLEANED
 
 
 def clean_data(file_path, output_path):
@@ -240,6 +240,6 @@ def clean_data(file_path, output_path):
 
 
 if __name__ == "__main__":
-    input_file = DATA_DIR / "arknights.csv"
-    output_file = DATA_DIR / "arknights_cleaned.csv"
+    input_file = ARKNIGHTS_DATA_CSV
+    output_file = ARKNIGHTS_DATA_CSV_CLEANED
     clean_data(input_file, output_file)

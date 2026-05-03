@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from cannotmax.config import MONSTER_COUNT
+from cannotdl.config import MONSTER_COUNT
 from cannotmax.config.paths import MODELS_DIR
 from cannotmax.core import CannotModel
 

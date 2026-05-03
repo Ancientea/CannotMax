@@ -1,16 +1,11 @@
 """CannotDL 常量配置 — 供训练/评估/管线使用。"""
 
 import csv
-import json
 import logging
-from pathlib import Path
-from typing import Any
 
 from cannotmax.config.paths import MONSTER_CSV
 
 logger = logging.getLogger(__name__)
-
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 
 def _build_monster_data() -> dict[int, dict]:
@@ -39,7 +34,7 @@ def _build_monster_data() -> dict[int, dict]:
                     else 0,
                 }
     except (FileNotFoundError, IOError) as e:
-        logger.warning("无法加载 monster_greenvine.csv: %s", e)
+        logger.warning("无法加载 %s: %s", MONSTER_CSV, e)
     return result
 
 
@@ -47,15 +42,4 @@ MONSTER_DATA: dict[int, dict] = _build_monster_data()
 
 MONSTER_COUNT = len(MONSTER_DATA)
 
-
-def _load_field_feature_count() -> int:
-    config_path = _PROJECT_ROOT / "config" / "app.json"
-    try:
-        with open(config_path, encoding="utf-8") as f:
-            data: dict[str, Any] = json.load(f)
-        return data.get("recognition", {}).get("field_feature_count", 0)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return 0
-
-
-FIELD_FEATURE_COUNT = _load_field_feature_count()
+FIELD_FEATURE_COUNT = 0
