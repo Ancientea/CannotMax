@@ -6,17 +6,17 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from cannotmax.config.paths import MONSTER_CSV
+
 logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-
-_MONSTER_CSV_PATH = _PROJECT_ROOT / "monster_greenvine.csv"
 
 
 def _build_monster_data() -> dict[int, dict]:
     result: dict[int, dict] = {}
     try:
-        with open(_MONSTER_CSV_PATH, encoding="utf-8") as f:
+        with open(MONSTER_CSV, encoding="utf-8") as f:
             reader = csv.reader(f)
             next(reader, None)
             for line in reader:
