@@ -180,22 +180,20 @@ class SandboxSimulator:
 
             return
 
-        for i in range(self.num_monsters):
-            image_file_id = i + 1
+        from .utils import MONSTER_MAPPING
+
+        for unit_id, name in MONSTER_MAPPING.items():
             try:
-                image = Image.open(f"images/{image_file_id}.png")
-                self.icons[i] = {
+                image = Image.open(f"images/monsters/{name}.png")
+                self.icons[unit_id] = {
                     "red": ImageTk.PhotoImage(image.resize((40, 40))),
                     "blue": ImageTk.PhotoImage(
                         image.resize((40, 40)).transpose(Image.FLIP_LEFT_RIGHT)
                     ),
                 }
             except Exception as e:
-                # 同样，show_message_below_button 可能还不可用
-                logger.error(
-                    f"加载图标错误 (图标键: {i}, 文件名ID: {image_file_id}): {str(e)}"
-                )
-                self.icons[i] = {
+                logger.error(f"加载图标错误 (ID: {unit_id}, 名称: {name}): {str(e)}")
+                self.icons[unit_id] = {
                     "red": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray")),
                     "blue": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray")),
                 }

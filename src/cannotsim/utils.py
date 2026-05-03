@@ -140,21 +140,19 @@ class SpatialHash:
             self.insert(obj_id, pos)
 
 
-def load_monster_mapping_from_csv(file_path="monster.csv"):
-    """从CSV文件加载怪物ID和原始名称的映射"""
+def load_monster_mapping_from_csv(file_path="monster_greenvine.csv"):
+    """从CSV文件加载怪物ID和原始名称的映射 (MONSTER_MAPPING: id → 原始名称)"""
     mapping = {}
     try:
         with open(file_path, mode="r", encoding="utf-8-sig") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 try:
-                    monster_id = int(row["id"]) - 1  # 转为0-based索引
+                    monster_id = int(row["id"]) - 1
                     original_name = row["原始名称"]
                     mapping[monster_id] = original_name
-                except ValueError:
-                    print(
-                        f"Skipping row due to invalid ID or missing '原始名称': {row}"
-                    )
+                except (ValueError, KeyError):
+                    print(f"Skipping row due to invalid ID or missing fields: {row}")
     except FileNotFoundError:
         print(f"Error: {file_path} not found. Using empty monster mapping.")
     except Exception as e:
@@ -162,8 +160,29 @@ def load_monster_mapping_from_csv(file_path="monster.csv"):
     return mapping
 
 
-# ID与怪物名称映射表
+def _build_reverse_mapping(csv_path="monster_greenvine.csv"):
+    """构建反向映射 (名称 → ID)，同时包含 名称 和 原始名称 两列"""
+    reverse = {}
+    try:
+        import csv
+
+        with open(csv_path, mode="r", encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                mid = int(row["id"]) - 1
+                for col in ("名称", "原始名称"):
+                    name = row.get(col)
+                    if name and name not in reverse:
+                        reverse[name] = mid
+    except Exception:
+        pass
+    # 手动补充：小喷蛛 映射到 大喷蛛 的 ID
+    if "小喷蛛" not in reverse and "变异巨岩蛛" in reverse:
+        reverse["小喷蛛"] = reverse["变异巨岩蛛"]
+    return reverse
+
+
+# ID与怪物名称映射表 (id → 原始名称，用于图片文件名)
 MONSTER_MAPPING = load_monster_mapping_from_csv("monster_greenvine.csv")
 
-# 创建反向映射字典（名字到ID）
-REVERSE_MONSTER_MAPPING = {name: id for id, name in MONSTER_MAPPING.items()}
+# 反向映射字典 (名字 → id，包含 名称 和 原始名称)
+REVERSE_MONSTER_MAPPING = _build_reverse_mapping("monster_greenvine.csv")
