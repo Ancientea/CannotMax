@@ -49,7 +49,7 @@ MONSTER_COUNT = len(MONSTER_DATA)
 
 
 def _load_field_feature_count() -> int:
-    config_path = Path("config/app.json")
+    config_path = _PROJECT_ROOT / "config" / "app.json"
     try:
         with open(config_path, encoding="utf-8") as f:
             data: dict[str, Any] = json.load(f)
