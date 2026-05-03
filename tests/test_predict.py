@@ -5,17 +5,17 @@ import pytest
 
 from cannotmax.config import MONSTER_COUNT
 from cannotmax.config.paths import MODELS_DIR
-from cannotmax.core.predict import CannotModel
+from cannotmax.core import CannotModel
 
 
 @pytest.fixture(scope="module")
 def model():
-    if not list((MODELS_DIR / "predictor").glob("*.pth")):
-        pytest.skip("No model checkpoint found in models/predictor/")
-    try:
-        return CannotModel(model_path=MODELS_DIR / "predictor")
-    except SystemExit:
-        pytest.skip("CannotModel exited (no model checkpoint)")
+    if not list((MODELS_DIR / "predictor").glob("*.onnx")):
+        pytest.skip("No ONNX model found in models/predictor/")
+    m = CannotModel(model_path=MODELS_DIR / "predictor")
+    if not m.is_model_loaded:
+        pytest.skip("ONNX model failed to load (no valid checkpoint)")
+    return m
 
 
 class TestCannotModel:

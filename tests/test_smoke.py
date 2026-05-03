@@ -11,7 +11,7 @@ def test_core_modules_import():
     """Test that core modules can be imported without errors."""
     # Test predict module
     try:
-        from cannotmax.core.predict import CannotModel
+        from cannotmax.core import CannotModel
 
         assert CannotModel is not None
     except Exception as e:
