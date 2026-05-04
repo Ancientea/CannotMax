@@ -169,14 +169,20 @@ class SandboxSimulator:
         for i in range(self.num_monsters):
             image_file_id = i + 1
             try:
-                image = Image.open(f'images/{image_file_id}.png')
+                from config import MONSTER_IMAGES
+                from simulator.utils import MONSTER_MAPPING as MM
+                name = MM.get(image_file_id, "")
+                cv_img = MONSTER_IMAGES.get(name) if name else None
+                if cv_img is not None:
+                    import cv2
+                    image = Image.fromarray(cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB))
+                else:
+                    raise FileNotFoundError(f"no icon for {name or image_file_id}")
                 self.icons[i] = {
                     "red": ImageTk.PhotoImage(image.resize((40, 40))),
                     "blue": ImageTk.PhotoImage(image.resize((40, 40)).transpose(Image.FLIP_LEFT_RIGHT))
                 }
             except Exception as e:
-                # 同样，show_message_below_button 可能还不可用
-                print(f"加载图标错误 (图标键: {i}, 文件名ID: {image_file_id}): {str(e)}")
                 self.icons[i] = {
                     "red": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray")),
                     "blue": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray"))

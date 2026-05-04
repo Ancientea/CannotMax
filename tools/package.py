@@ -1,34 +1,24 @@
 import subprocess
 import shutil
-import sys
 from pathlib import Path
-import toml  # 导入toml库
+import toml # 导入toml库
 
-
-def _configure_utf8_stdio():
-    """Ensure console output can safely print Chinese text on Windows CI."""
-    for stream_name in ("stdout", "stderr"):
-        stream = getattr(sys, stream_name, None)
-        if stream is not None and hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8", errors="replace")
-
-
-_configure_utf8_stdio()
+# TODO: 需重新适配UV
 
 # 配置区（用户可根据需要修改这些参数）
 CONFIG = {
-    "venv_dir": ".venv",  # 虚拟环境目录
-    "source_script": "main.py",  # 主程序文件路径
-    "icon_file": r"ico/icon_64x64.ico",  # 图标文件路径
-    "output_dir": "output",  # 输出目录
+    "venv_dir": ".venv",                  # 虚拟环境目录
+    "source_script": "main.py",          # 主程序文件路径
+    "icon_file": r"ico/icon_64x64.ico",             # 图标文件路径
+    "output_dir": "output",              # 输出目录
     "console": True,
-    "add_data": [  # 需要打包的附加数据
+    "add_data": [                        # 需要打包的附加数据
         (r".venv/Lib/site-packages/rapidocr/default_models.yaml", "rapidocr"),
         (r".venv/Lib/site-packages/rapidocr/config.yaml", "rapidocr"),
         (r".venv/Lib/site-packages/rapidocr/models", "rapidocr/models"),
         # (r".venv/Lib/site-packages/onnxruntime", "onnxruntime"),
     ],
-    "copy_files": [  # 需要复制的额外文件/目录
+    "copy_files": [                      # 需要复制的额外文件/目录
         r"C:\Windows\System32\msvcp140.dll",
         r"C:\Windows\System32\vcruntime140.dll",
         r"C:\Windows\System32\vcruntime140_1.dll",
@@ -40,26 +30,20 @@ CONFIG = {
         "pyproject.toml",
         "monster.csv",
         "monster_greenvine.csv",
-        "maafw",
-    ],
+    ]
 }
-
 
 def build_exe():
     """使用PyInstaller打包，直接调用spec文件"""
     venv_python = str(Path(CONFIG["venv_dir"]) / "Scripts" / "python.exe")
-
+    
     # 直接运行 spec 文件，保持 spec 文件中的过滤逻辑生效
     build_cmd = [
-        venv_python,
-        "-m",
-        "PyInstaller",
+        venv_python, "-m", "PyInstaller",
         "--noconfirm",
-        "--distpath",
-        CONFIG["output_dir"],
-        "--workpath",
-        "build",
-        "main.spec",
+        "--distpath", CONFIG["output_dir"],
+        "--workpath", "build",
+        "main.spec"
     ]
 
     try:
@@ -68,7 +52,6 @@ def build_exe():
     except subprocess.CalledProcessError as e:
         print(f"打包失败：{e}")
         return False
-
 
 def copy_additional_files():
     """复制额外文件到输出目录"""
@@ -96,18 +79,14 @@ def copy_additional_files():
                 dest.mkdir(parents=True, exist_ok=True)
                 # 特殊处理images目录，排除tmp和nums子目录
                 if src.name == "images":
-
                     def ignore_func(dir, names):
                         """忽略tmp和nums子目录"""
                         dir_path = Path(dir)
                         # 仅在images根目录下排除特定子目录
                         if dir_path.resolve() == src.resolve():
-                            return [n for n in names if n in {"tmp", "nums"}]
+                            return [n for n in names if n in {'tmp', 'nums'}]
                         return []
-
-                    shutil.copytree(
-                        src, dest, ignore=ignore_func, dirs_exist_ok=True
-                    )
+                    shutil.copytree(src, dest, ignore=ignore_func, dirs_exist_ok=True)
                 else:
                     shutil.copytree(src, dest, dirs_exist_ok=True)
                 print(f"已复制目录：{src} -> {dest}")
@@ -121,7 +100,6 @@ def copy_additional_files():
 
     return True
 
-
 def create_zip_archive(project_name, project_version):
     """将输出目录打包为zip文件"""
     output_dir = Path(CONFIG["output_dir"]) / "main"
@@ -131,11 +109,10 @@ def create_zip_archive(project_name, project_version):
     zip_name = Path(CONFIG["output_dir"]) / f"{project_name}-{project_version}"
     try:
         # shutil.make_archive 会自动添加 .zip 扩展名
-        shutil.make_archive(zip_name, "zip", root_dir=output_dir)
+        shutil.make_archive(zip_name, 'zip', root_dir=output_dir)
         print(f"已创建zip文件：{zip_name}.zip")
     except Exception as e:
         print(f"创建zip文件失败：{e}")
-
 
 def main():
     with open("pyproject.toml", "r", encoding="utf-8") as f:
@@ -152,7 +129,6 @@ def main():
     print(f"\n打包成功！输出目录：{Path(CONFIG['output_dir']).resolve()}")
 
     create_zip_archive(project_name, project_version)
-
 
 if __name__ == "__main__":
     main()

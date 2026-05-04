@@ -4,7 +4,7 @@ class Unit:
     def __init__(self, team, unit_id, x, y):
         self.team = team
         self.unit_id = unit_id
-        self.config = UNIT_CONFIG[1]  # 现在可以正确访问配置
+        self.config = UNIT_CONFIG.get(self.unit_id, UNIT_CONFIG[1])  # 按实际ID取配置，兜底ID=1
 
         self.x = x
         self.y = y

@@ -6,7 +6,7 @@ import csv
 from collections import defaultdict
 from config import MONSTER_COUNT, FIELD_FEATURE_COUNT, MONSTER_DATA
 
-FIELD_FEATURE_COUNT=0
+
 def load_data():
     """加载数据"""
     df = pd.read_csv('arknights.csv', header=None, low_memory=False)
@@ -23,13 +23,6 @@ def load_data():
 def get_monster_name(monster_id):
     """根据怪物ID获取怪物名称"""
     if monster_id in MONSTER_DATA.index:
-        return MONSTER_DATA.loc[monster_id]['名称']
-    return f'怪物{monster_id}'
-
-
-def get_monster_original_name(monster_id):
-    """根据怪物ID获取怪物原始名称（用于匹配图片）"""
-    if monster_id in MONSTER_DATA.index:
         return MONSTER_DATA.loc[monster_id]['原始名称']
     return f'怪物{monster_id}'
 
@@ -37,7 +30,6 @@ def get_monster_original_name(monster_id):
 def calculate_all_monster_win_rates(df):
     """计算所有怪物的胜率"""
     monster_stats = {}
-    total_matches = len(df)
     
     for i in range(1, MONSTER_COUNT + 1):
         try:
@@ -65,13 +57,11 @@ def calculate_all_monster_win_rates(df):
         if total_games > 0:
             monster_name = get_monster_name(i)
             win_rate = total_wins / total_games
-            participation_rate = total_games / total_matches if total_matches > 0 else 0
             monster_stats[monster_name] = {
                 '怪物ID': i,
                 '胜场': total_wins,
                 '总场数': total_games,
-                '胜率': win_rate,
-                '参战率': participation_rate
+                '胜率': win_rate
             }
     
     return pd.DataFrame(monster_stats).T.sort_values('胜率', ascending=False)
@@ -476,6 +466,71 @@ def analyze_terrain_effects(df):
     return pd.DataFrame(terrain_effects[:20])  # 增加到前20个
 
 
+# ══════════════════════════════════════════════════════════════
+# 怪物胜率排行榜（独立可用）
+# ══════════════════════════════════════════════════════════════
+
+def load_monster_info():
+    """从 monster_greenvine.csv 加载怪物面板数据"""
+    info = pd.read_csv('monster_greenvine.csv', index_col='id', encoding='utf-8-sig')
+    return info
+
+
+def print_leaderboard():
+    """打印怪物胜率排行榜（含属性面板）"""
+    df = load_data()
+    stats = calculate_all_monster_win_rates(df)
+    info = load_monster_info()
+
+    # 合并属性
+    stats = stats.copy()
+    stats['名称'] = stats.index.map(
+        lambda name: info.loc[info['原始名称'] == name, '名称'].values[0]
+        if name in info['原始名称'].values else name
+    )
+    stats['攻击力'] = stats['怪物ID'].map(
+        lambda mid: int(pd.to_numeric(info.loc[mid, '攻击力'], errors='coerce') or 0) if mid in info.index else 0
+    )
+    stats['防御力'] = stats['怪物ID'].map(
+        lambda mid: int(pd.to_numeric(info.loc[mid, '防御力'], errors='coerce') or 0) if mid in info.index else 0
+    )
+    stats['生命值'] = stats['怪物ID'].map(
+        lambda mid: int(pd.to_numeric(info.loc[mid, '生命值'], errors='coerce') or 0) if mid in info.index else 0
+    )
+    stats['攻击类型'] = stats['怪物ID'].map(
+        lambda mid: info.loc[mid, '攻击类型'] if mid in info.index else ''
+    )
+
+    # 排名
+    stats = stats.reset_index(drop=True)
+    stats.index = range(1, len(stats) + 1)
+
+    print(f"\n{'='*90}")
+    print(f"  怪物胜率排行榜（共 {len(stats)} 只）")
+    print(f"{'='*90}")
+    print(f"{'排名':<5}{'名称':<12}{'胜率':>7}{'胜场':>6}{'总场':>6}{'攻击':>6}{'防御':>6}{'生命':>7}{'类型':<6}")
+    print(f"{'-'*90}")
+
+    for rank, row in stats.iterrows():
+        name = row['名称'] if len(row['名称']) <= 10 else row['名称'][:9] + '…'
+        win_rate_str = f"{row['胜率']:.1%}"
+        print(f"{rank:<5}{name:<12}{win_rate_str:>7}{int(row['胜场']):>6}{int(row['总场数']):>6}"
+              f"{row['攻击力']:>6}{row['防御力']:>6}{row['生命值']:>7}{str(row['攻击类型']):<6}")
+
+    print(f"{'='*90}")
+
+    # Top 5 / Bottom 5
+    print(f"\n🏆 Top 5:")
+    for rank, row in stats.head(5).iterrows():
+        print(f"  {rank}. {row['名称']} — 胜率 {row['胜率']:.1%} ({int(row['胜场'])}/{int(row['总场数'])})")
+
+    print(f"\n💀 Bottom 5:")
+    for rank, row in stats.tail(5).iterrows():
+        print(f"  {rank}. {row['名称']} — 胜率 {row['胜率']:.1%} ({int(row['胜场'])}/{int(row['总场数'])})")
+
+    return stats
+
+
 def analyze_device_counter_effects(df):
     """分析五个装置对怪物的克制效果"""
     device_counter_results = {}
@@ -626,38 +681,33 @@ def create_html_table(df, columns, title, is_combo=False, monster_relations=None
         if is_combo and 'ID1' in row and 'ID2' in row:
             monster1_name = get_monster_name(row['ID1'])
             monster2_name = get_monster_name(row['ID2'])
-            monster1_orig = get_monster_original_name(row['ID1'])
-            monster2_orig = get_monster_original_name(row['ID2'])
             html += f"""<td>
                 <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                <img src="images/{monster1_orig}.png" onerror="this.src='images/empty.png'" style="width:30px;height:30px;">
+                <img src="images/{monster1_name}.png" onerror="this.src='images/empty.png'" style="width:30px;height:30px;">
                 <span>{monster1_name}</span><br>
-                <img src="images/{monster2_orig}.png" onerror="this.src='images/empty.png'" style="width:30px;height:30px;">
+                <img src="images/{monster2_name}.png" onerror="this.src='images/empty.png'" style="width:30px;height:30px;">
                 <span>{monster2_name}</span>
             </td>"""
         elif '怪物ID' in row:
             monster_name = get_monster_name(row['怪物ID'])
-            monster_orig = get_monster_original_name(row['怪物ID'])
             display_name = row.get('怪物', monster_name)
             monster_id = row['怪物ID']
             html += f"""<td>
                 <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                <img src="images/{monster_orig}.png" onerror="this.src='images/empty.png'" style="width:50px;height:50px;">
+                <img src="images/{monster_name}.png" onerror="this.src='images/empty.png'" style="width:50px;height:50px;">
                 <span style="font-weight:bold;">{display_name}</span>
             </td>"""
         else:
             # 对于胜率表，使用索引作为怪物名称
             monster_name = idx
             # 尝试从怪物数据中获取ID
-            monster_orig = monster_name
             for mid in range(1, MONSTER_COUNT + 1):
                 if get_monster_name(mid) == monster_name:
                     monster_id = mid
-                    monster_orig = get_monster_original_name(mid)
                     break
             html += f"""<td>
                 <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                <img src="images/{monster_orig}.png" onerror="this.src='images/empty.png'" style="width:50px;height:50px;">
+                <img src="images/{monster_name}.png" onerror="this.src='images/empty.png'" style="width:50px;height:50px;">
                 <span style="font-weight:bold;">{monster_name}</span>
             </td>"""
         
@@ -681,9 +731,8 @@ def create_html_table(df, columns, title, is_combo=False, monster_relations=None
             if relations and 'best_teammates' in relations and relations['best_teammates']:
                 teammates = []
                 for teammate in relations['best_teammates']:
-                    teammate_orig = get_monster_original_name(teammate['partner_id'])
                     teammates.append(f"""<div style="margin:3px 0;">
-                        <img src="images/{teammate_orig}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
+                        <img src="images/{teammate['partner_name']}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
                         <small>{teammate['partner_name']} ({teammate['lift']:.2f}x)</small>
                     </div>""")
                 html += "".join(teammates)
@@ -696,9 +745,8 @@ def create_html_table(df, columns, title, is_combo=False, monster_relations=None
             if relations and 'counters' in relations and relations['counters']:
                 counters = []
                 for counter in relations['counters']:
-                    counter_orig = get_monster_original_name(counter['opponent_id'])
                     counters.append(f"""<div style="margin:3px 0;">
-                        <img src="images/{counter_orig}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
+                        <img src="images/{counter['opponent_name']}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
                         <small>{counter['opponent_name']} ({counter['win_rate']:.0%})</small>
                     </div>""")
                 html += "".join(counters)
@@ -711,9 +759,8 @@ def create_html_table(df, columns, title, is_combo=False, monster_relations=None
             if relations and 'countered_by' in relations and relations['countered_by']:
                 countered = []
                 for counter in relations['countered_by']:
-                    counter_orig = get_monster_original_name(counter['opponent_id'])
                     countered.append(f"""<div style="margin:3px 0;">
-                        <img src="images/{counter_orig}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
+                        <img src="images/{counter['opponent_name']}.png" onerror="this.src='images/empty.png'" style="width:20px;height:20px;vertical-align:middle;margin-right:3px;">
                         <small>{counter['opponent_name']} ({counter['lose_rate']:.0%})</small>
                     </div>""")
                 html += "".join(countered)
@@ -748,11 +795,10 @@ def create_device_counter_html(device_counter_effects):
         row_number = 1
         for effect in effects:
             monster_name = effect['怪物']
-            monster_orig = get_monster_original_name(effect['怪物ID'])
             html += f"""<tr>
                 <td>
                     <span style="font-size:16px;font-weight:bold;color:#4CAF50;margin-right:8px;">{row_number}.</span>
-                    <img src="images/{monster_orig}.png" onerror="this.src='images/empty.png'" style="width:40px;height:40px;">
+                    <img src="images/{monster_name}.png" onerror="this.src='images/empty.png'" style="width:40px;height:40px;">
                     <span style="font-weight:bold;">{monster_name}</span>
                 </td>
                 <td style="color: {'red' if effect['克制程度'] > 0 else 'green'};">{effect['克制程度']:.2%}</td>
@@ -783,16 +829,11 @@ def generate_comprehensive_report():
     print("正在分析被克制关系...")
     countered = find_countered_monsters(df)
     
-    if FIELD_FEATURE_COUNT > 0:
-        print("正在分析地形效果...")
-        terrain_effects = analyze_terrain_effects(df)
-        
-        print("正在分析装置克制效果...")
-        device_counter_effects = analyze_device_counter_effects(df)
-    else:
-        print("地形特征数量为0，跳过地形分析...")
-        terrain_effects = pd.DataFrame()
-        device_counter_effects = {}
+    print("正在分析地形效果...")
+    terrain_effects = analyze_terrain_effects(df)
+    
+    print("正在分析装置克制效果...")
+    device_counter_effects = analyze_device_counter_effects(df)
     
     print("正在分析个体怪物关系...")
     monster_relations = analyze_individual_monster_relations(df)
@@ -863,7 +904,7 @@ def generate_comprehensive_report():
     </style>
 </head>
 <body>
-    <h1>明日方舟争锋频道绿藤城</h1>
+    <h1>明日方舟怪物战斗统计报告</h1>
     <div class="stats">
         <p><strong>数据概览：</strong></p>
         <ul>
@@ -876,7 +917,7 @@ def generate_comprehensive_report():
     
     # 1. 所有怪物胜率
     if not win_rates.empty:
-        html += create_html_table(win_rates, ['胜场', '总场数', '胜率', '参战率'], '所有怪物胜率排行榜', monster_relations=monster_relations)
+        html += create_html_table(win_rates, ['胜场', '总场数', '胜率'], '所有怪物胜率排行榜', monster_relations=monster_relations)
     else:
         html += "<h2>所有怪物胜率排行榜</h2><p>暂无数据</p>"
     

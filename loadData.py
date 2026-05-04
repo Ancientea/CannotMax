@@ -18,11 +18,11 @@ logger.setLevel(logging.DEBUG)
 
 
 class AdbConnector:
-    def __init__(self, adb_serial=None):
+    def __init__(self):
         self.adb_path = r".\platform-tools\adb.exe"
         self.screen_width = 0
         self.screen_height = 0
-        self.device_serial = adb_serial if adb_serial else ""
+        self.device_serial = ""
         self.is_connected = False
 
     def connect(self):
@@ -33,7 +33,7 @@ class AdbConnector:
             self.update_device_serial(target_serial)
             logger.info(f"最终使用设备: {self.device_serial}")
         except RuntimeError as e:
-            logger.exception(f"初始化设备序列号错误: ", e)
+            logger.exception(f"初始化设备序列号错误: {e}")
             self.is_connected = False
             return
 
@@ -104,7 +104,7 @@ class AdbConnector:
                     devices.append(dev)
             return devices
         except Exception as e:
-            logger.exception(f"获取设备列表失败", e)
+            logger.exception(f"获取设备列表失败: {e}")
             return []
 
     def update_device_serial(self, serial):
@@ -120,8 +120,7 @@ class AdbConnector:
             result = subprocess.run(
                 device_cmd, shell=True, capture_output=True, text=True, timeout=5
             )
-            # 只在调试模式下输出完整设备列表
-            logger.debug(f"ADB devices输出:\n{result.stdout}")
+            logger.info(f"ADB devices输出:\n{result.stdout}")
 
             devices: list[str] = []
             for line in result.stdout.split("\n"):
@@ -133,13 +132,18 @@ class AdbConnector:
                         self.device_serial = serial
                         return dev
 
-            # 只使用指定的设备，不要自动选择其他设备
-            logger.error(f"未找到指定的设备: {serial}，当前在线设备: {devices}")
+            # 自动选择第一个可用设备
+            if devices:
+                self.device_serial = devices[0]
+                logger.info(f"自动选择第一个可用设备: {self.device_serial}")
+                return self.device_serial
+
+            logger.error("未找到可连接的Android设备")
             self.device_serial = ""
             return ""
 
         except Exception as e:
-            logger.exception(f"设备检测失败", e)
+            logger.exception(f"设备检测失败: {e}")
             self.device_serial = ""
             return ""
 
@@ -185,10 +189,9 @@ class AdbConnector:
         # 将二进制数据转换为numpy数组
         argb_array = np.frombuffer(data, dtype=np.uint8)[header_size:]
 
-        # 确保数据长度正确（实际屏幕分辨率，4通道）
-        expected_length = self.screen_width * self.screen_height * 4
-        if len(argb_array) != expected_length:
-            raise ValueError(f"Invalid data length for {self.screen_width}x{self.screen_height} ARGB image")
+        # 确保数据长度正确（1920x1080分辨率，4通道）
+        if len(argb_array) != 1920 * 1080 * 4:
+            raise ValueError("Invalid data length for 1920x1080 ARGB image")
 
         # 转换为正确的形状 (高度, 宽度, 通道)
         argb_array = argb_array.reshape((self.screen_height, self.screen_width, 4))
@@ -203,13 +206,9 @@ class AdbConnector:
         return image
 
     def decode_raw_with_gzip(self, data: bytes):
-        try:
-            decompressed_data = gzip.decompress(data)
-            image = self.decode_raw(decompressed_data)
-            return image
-        except Exception as e:
-            logger.exception("Gzip decompression or image decoding failed: %s", e)
-            return None
+        decompressed_data = gzip.decompress(data)
+        image = self.decode_raw(decompressed_data)
+        return image
 
     def capture_screenshot_raw_gzip(self):
         get_raw_gzip_cmd = (
@@ -226,10 +225,10 @@ class AdbConnector:
             logger.exception("Screenshot capture failed (ADB error): %s", e)
             return None
         except gzip.BadGzipFile as e:
-            logger.exception("Gzip decompression failed: %s", e)
+            logger.exception("Gzip decompression failed:", e)
             return None
         except Exception as e:
-            logger.exception("Image processing error: %s", e)
+            logger.exception("Image processing error:", e)
             return None
         # logger.debug(f"获取图片用时{time.time()-ta:.3f}s")
         return image
@@ -262,10 +261,11 @@ class PcConnector:
             self.screen_height = rect[3] - rect[1]
             
             try:
-                from maa_adb_connector import resolve_maafw_path
-                binary_path = resolve_maafw_path()
-                if binary_path:
-                    os.environ["MAAFW_BINARY_PATH"] = binary_path
+                # 尝试初始化 MaaFramework 控制器以实现后台截图与点击
+                repo_root = Path("MaaAutoReverse").resolve()
+                if str(repo_root) not in sys.path:
+                    sys.path.insert(0, str(repo_root))
+                os.environ["MAAFW_BINARY_PATH"] = str(repo_root / "runtime" / "bin")
                 
                 from maa.toolkit import Toolkit
                 from maa.controller import Win32Controller, MaaWin32ScreencapMethodEnum, MaaWin32InputMethodEnum

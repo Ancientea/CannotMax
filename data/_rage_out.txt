@@ -1,0 +1,20 @@
+961:                 m.on_hit(self, damage)
+962:                 m.status_system.apply(BuffEffect(
+963:                     type=BuffType.FIRE,
+964:                     duration=10,
+965:                     source=self
+966:                 ))
+967: 
+968:     def on_extra_update(self, delta_time):
+969:         if not self.rage_mode and self.health < 0.5 * self.max_health:
+970:             self.rage_mode = True
+971:             self.attack_speed += 40
+972:             debug_print(f"{self.name} 进入狂暴模式")
+973:         self.ring_attack_counter += delta_time
+974:         if self.ring_attack_counter >= 10.0:
+975:             # 检查是否有敌人在近身范围（0.8），触发AOE
+976:             nearby = [t for t in self.battlefield.alive_monsters
+977:                       if t.faction != self.faction and t.is_alive
+978:                       and (t.position - self.position).magnitude < 0.8]
+979:             if nearby:
+980:                 targets = [t for t in self.battlefield.alive_monsters

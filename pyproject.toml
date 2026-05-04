@@ -1,58 +1,59 @@
 [project]
 name = "CannotMax-Greenvine"
-version = "1.1.0"
+version = "1.0.7"
 description = "这是一个基于深度学习的明日方舟游戏辅助工具，用于自动识别游戏画面中的单位并预测战斗结果。"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 dependencies = [
-  "matplotlib",
-  "numpy",
-  "onnxruntime",
-  "opencv-python",
-  "pandas",
-  "pillow",
-  "pyqt6",
-  "rapidocr",
-  "scikit-learn",
-  "windows-capture",
-  "toml",
-  "pywin32>=311",
-  "maafw>=5.10.2",
+    "matplotlib",
+    "numpy",
+    "onnxruntime",
+    "opencv-python",
+    "pandas",
+    "pillow",
+    "pyqt6",
+    "rapidocr",
+    "scikit-learn",
+    "tqdm",
+    "windows-capture",
+    "toml",
+    "pywin32>=311",
 ]
 
 [dependency-groups]
-dev = ["onnx>=1.19.0", "onnxscript>=0.7.0", "pyinstaller>=6.15.0"]
+dev = [
+    "onnx>=1.19.0",
+    "onnxscript>=0.7.0",
+    "pyinstaller>=6.15.0",
+]
 
 [project.optional-dependencies]
 cpu = ["torch", "torchvision"]
 cu128 = ["torch>=2.7.0", "torchvision>=0.22.0"]
 cu130 = ["torch>=2.7.0", "torchvision>=0.22.0"]
+directml = ["torch", "torchvision"]
 
 [tool.uv]
 python-install-mirror = "https://mirror.nju.edu.cn/github-release/astral-sh/python-build-standalone/"
 conflicts = [
-  [
-    { extra = "cpu" },
-    { extra = "cu128" },
-  ],
-  [
-    { extra = "cpu" },
-    { extra = "cu130" },
-  ],
-  [
-    { extra = "cu128" },
-    { extra = "cu130" },
-  ],
+  [{ extra = "cpu" }, { extra = "cu128" }],
+  [{ extra = "cpu" }, { extra = "cu130" }],
+  [{ extra = "cpu" }, { extra = "directml" }],
+  [{ extra = "cu128" }, { extra = "cu130" }],
+  [{ extra = "cu128" }, { extra = "directml" }],
+  [{ extra = "cu130" }, { extra = "directml" }],
 ]
 
 [tool.uv.sources]
 torch = [
   { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cpu", extra = "directml" },
   { index = "pytorch-cu128", extra = "cu128" },
   { index = "pytorch-cu130", extra = "cu130" },
 ]
 torchvision = [
   { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cpu", extra = "directml" },
   { index = "pytorch-cu128", extra = "cu128" },
   { index = "pytorch-cu130", extra = "cu130" },
 ]

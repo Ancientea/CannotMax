@@ -211,7 +211,10 @@ class WinRTScreenCapture:
                 x2 = max(0, min(int(x2), W))
                 y1 = max(0, min(int(y1), H - 1))
                 y2 = max(0, min(int(y2), H))
-                return frame[y1:y2, x1:x2]
+                # 防御: 裁剪区域至少 1×1
+                if x2 <= x1 or y2 <= y1:
+                    raise ValueError(f"bbox裁剪区域无效: ({x1},{y1})-({x2},{y2})")
+                frame = frame[y1:y2, x1:x2]
             return frame
 
     def snapshot_once(self, bbox: Optional[tuple[int, int, int, int]] = None, timeout_sec: float = 2.0) -> np.ndarray:
@@ -245,6 +248,9 @@ class WinRTScreenCapture:
                 x2 = max(0, min(int(x2), W))
                 y1 = max(0, min(int(y1), H - 1))
                 y2 = max(0, min(int(y2), H))
+                # 防御: 裁剪区域至少 1×1
+                if x2 <= x1 or y2 <= y1:
+                    raise ValueError(f"bbox裁剪区域无效: ({x1},{y1})-({x2},{y2})")
                 frame = frame[y1:y2, x1:x2]
 
             if not was_started:

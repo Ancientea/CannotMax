@@ -1,0 +1,52 @@
+# ==================== CannotMax 完整依赖列表 ====================
+# 安装: pip install -r requirements.txt
+# PyTorch CUDA 版需额外指定源，见底部说明
+
+# ── 核心运行时 ──
+numpy
+opencv-python
+pillow
+pandas
+tqdm
+toml
+matplotlib
+
+# ── 深度学习 ──
+# PyTorch（CPU 版，自动安装。CUDA 版见底部说明）
+torch>=2.7.0
+torchvision>=0.22.0
+onnxruntime
+scikit-learn
+
+# ── GUI ──
+pyqt6
+
+# ── OCR（屏幕文字识别）──
+rapidocr
+
+# ── Windows 平台 ──
+pywin32>=311
+windows-capture
+
+# ── 开发 / 构建 / 导出（可选）──
+onnx>=1.19.0
+onnxscript>=0.7.0
+pyinstaller>=6.15.0
+
+
+# ==================== 安装说明 ====================
+#
+# 1. 基础安装（含 CPU 版 PyTorch）:
+#    pip install -r requirements.txt
+#
+# 2. CUDA 版 PyTorch（NVIDIA GPU，训练/推理更快）:
+#    先装基础依赖（跳过 torch）:
+#    pip install -r requirements.txt --ignore-installed torch torchvision
+#    再装 CUDA 12.8 版:
+#    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+#
+# 3. 国内镜像加速:
+#    pip install -r requirements.txt -i https://mirrors.cloud.tencent.com/pypi/simple/
+#
+# 4. Python 版本要求: >= 3.10
+#    操作系统: Windows 10/11（pywin32 / windows-capture 仅支持 Windows）

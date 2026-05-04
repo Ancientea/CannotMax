@@ -1,0 +1,3 @@
+Quick test after fix
+MIS #55 矿脉×5+炮击×4 vs 沉沙×3+沸血×3                              L 左7% L1/R14 [4.7s]
+MIS #103 妒×4+水遁×3 vs 庞贝×2                                   R 左93% L14/R1 [4.1s]
