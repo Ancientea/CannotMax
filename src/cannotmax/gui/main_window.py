@@ -654,8 +654,6 @@ class ArknightsApp(QMainWindow):
         method_id = self.input_method_combo.currentData()
         if not method_id:
             return
-        if self.connector:
-            self.connector.set_input_method(method_id)
         if self.connector and self.current_capture_mode in self.connector_factory._pool:
             _, _, state = self.connector_factory._pool[self.current_capture_mode]
             if state == ConnectorState.VALID:
