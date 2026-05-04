@@ -138,10 +138,10 @@ def normalize_coords(coords, ref_w, ref_h):
     for x1, y1, x2, y2 in coords:
         result.append(
             (
-                round(float(min(x1, x2)) / ref_w, 4),
-                round(float(min(y1, y2)) / ref_h, 4),
-                round(float(max(x1, x2)) / ref_w, 4),
-                round(float(max(y1, y2)) / ref_h, 4),
+                round(float(x1) / ref_w, 4),
+                round(float(y1) / ref_h, 4),
+                round(float(x2) / ref_w, 4),
+                round(float(y2) / ref_h, 4),
             )
         )
     return result

@@ -482,91 +482,99 @@ def _build_frame_boxes(cx, cy, r, high_tol=False):
     nbi = 0.3  # nums inner bias
     ny = cy - 0.5 * r
 
-    avatar = np.round(
-        np.array(
+    avatar_raw = np.array(
+        [
             [
-                [
-                    cx - r * t,
-                    cy + r * t,
-                    cx + 2 * k * r + r * t,
-                    cy - 2 * k * r - r * t,
-                ],
-                [
-                    cx + 2 * k * r - r * t,
-                    cy - 2 * k * r - r * t,
-                    cx + 4 * k * r + r * t,
-                    cy + r * t,
-                ],
-                [
-                    cx + 4 * k * r - r * t,
-                    cy + r * t,
-                    cx + 6 * k * r + r * t,
-                    cy - 2 * k * r - r * t,
-                ],
-                [
-                    cx + (6 * k + m) * r - r * t,
-                    cy + r * t,
-                    cx + (8 * k + m) * r + r * t,
-                    cy - 2 * k * r - r * t,
-                ],
-                [
-                    cx + (8 * k + m) * r - r * t,
-                    cy - 2 * k * r - r * t,
-                    cx + (10 * k + m) * r + r * t,
-                    cy + r * t,
-                ],
-                [
-                    cx + (10 * k + m) * r - r * t,
-                    cy + r * t,
-                    cx + (12 * k + m) * r + r * t,
-                    cy - 2 * k * r - r * t,
-                ],
-            ]
-        )
-    ).astype("int")
+                cx - r * t,
+                cy + r * t,
+                cx + 2 * k * r + r * t,
+                cy - 2 * k * r - r * t,
+            ],
+            [
+                cx + 2 * k * r - r * t,
+                cy - 2 * k * r - r * t,
+                cx + 4 * k * r + r * t,
+                cy + r * t,
+            ],
+            [
+                cx + 4 * k * r - r * t,
+                cy + r * t,
+                cx + 6 * k * r + r * t,
+                cy - 2 * k * r - r * t,
+            ],
+            [
+                cx + (6 * k + m) * r - r * t,
+                cy + r * t,
+                cx + (8 * k + m) * r + r * t,
+                cy - 2 * k * r - r * t,
+            ],
+            [
+                cx + (8 * k + m) * r - r * t,
+                cy - 2 * k * r - r * t,
+                cx + (10 * k + m) * r + r * t,
+                cy + r * t,
+            ],
+            [
+                cx + (10 * k + m) * r - r * t,
+                cy + r * t,
+                cx + (12 * k + m) * r + r * t,
+                cy - 2 * k * r - r * t,
+            ],
+        ]
+    )
+    # 确保每行坐标为 (x1, y1, x2, y2) 且 y1 < y2
+    avatar = np.zeros_like(avatar_raw)
+    for i in range(6):
+        x1, y1, x2, y2 = avatar_raw[i]
+        avatar[i] = [min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)]
+    avatar = np.round(avatar).astype("int")
 
-    nums = np.round(
-        np.array(
+    nums_raw = np.array(
+        [
             [
-                [
-                    cx + (nb + 0 * k) * r - r * t,
-                    cy + r * t,
-                    cx + (nbi + 2 * k) * r + r * t,
-                    ny,
-                ],
-                [
-                    cx + (nb + 2 * k) * r - r * t,
-                    ny,
-                    cx + (nbi + 4 * k) * r + r * t,
-                    cy + r * t,
-                ],
-                [
-                    cx + (nb + 4 * k) * r - r * t,
-                    cy + r * t,
-                    cx + (nbi + 6 * k) * r + r * t,
-                    ny,
-                ],
-                [
-                    cx + (-nbi + 6 * k + m) * r - r * t,
-                    cy + r * t,
-                    cx + (-nb + 8 * k + m) * r + r * t,
-                    ny,
-                ],
-                [
-                    cx + (-nbi + 8 * k + m) * r - r * t,
-                    ny,
-                    cx + (-nb + 10 * k + m) * r + r * t,
-                    cy + r * t,
-                ],
-                [
-                    cx + (-nbi + 10 * k + m) * r - r * t,
-                    cy + r * t,
-                    cx + (-nb + 12 * k + m) * r + r * t,
-                    ny,
-                ],
-            ]
-        )
-    ).astype("int")
+                cx + (nb + 0 * k) * r - r * t,
+                cy + r * t,
+                cx + (nbi + 2 * k) * r + r * t,
+                ny,
+            ],
+            [
+                cx + (nb + 2 * k) * r - r * t,
+                ny,
+                cx + (nbi + 4 * k) * r + r * t,
+                cy + r * t,
+            ],
+            [
+                cx + (nb + 4 * k) * r - r * t,
+                cy + r * t,
+                cx + (nbi + 6 * k) * r + r * t,
+                ny,
+            ],
+            [
+                cx + (-nbi + 6 * k + m) * r - r * t,
+                cy + r * t,
+                cx + (-nb + 8 * k + m) * r + r * t,
+                ny,
+            ],
+            [
+                cx + (-nbi + 8 * k + m) * r - r * t,
+                ny,
+                cx + (-nb + 10 * k + m) * r + r * t,
+                cy + r * t,
+            ],
+            [
+                cx + (-nbi + 10 * k + m) * r - r * t,
+                cy + r * t,
+                cx + (-nb + 12 * k + m) * r + r * t,
+                ny,
+            ],
+        ]
+    )
+    # 确保每行坐标为 (x1, y1, x2, y2) 且 y1 < y2
+    nums = np.zeros_like(nums_raw)
+    for i in range(6):
+        x1, y1, x2, y2 = nums_raw[i]
+        nums[i] = [min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)]
+    nums = np.round(nums).astype("int")
 
     return avatar, nums
 

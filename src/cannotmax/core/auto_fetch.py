@@ -488,7 +488,7 @@ class AutoFetch:
         if screenshot is None:
             screenshot = self.connector.capture_screenshot()
         self.recognize_results = self.recognizer.process_regions(
-            screenshot, auto_fallback=True, mode=self.capture_mode
+            screenshot, mode=self.capture_mode
         )
 
         # 场地识别

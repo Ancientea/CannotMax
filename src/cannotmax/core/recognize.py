@@ -95,6 +95,8 @@ def find_best_match(
 
     for img_id, ref_img in ref_images.items():
         try:
+            if ref_img.shape[0] > target.shape[0] or ref_img.shape[1] > target.shape[1]:
+                continue
             res = cv2.matchTemplate(target, ref_img, cv2.TM_CCOEFF_NORMED)
             _, max_val, _, _ = cv2.minMaxLoc(res)
             if max_val > confidence:
@@ -180,12 +182,8 @@ class RecognizeMonster:
         self.avatar_regions = avatar_regions
         self.number_regions = number_regions
 
-    def _resolve_crop_ratio(self, auto_fallback: bool, mode: str = "ADB") -> tuple:
+    def _resolve_crop_ratio(self) -> tuple:
         """解析裁剪比例。
-
-        Args:
-            auto_fallback: True 时 crop_ratio=None 回退到默认值
-            mode: 捕获模式 (ADB/PC/WIN)，影响默认值选择
 
         Returns:
             ((x1, y1), (x2, y2)) 相对坐标
@@ -195,9 +193,6 @@ class RecognizeMonster:
         """
         if self.crop_ratio is not None:
             return self.crop_ratio
-        if auto_fallback:
-            cr = RECOGNITION_PARAMS[mode]["crop_regions"]
-            return tuple(tuple(p) for p in cr)
         raise ROINotSelectedError("请先选择怪物条范围")
 
     def _crop_by_ratio(self, screenshot: np.ndarray, ratio: tuple) -> np.ndarray:
@@ -216,62 +211,135 @@ class RecognizeMonster:
         px2, py2 = int(x2 * w), int(y2 * h)
         return screenshot[py1:py2, px1:px2]
 
-    def process_regions(
-        self, screenshot: np.ndarray, auto_fallback: bool = True, mode: str = "ADB"
-    ) -> list[dict]:
+    def process_regions(self, screenshot: np.ndarray, mode: str = "ADB") -> list[dict]:
         """Process full-screen screenshot to identify monsters.
 
         Args:
             screenshot: Full-screen BGR image (any resolution)
-            auto_fallback: True 时 crop_ratio=None 回退默认值 (ADB/PC)；False 时抛异常 (WIN)
             mode: 捕获模式 (ADB/PC/WIN)，影响默认裁剪参数选择
 
         Returns:
             List of 6 recognition results
         """
         from cannotmax.utils import find_monster_zone
+        from cannotmax.utils.roi_transform import transform_coords
 
-        zones = RECOGNITION_PARAMS.get(mode) if mode != "WIN" else None
-        avatar_regs = (
-            self.avatar_regions
-            if self.avatar_regions is not None
-            else zones["avatar_regions"]
-            if zones
-            else None
-        )
-        number_regs = (
-            self.number_regions
-            if self.number_regions is not None
-            else zones["number_regions"]
-            if zones
-            else None
-        )
-
-        detected_zones = None  # (d_avatar, d_nums) from find_monster_zone
+        detected_zones = RECOGNITION_PARAMS.get(mode) if mode != "WIN" else None
 
         # Save original screenshot for debugging
         if DEBUG_MODE:
             TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
             cv2.imwrite(f"{TMP_IMAGES_DIR}/original_screenshot.png", screenshot)
 
-        # 1. Resolve crop ratio and crop
-        ratio = self._resolve_crop_ratio(auto_fallback, mode)
+        # 1. Resolve crop ratio and crop, crop_ratio is set by user selection in WIN mode,
+        # or use config for ADB/PC modes
+        ratio = self._resolve_crop_ratio()
         cropped = self._crop_by_ratio(screenshot, ratio)
 
-        # 2. Custom ROI + no fallback: find_monster_zone provides precise zone coordinates
-        if self.crop_ratio is not None and auto_fallback is False:
+        # 2. WIN mode: find_monster_zone provides precise zone coordinates (relative to user ROI)
+        if detected_zones is None:
             try:
+                # 获取用户 ROI 在原始截图上的位置
+                orig_h, orig_w = screenshot.shape[:2]
+                roi_x1, roi_y1 = int(ratio[0][0] * orig_w), int(ratio[0][1] * orig_h)
+                roi_x2, roi_y2 = int(ratio[1][0] * orig_w), int(ratio[1][1] * orig_h)
+                roi_x, roi_y = roi_x1, roi_y1
+                roi_w, roi_h = roi_x2 - roi_x1, roi_y2 - roi_y1
+
+                # find_monster_zone 在 ROI 上识别（返回相对于 ROI 的归一化坐标）
                 d_avatar, d_nums = find_monster_zone.find_monster_zone(cropped)
-                if d_avatar is not None:
-                    h, w = cropped.shape[:2]
-                    if mode == "WIN":
-                        detected_zones = (d_avatar, d_nums)
-                    avatar_px = np.round(d_avatar * [w, h, w, h]).astype(int)
-                    x_min = max(0, int(avatar_px[:, 0].min()))
-                    y_min = max(0, int(avatar_px[:, 1].min()))
-                    x_max = min(w, int(avatar_px[:, 2].max()))
-                    y_max = min(h, int(avatar_px[:, 3].max()))
-                    cropped = cropped[y_min:y_max, x_min:x_max]
+                if d_avatar is None:
+                    logger.error("find_monster_zone 检测失败，请重新选择区域")
+                    return []
+
+                # 将相对于 ROI 的归一化坐标转换为相对于原始截图的像素坐标
+                logger.info(
+                    "ROI params: roi_x=%d, roi_y=%d, roi_w=%d, roi_h=%d",
+                    roi_x,
+                    roi_y,
+                    roi_w,
+                    roi_h,
+                )
+                logger.info("d_avatar before transform:\n%s", d_avatar)
+
+                # 将相对于 ROI 的归一化坐标转换为相对于原始截图的像素坐标
+                # 正向: pixel = roi_x + normalized * roi_w
+                # transform: scale_x=roi_w, x_offset=-roi_x/roi_w
+                avatar_px = transform_coords(
+                    d_avatar,
+                    x_offset=-roi_x / roi_w,
+                    y_offset=-roi_y / roi_h,
+                    scale_x=roi_w,
+                    scale_y=roi_h,
+                    clamp=False,
+                )
+                nums_px = transform_coords(
+                    d_nums,
+                    x_offset=-roi_x / roi_w,
+                    y_offset=-roi_y / roi_h,
+                    scale_x=roi_w,
+                    scale_y=roi_h,
+                    clamp=False,
+                )
+
+                logger.info("avatar_px after transform:\n%s", avatar_px)
+
+                # 检查转换后的坐标包围盒是否合理
+                bbox_x1, bbox_y1 = avatar_px[:, :2].min(axis=0)
+                bbox_x2, bbox_y2 = avatar_px[:, 2:].max(axis=0)
+                bbox_w, bbox_h = bbox_x2 - bbox_x1, bbox_y2 - bbox_y1
+                logger.info(
+                    "BBox: x1=%d, y1=%d, x2=%d, y2=%d, w=%d, h=%d, ROI_w=%d, ROI_h=%d",
+                    int(bbox_x1),
+                    int(bbox_y1),
+                    int(bbox_x2),
+                    int(bbox_y2),
+                    int(bbox_w),
+                    int(bbox_h),
+                    roi_w,
+                    roi_h,
+                )
+
+                # 从原始截图裁剪完整怪物条
+                x_min = max(0, int(avatar_px[:, 0].min()))
+                y_min = max(0, int(avatar_px[:, 1].min()))
+                x_max = min(orig_w, int(avatar_px[:, 2].max()))
+                y_max = min(orig_h, int(avatar_px[:, 3].max()))
+
+                monster_bar_crop = screenshot[y_min:y_max, x_min:x_max]
+                crop_h, crop_w = monster_bar_crop.shape[:2]
+                logger.info(
+                    "Cropped monster bar: x=%d, y=%d, w=%d, h=%d, crop_w=%d, crop_h=%d",
+                    x_min,
+                    y_min,
+                    x_max - x_min,
+                    y_max - y_min,
+                    crop_w,
+                    crop_h,
+                )
+                if crop_w == 0 or crop_h == 0:
+                    logger.error("怪物条裁剪失败，区域无效")
+                    return []
+
+                # 重新计算相对于怪物条区域的归一化坐标
+                new_avatar = transform_coords(
+                    avatar_px,
+                    x_offset=x_min,
+                    y_offset=y_min,
+                    scale_x=1.0 / crop_w,
+                    scale_y=1.0 / crop_h,
+                )
+                new_nums = transform_coords(
+                    nums_px,
+                    x_offset=x_min,
+                    y_offset=y_min,
+                    scale_x=1.0 / crop_w,
+                    scale_y=1.0 / crop_h,
+                )
+
+                cropped = monster_bar_crop
+                detected_zones = (new_avatar, new_nums)
+
             except Exception as e:
                 logger.exception("Monster bar detection failed: %s", e)
                 return []
@@ -289,6 +357,43 @@ class RecognizeMonster:
 
         if DEBUG_MODE:
             cv2.imwrite(f"{TMP_IMAGES_DIR}/monster_bar_975x119.png", monster_bar)
+
+        # 可视化：画框并保存
+        if detected_zones is not None and DEBUG_MODE:
+            d_avatar, d_nums = detected_zones
+            h, w = monster_bar.shape[:2]
+            vis_img = monster_bar.copy()
+            for idx in range(6):
+                # 头像框（绿色）
+                ax1, ay1, ax2, ay2 = d_avatar[idx]
+                cv2.rectangle(
+                    vis_img,
+                    (int(ax1 * w), int(ay1 * h)),
+                    (int(ax2 * w), int(ay2 * h)),
+                    (0, 255, 0),  # 绿色
+                    2,
+                )
+                # 数字框（红色）
+                nx1, ny1, nx2, ny2 = d_nums[idx]
+                cv2.rectangle(
+                    vis_img,
+                    (int(nx1 * w), int(ny1 * h)),
+                    (int(nx2 * w), int(ny2 * h)),
+                    (0, 0, 255),  # 红色
+                    2,
+                )
+                # 标签
+                cv2.putText(
+                    vis_img,
+                    f"{idx}",
+                    (int(ax1 * w), int(ay1 * h) - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (255, 255, 255),
+                    1,
+                )
+            TMP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(f"{TMP_IMAGES_DIR}/debug_monster_bar_boxes.png", vis_img)
 
         # 4. Split into 6 regions using precise coordinates and recognize
         results = []
@@ -308,20 +413,9 @@ class RecognizeMonster:
                 ]
                 result = self._recognize_region(avatar_img, num_img, idx)
                 results.append(result)
-        else:
-            for idx in range(6):
-                ax1, ay1, ax2, ay2 = avatar_regs[idx]
-                avatar_img = monster_bar[
-                    int(ay1 * 119) : int(ay2 * 119),
-                    int(ax1 * 975) : int(ax2 * 975),
-                ]
-                nx1, ny1, nx2, ny2 = number_regs[idx]
-                num_img = monster_bar[
-                    int(ny1 * 119) : int(ny2 * 119),
-                    int(nx1 * 975) : int(nx2 * 975),
-                ]
-                result = self._recognize_region(avatar_img, num_img, idx)
-                results.append(result)
+
+        if not results:
+            logger.warning("No valid monster detected, recognition failed")
 
         return results
 
@@ -415,8 +509,8 @@ if __name__ == "__main__":
     test_img = f"{TMP_IMAGES_DIR}/zone1.png"
     if Path(test_img).exists():
         screenshot = cv2.imread(test_img)
-        recognizer = RecognizeMonster()
-        results = recognizer.process_regions(screenshot)
+        recognizer = RecognizeMonster(crop_ratio=((0.0, 0.0), (1.0, 1.0)))
+        results = recognizer.process_regions(screenshot, mode="WIN")
         print("识别结果：")
         for res in results:
             if "error" in res:

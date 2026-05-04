@@ -1,4 +1,4 @@
-"""Tests for RecognizeMonster crop_ratio and process_regions with auto_fallback."""
+"""Tests for RecognizeMonster crop_ratio and process_regions."""
 
 from pathlib import Path
 
@@ -25,24 +25,24 @@ class TestRecognizeMonsterCropRatio:
 
     def test_resolve_fallback_returns_default(self):
         recognizer = RecognizeMonster(crop_ratio=None)
-        result = recognizer._resolve_crop_ratio(auto_fallback=True)
+        result = recognizer._resolve_crop_ratio()
         assert result == _DEFAULT_CROP_RATIO
 
     def test_resolve_fallback_returns_custom(self):
         ratio = ((0.1, 0.2), (0.8, 0.9))
         recognizer = RecognizeMonster(crop_ratio=ratio)
-        result = recognizer._resolve_crop_ratio(auto_fallback=True)
+        result = recognizer._resolve_crop_ratio()
         assert result == ratio
 
     def test_resolve_no_fallback_raises_when_none(self):
         recognizer = RecognizeMonster(crop_ratio=None)
         with pytest.raises(ROINotSelectedError):
-            recognizer._resolve_crop_ratio(auto_fallback=False)
+            recognizer._resolve_crop_ratio()
 
     def test_resolve_no_fallback_returns_custom(self):
         ratio = ((0.1, 0.2), (0.8, 0.9))
         recognizer = RecognizeMonster(crop_ratio=ratio)
-        result = recognizer._resolve_crop_ratio(auto_fallback=False)
+        result = recognizer._resolve_crop_ratio()
         assert result == ratio
 
 
@@ -72,7 +72,7 @@ class TestProcessRegions:
     def test_process_regions_with_fallback_no_crash(self):
         recognizer = RecognizeMonster()
         img = np.zeros((1080, 1920, 3), dtype=np.uint8)
-        results = recognizer.process_regions(img, auto_fallback=True)
+        results = recognizer.process_regions(img)
         assert isinstance(results, list)
         assert 0 <= len(results) <= 6
 
@@ -80,12 +80,12 @@ class TestProcessRegions:
         recognizer = RecognizeMonster()
         img = np.zeros((1080, 1920, 3), dtype=np.uint8)
         with pytest.raises(ROINotSelectedError):
-            recognizer.process_regions(img, auto_fallback=False)
+            recognizer.process_regions(img)
 
     def test_process_regions_no_fallback_with_roi_no_crash(self):
         recognizer = RecognizeMonster(crop_ratio=((0.25, 0.80), (0.75, 0.95)))
         img = np.zeros((1080, 1920, 3), dtype=np.uint8)
-        results = recognizer.process_regions(img, auto_fallback=False)
+        results = recognizer.process_regions(img)
         assert isinstance(results, list)
         assert 0 <= len(results) <= 6
 
@@ -102,7 +102,7 @@ class TestAdbRecognitionAccuracy:
         if img is None:
             pytest.skip(f"Cannot read adb_original_screenshort_{index}.png")
         recognizer = RecognizeMonster()
-        results = recognizer.process_regions(img, auto_fallback=True, mode="ADB")
+        results = recognizer.process_regions(img, mode="ADB")
         assert isinstance(results, list)
         assert len(results) == 6
 
@@ -115,7 +115,7 @@ class TestAdbRecognitionAccuracy:
         if img is None:
             pytest.skip(f"Cannot read adb_original_screenshort_{index}.png")
         recognizer = RecognizeMonster()
-        results = recognizer.process_regions(img, auto_fallback=True, mode="ADB")
+        results = recognizer.process_regions(img, mode="ADB")
 
         detected = set()
         for r in results:
@@ -143,7 +143,7 @@ class TestPcRecognitionAccuracy:
         if img is None:
             pytest.skip(f"Cannot read pc_original_screenshot_{index}.png")
         recognizer = RecognizeMonster()
-        results = recognizer.process_regions(img, auto_fallback=True, mode="PC")
+        results = recognizer.process_regions(img, mode="PC")
         assert isinstance(results, list)
         assert len(results) == 6
 
@@ -156,7 +156,7 @@ class TestPcRecognitionAccuracy:
         if img is None:
             pytest.skip(f"Cannot read pc_original_screenshot_{index}.png")
         recognizer = RecognizeMonster()
-        results = recognizer.process_regions(img, auto_fallback=True, mode="PC")
+        results = recognizer.process_regions(img, mode="PC")
 
         detected = set()
         for r in results:

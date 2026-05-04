@@ -44,7 +44,7 @@ class TestWinRecognition:
         if img is None:
             pytest.skip(f"{filename} not found")
         recognizer = RecognizeMonster(crop_ratio=((0.0, 0.0), (1.0, 1.0)))
-        results = recognizer.process_regions(img, auto_fallback=False)
+        results = recognizer.process_regions(img, mode="WIN")
         assert isinstance(results, list)
         assert len(results) == 6, f"Expected 6 results, got {len(results)}"
 
@@ -63,7 +63,7 @@ class TestWinRecognition:
         if img is None:
             pytest.skip(f"{filename} not found")
         recognizer = RecognizeMonster(crop_ratio=((0.0, 0.0), (1.0, 1.0)))
-        results = recognizer.process_regions(img, auto_fallback=False)
+        results = recognizer.process_regions(img, mode="WIN")
 
         detected = set()
         for r in results:
