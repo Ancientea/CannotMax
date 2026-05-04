@@ -1,0 +1,104 @@
+# -*- mode: python ; coding: utf-8 -*-
+import os
+
+from PyInstaller.utils.hooks import collect_dynamic_libs, collect_data_files
+
+block_cipher = None
+project_root = os.path.abspath(os.getcwd())
+
+# ── 主程序分析 ──────────────────────────────────────────────
+a_main = Analysis(
+    ['src/cannotmax/console.py'],
+    pathex=[project_root, os.path.join(project_root, 'src')],
+    binaries=collect_dynamic_libs('maa'),
+    datas=[
+        ('.venv/Lib/site-packages/rapidocr/default_models.yaml', 'rapidocr'),
+        ('.venv/Lib/site-packages/rapidocr/config.yaml', 'rapidocr'),
+        ('.venv/Lib/site-packages/rapidocr/models', 'rapidocr/models'),
+    ] + collect_data_files('maa'),
+    hiddenimports=['maa', 'maa.controller', 'maa.toolkit', 'maa.resource', 'maa.library',
+                   'cannotsim', 'cannotsim.main_sim', 'cannotsim.battle_field',
+                   'cannotsim.monsters', 'cannotsim.unit', 'cannotsim.utils', 'cannotsim.vector2d'],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        'cannotdl.training', 'cannotdl.core',
+        'torch', 'torchvision', 'matplotlib',
+        'sklearn', 'scikit-learn', 'scipy',
+        'PyQt6.QtPdf', 'PyQt6.QtNetwork',
+        'onnxscript',
+    ],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+unwanted_bins = ['Qt6Pdf', 'Qt6Network', 'opengl32sw', 'opencv_videoio_ffmpeg']
+a_main.binaries = [x for x in a_main.binaries if not any(bad in x[0] for bad in unwanted_bins)]
+
+pyz_main = PYZ(a_main.pure, a_main.zipped_data, cipher=block_cipher)
+
+exe_main = EXE(
+    pyz_main, a_main.scripts, [],
+    exclude_binaries=True, name='cannotmax', debug=False,
+    bootloader_ignore_signals=False, strip=False, upx=True, console=True,
+    disable_windowed_traceback=False, argv_emulation=False,
+    target_arch=None, codesign_identity=None, entitlements_file=None,
+    icon=['ico\\icon_64x64.ico'],
+)
+
+# ── 模拟器分析 ──────────────────────────────────────────────
+a_sim = Analysis(
+    ['src/cannotsim/__main__.py'],
+    pathex=[project_root, os.path.join(project_root, 'src')],
+    binaries=[],
+    datas=collect_data_files('maa'),
+    hiddenimports=[
+        'maa', 'maa.controller', 'maa.toolkit', 'maa.resource', 'maa.library',
+        'cannotsim', 'cannotsim.battle_field', 'cannotsim.monsters',
+        'cannotsim.unit', 'cannotsim.utils', 'cannotsim.vector2d',
+        'cannotdl.config', 'cannotmax.config.paths',
+        'PIL', 'PIL.Image', 'PIL.ImageTk',
+    ],
+    hookspath=[], hooksconfig={}, runtime_hooks=[],
+    excludes=[
+        'cannotdl.training', 'cannotdl.core',
+        'torch', 'torchvision', 'matplotlib',
+        'sklearn', 'scikit-learn', 'scipy',
+        'onnxscript', 'cv2',
+        'PyQt6', 'PyQt6.QtCore', 'PyQt6.QtGui', 'PyQt6.QtWidgets',
+    ],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz_sim = PYZ(a_sim.pure, a_sim.zipped_data, cipher=block_cipher)
+
+exe_sim = EXE(
+    pyz_sim, a_sim.scripts, [],
+    exclude_binaries=True, name='cannotsim', debug=False,
+    bootloader_ignore_signals=False, strip=False, upx=True, console=True,
+    disable_windowed_traceback=False, argv_emulation=False,
+    target_arch=None, codesign_identity=None, entitlements_file=None,
+    icon=['ico\\icon_64x64.ico'],
+)
+
+# ── 合并输出 ─────────────────────────────────────────────────
+coll = COLLECT(
+    exe_main,
+    exe_sim,
+    a_main.binaries,
+    a_sim.binaries,
+    a_main.zipfiles,
+    a_sim.zipfiles,
+    a_main.datas,
+    a_sim.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='cannotmax',
+)

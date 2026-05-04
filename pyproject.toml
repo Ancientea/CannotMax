@@ -1,6 +1,6 @@
 [project]
 name = "CannotMax-Greenvine"
-version = "1.1.0"
+version = "2.0.0-alpha.2"
 description = "这是一个基于深度学习的明日方舟游戏辅助工具，用于自动识别游戏画面中的单位并预测战斗结果。"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,16 +21,31 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["onnx>=1.19.0", "onnxscript>=0.7.0", "pyinstaller>=6.15.0"]
+dev = [
+    "onnx>=1.19.0",
+    "onnxscript>=0.7.0",
+    "pre-commit>=4.6.0",
+    "pyinstaller>=6.15.0",
+    "pytest>=8.0.0",
+    "pytest-qt>=4.5.0",
+    "ruff>=0.15.12",
+]
 
 [project.optional-dependencies]
 cpu = ["torch", "torchvision"]
 cu128 = ["torch>=2.7.0", "torchvision>=0.22.0"]
 cu130 = ["torch>=2.7.0", "torchvision>=0.22.0"]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cannotmax", "src/cannotdl", "src/cannotsim"]
+
 [tool.uv]
-python-install-mirror = "https://mirror.nju.edu.cn/github-release/astral-sh/python-build-standalone/"
-conflicts = [
+  python-install-mirror = "https://mirror.nju.edu.cn/github-release/astral-sh/python-build-standalone/"
+  conflicts = [
   [
     { extra = "cpu" },
     { extra = "cu128" },
@@ -75,3 +90,13 @@ explicit = true
 name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
 explicit = true
+
+[project.scripts]
+cannotmax = "cannotmax.console:main"
+cannotdl = "cannotdl.console:main"
+cannotsim = "cannotsim.console:main"
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: tests requiring real ADB simulator",
+]

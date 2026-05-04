@@ -1,0 +1,6 @@
+{
+  "debug_mode": true,
+  "control": {
+    "disable_maafw": false
+  }
+}
