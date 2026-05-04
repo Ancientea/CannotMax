@@ -3,11 +3,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-import toml  # 导入toml库
+import toml
 
 
 def _configure_utf8_stdio():
-    """Ensure console output can safely print Chinese text on Windows CI."""
     for stream_name in ("stdout", "stderr"):
         stream = getattr(sys, stream_name, None)
         if stream is not None and hasattr(stream, "reconfigure"):
@@ -16,26 +15,11 @@ def _configure_utf8_stdio():
 
 _configure_utf8_stdio()
 
-# 配置区（用户可根据需要修改这些参数）
 CONFIG = {
-    "venv_dir": ".venv",  # 虚拟环境目录
-    "output_name": "cannotmax",  # PyInstaller 输出目录名（与 cannotmax.spec 中 EXE name 一致）
-    "source_script": "src/cannotmax/console.py",  # 主程序文件路径
-    "icon_file": r"ico/icon_64x64.ico",  # 图标文件路径
-    "output_dir": "output",  # 输出目录
-    "console": True,
-    "add_data": [  # 需要打包的附加数据
-        (r".venv/Lib/site-packages/rapidocr/default_models.yaml", "rapidocr"),
-        (r".venv/Lib/site-packages/rapidocr/config.yaml", "rapidocr"),
-        (r".venv/Lib/site-packages/rapidocr/models", "rapidocr/models"),
-        # (r".venv/Lib/site-packages/onnxruntime", "onnxruntime"),
-    ],
-    "copy_files": [  # 需要复制的额外文件/目录
-        r"C:\Windows\System32\msvcp140.dll",
-        r"C:\Windows\System32\vcruntime140.dll",
-        r"C:\Windows\System32\vcruntime140_1.dll",
-        # "arknights.csv",
-        # "models/best_model_full.onnx",
+    "venv_dir": ".venv",
+    "output_dir": "output",
+    "specs": ["cannotmax.spec"],
+    "copy_files": [
         "images",
         "3rdparty/platform-tools",
         "ico",
@@ -47,94 +31,85 @@ CONFIG = {
 }
 
 
-def build_exe():
-    """使用PyInstaller打包，直接调用spec文件"""
-    venv_python = str(Path(CONFIG["venv_dir"]) / "Scripts" / "python.exe")
+def _venv_python():
+    return str(Path(CONFIG["venv_dir"]) / "Scripts" / "python.exe")
 
-    # 直接运行 spec 文件，保持 spec 文件中的过滤逻辑生效
-    build_cmd = [
-        venv_python,
-        "-m",
-        "PyInstaller",
-        "--noconfirm",
-        "--distpath",
-        CONFIG["output_dir"],
-        "--workpath",
-        "build",
-        "cannotmax.spec",
-    ]
 
-    try:
-        subprocess.check_call(build_cmd)
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"打包失败：{e}")
-        return False
+def build_specs():
+    for spec in CONFIG["specs"]:
+        print(f"\n{'=' * 40}")
+        print(f"Building {spec} ...")
+        cmd = [
+            _venv_python(),
+            "-m",
+            "PyInstaller",
+            "--noconfirm",
+            "--distpath",
+            CONFIG["output_dir"],
+            "--workpath",
+            "build",
+            spec,
+        ]
+        try:
+            subprocess.check_call(cmd)
+            print(f"{spec} 打包完成")
+        except subprocess.CalledProcessError as e:
+            print(f"{spec} 打包失败：{e}")
+            return False
+    return True
+
+
+def _ignore_images(dir, names):
+    if Path(dir).resolve() == Path("images").resolve():
+        return [n for n in names if n in {"tmp", "nums"}]
+    return []
 
 
 def copy_additional_files():
-    """复制额外文件到输出目录"""
-    exe_dir = Path(CONFIG["output_dir"]) / CONFIG["output_name"]
+    output = Path(CONFIG["output_dir"])
+    exe_dir = output / "cannotmax"
     if not exe_dir.exists():
-        print(f"输出目录不存在: {exe_dir}")
-        return False
+        print(f"警告：输出目录 {exe_dir} 不存在，跳过文件复制")
+        return True
 
     for item in CONFIG["copy_files"]:
         src = Path(item)
-        # 保持相对路径结构
         if src.is_absolute():
             dest = exe_dir / src.name
         else:
-            # 对于相对路径，在输出目录中创建相同的目录结构
             dest = exe_dir / src
 
         if not src.exists():
-            print(f"警告：{src} 不存在，跳过复制")
+            print(f"  警告：{src} 不存在，跳过")
             continue
 
         try:
             if src.is_dir():
-                # 确保目标目录存在
                 dest.mkdir(parents=True, exist_ok=True)
-                # 特殊处理images目录，排除tmp和nums子目录
                 if src.name == "images":
-
-                    def ignore_func(dir, names):
-                        """忽略tmp和nums子目录"""
-                        dir_path = Path(dir)
-                        # 仅在images根目录下排除特定子目录
-                        if dir_path.resolve() == src.resolve():
-                            return [n for n in names if n in {"tmp", "nums"}]
-                        return []
-
-                    shutil.copytree(src, dest, ignore=ignore_func, dirs_exist_ok=True)
+                    shutil.copytree(
+                        src, dest, ignore=_ignore_images, dirs_exist_ok=True
+                    )
                 else:
                     shutil.copytree(src, dest, dirs_exist_ok=True)
-                print(f"已复制目录：{src} -> {dest}")
+                print(f"  目录 {src} -> {dest}")
             else:
-                # 确保目标文件的父目录存在
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dest)
-                print(f"已复制文件：{src} -> {dest}")
+                print(f"  文件 {src} -> {dest}")
         except Exception as e:
-            print(f"复制失败：{e}")
-
+            print(f"  复制失败：{e}")
     return True
 
 
 def create_zip_archive(project_name, project_version):
-    """将输出目录打包为zip文件"""
-    output_dir = Path(CONFIG["output_dir"]) / CONFIG["output_name"]
-    if not output_dir.exists():
-        print(f"错误：输出目录 '{output_dir}' 不存在，无法创建zip文件。")
-
-    zip_name = Path(CONFIG["output_dir"]) / f"{project_name}-{project_version}"
+    output = Path(CONFIG["output_dir"])
+    zip_root = output / f"{project_name}-{project_version}"
     try:
-        # shutil.make_archive 会自动添加 .zip 扩展名
-        shutil.make_archive(zip_name, "zip", root_dir=output_dir)
-        print(f"已创建zip文件：{zip_name}.zip")
+        shutil.make_archive(str(zip_root), "zip", root_dir=output, base_dir="cannotmax")
+        print(f"已创建 zip：{zip_root}.zip")
     except Exception as e:
-        print(f"创建zip文件失败：{e}")
+        print(f"创建 zip 失败：{e}")
 
 
 def main():
@@ -143,7 +118,9 @@ def main():
     project_name = pyproject_data["project"]["name"]
     project_version = pyproject_data["project"]["version"]
 
-    if not build_exe():
+    print(f"开始打包 {project_name} v{project_version} ...")
+
+    if not build_specs():
         return
 
     if not copy_additional_files():

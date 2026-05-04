@@ -1104,8 +1104,13 @@ class ArknightsApp(QMainWindow):
         json_data = json.dumps(simulation_data, ensure_ascii=False)
         logger.info(f"Simulation data JSON: {json_data}")
         try:
+            if getattr(sys, "frozen", False):
+                sim_exe = Path(sys.executable).parent / "cannotsim.exe"
+                cmd = [str(sim_exe)]
+            else:
+                cmd = [sys.executable, "-m", "cannotsim"]
             process = subprocess.Popen(
-                [sys.executable, "-m", "cannotsim.main_sim"],
+                cmd,
                 stdin=subprocess.PIPE,
                 text=True,
                 encoding="utf-8",
@@ -1113,7 +1118,9 @@ class ArknightsApp(QMainWindow):
             process.stdin.write(json_data)
             process.stdin.close()
         except FileNotFoundError:
-            QMessageBox.critical(self, "错误", "未找到 main_sim.py 文件，请检查路径。")
+            QMessageBox.critical(
+                self, "错误", "启动模拟器失败，请检查 cannotsim 是否正确安装。"
+            )
         except Exception as e:
             QMessageBox.critical(self, "错误", f"启动模拟器时发生错误: {str(e)}")
 
