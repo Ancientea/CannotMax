@@ -9,6 +9,28 @@ class DarkModeStyleFix:
     @staticmethod
     def get_global_qss() -> str:
         return f"""
+            QDialog {{
+                background-color: #FFFFFF;
+            }}
+            QMessageBox {{
+                background-color: #FFFFFF;
+            }}
+            QMessageBox QLabel {{
+                color: {DarkModeStyleFix.DARK_TEXT_COLOR};
+                background-color: transparent;
+            }}
+            QMessageBox QPushButton {{
+                color: {DarkModeStyleFix.DARK_TEXT_COLOR};
+                background-color: #F2F2F2;
+                border: 1px solid #999999;
+                border-radius: 4px;
+                padding: 4px 10px;
+                min-width: 60px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: #E6E6E6;
+                border: 1px solid #666666;
+            }}
             QLabel {{
                 color: {DarkModeStyleFix.DARK_TEXT_COLOR};
             }}
