@@ -22,7 +22,6 @@ from rapidocr import EngineType, RapidOCR
 
 from cannotmax.config import DEBUG_MODE
 from cannotmax.config.paths import TMP_IMAGES_DIR
-from cannotmax.config.settings import RECOGNITION_PARAMS
 from cannotmax.utils.images import get_monster_images
 
 logger = logging.getLogger(__name__)
@@ -189,7 +188,7 @@ class RecognizeMonster:
             ((x1, y1), (x2, y2)) 相对坐标
 
         Raises:
-            ROINotSelectedError: WIN 模式且 crop_ratio=None 时
+            ROINotSelectedError: crop_ratio=None 时
         """
         if self.crop_ratio is not None:
             return self.crop_ratio
@@ -224,7 +223,7 @@ class RecognizeMonster:
         from cannotmax.utils import find_monster_zone
         from cannotmax.utils.roi_transform import transform_coords
 
-        detected_zones = RECOGNITION_PARAMS.get(mode) if mode != "WIN" else None
+        detected_zones = None
 
         # Save original screenshot for debugging
         if DEBUG_MODE:
