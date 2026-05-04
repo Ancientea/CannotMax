@@ -318,6 +318,13 @@ class Monster:
         else:
             self.attack_animation = AttackAnimation(0.2, 0.5, 0.3, self)
 
+        # 行为组件系统
+        self.behaviors: list[BaseBehavior] = []
+        behavior_configs = data.get("行为", [])
+        if behavior_configs:
+            from .behaviors import create_behaviors
+            self.behaviors = create_behaviors(self, behavior_configs)
+
     # 如果活着且不处于不可选取状态
     def can_be_target(self):
         return self.is_alive and self.can_target
@@ -325,15 +332,15 @@ class Monster:
     # 新增可扩展的虚方法
     def on_spawn(self):
         """生成时触发的逻辑"""
-        pass
+        for b in self.behaviors:
+            b.on_spawn()
 
     def on_death(self):
         """真正死亡时触发的逻辑"""
         debug_print(f"{self.name}{self.id} 已死亡！")
         self.battlefield.dead_count[self.faction] += 1
-
-        # for (name, count) in self.battlefield.alive_count.items():
-        #     debug_print(f"{name}的数量为{count}")
+        for b in self.behaviors:
+            b.on_death()
 
     def get_skill_bar(self):
         """技力在ui显示的内容"""
@@ -345,15 +352,18 @@ class Monster:
 
     def on_hit(self, attacker, damage):
         """被击中时触发的逻辑"""
-        pass
+        for b in self.behaviors:
+            b.on_hit(attacker, damage)
 
     def on_attack(self, target, damage):
         """攻击命中时触发的逻辑"""
-        pass
+        for b in self.behaviors:
+            b.on_attack(target, damage)
 
     def on_extra_update(self, delta_time):
         """额外更新逻辑"""
-        pass
+        for b in self.behaviors:
+            b.on_update(delta_time)
 
     def increase_skill_cd(self, delta_time):
         """增加技能技力"""
@@ -513,10 +523,19 @@ class Monster:
 
     # 攻击相关方法
     def attack(self, target, gameTime):
-        damage = self.calculate_damage(target, self.get_attack_power())
-        self.on_attack(target, damage)
-        if self.apply_damage_to_target(target, damage):
-            target.on_hit(self, damage)
+        # 检查多目标行为
+        max_tgts = 1
+        from .behaviors import MultiTarget as _MT
+        for b in self.behaviors:
+            if isinstance(b, _MT):
+                max_tgts = b.max_targets
+                break
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=max_tgts)
+        for t in targets:
+            damage = self.calculate_damage(t, self.get_attack_power())
+            self.on_attack(t, damage)
+            if self.apply_damage_to_target(t, damage):
+                t.on_hit(self, damage)
 
     def apply_damage_to_target(self, target, damage) -> bool:
         debug_print(f"{self.name}{self.id} 对 {target.name}{target.id} 造成{damage}点{self.attack_type}伤害")
@@ -545,6 +564,8 @@ class Monster:
 
     def take_damage(self, damage, attack_type: DamageType) -> bool:
         """承受伤害"""
+        if not self.is_alive:  # 已死不再触发
+            return False
         if not self.dodge_and_invincible(damage, attack_type):
             return False
         self.health -= damage
@@ -905,7 +926,7 @@ class 冰原术师(Monster):
 
 
 class 矿脉守卫(Monster):
-    """反伤怪"""
+    """反伤怪 — 法术反伤"""
 
     def on_spawn(self):
         self.aggro = 1
@@ -913,60 +934,12 @@ class 矿脉守卫(Monster):
     def on_hit(self, attacker, damage):
         if attacker == None:
             return
-        damage = self.calculate_damage(attacker, 300)
-        if self.apply_damage_to_target(attacker, damage):
-            attacker.on_hit(self, damage)
-            debug_print(f"{self.name}{self.id} 对 {attacker.name}{attacker.id} 造成{damage}伤害")
+        # 固定300法术反伤，不受对方物防影响
+        reflect = calculate_normal_dmg(0, attacker.magic_resist, 300, DamageType.MAGIC)
+        attacker.take_damage(reflect, DamageType.MAGIC)
+        debug_print(f"{self.name}{self.id} 对 {attacker.name}{attacker.id} 造成{reflect:.0f}法术反伤")
 
 
-class 庞贝(Monster):
-    """庞氏骗局"""
-
-    def on_spawn(self):
-        self.rage_mode = False
-        self.ring_attack_counter = 0
-        self.boss = True
-        self.attack_animation = AttackAnimation(0.1, 0.1, 0.8, self)
-
-    def get_skill_bar(self):
-        """技力在ui显示的内容"""
-        return self.ring_attack_counter
-
-    def get_max_skill_bar(self):
-        """技力在ui显示的内容，最大技力"""
-        return 10
-
-    def attack(self, target, gameTime):
-        targets: list[Monster] = TargetSelector.select_targets(self, self.battlefield, need_in_range=True,
-                                                               max_targets=4)
-        if len(targets) == 0:
-            return
-
-        for m in targets:
-            damage = self.calculate_damage(m, self.get_attack_power())
-            if self.apply_damage_to_target(m, damage):
-                m.on_hit(self, damage)
-                m.status_system.apply(BuffEffect(
-                    type=BuffType.FIRE,
-                    duration=10,
-                    source=self
-                ))
-
-    def on_extra_update(self, delta_time):
-        if not self.rage_mode and self.health < 0.5 * self.max_health:
-            self.rage_mode = True
-            self.attack_speed += 40
-            debug_print(f"{self.name} 进入狂暴模式")
-        self.ring_attack_counter += delta_time
-        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=False, max_targets=9999)
-        if len(targets) > 0 and (targets[0].position - self.position).magnitude < 0.8:
-            if self.ring_attack_counter >= 10.0:
-                targets = [t for t in targets if (t.position - self.position).magnitude < 1.4]
-                for tar in targets:
-                    dmg = self.calculate_damage(tar, 1000)
-                    if self.apply_damage_to_target(tar, dmg):
-                        tar.on_hit(self, dmg)
-                self.ring_attack_counter = 0
 
 
 class 食腐狗(Monster):
@@ -1942,7 +1915,7 @@ class 沸血骑士团精锐(Monster):
 
 
 class 门(Monster):
-    """门"""
+    """门 — 免疫眩晕/冰冻，死亡时带走一个敌人"""
 
     def on_extra_update(self, delta_time):
         self.immunity.add(BuffType.DIZZY)
@@ -1950,18 +1923,19 @@ class 门(Monster):
         return super().on_extra_update(delta_time)
 
     def on_death(self):
-        enemies = enemies = [
-            m for m in self.battlefield.monsters
-            if m.can_be_target()
-               and m.faction != self.faction
+        # 死亡时随机带走一个敌人
+        import random as _random
+        enemies = [
+            m for m in self.battlefield.alive_monsters
+            if m.is_alive and m.faction != self.faction
         ]
-        if not enemies:
-            return
-        target = random.choice(enemies)
-        debug_print(f"{self.name}{self.id} 带走了{target.name}{target.id}")
-        target.health = 0
-        target.invincible = False
-        target.take_damage(1, "真实")
+        if enemies:
+            target = _random.choice(enemies)
+            debug_print(f"{self.name}{self.id} 带走{target.name}{target.id}")
+            target.health = 0
+            target.invincible = False
+            target.is_alive = False
+            target.on_death()
         super().on_death()
 
 
@@ -2136,6 +2110,826 @@ class 自在(Monster):
         return True
 
 
+
+class 暴走食人花(Monster):
+    """暴走食人花 — 吞噬目标后进入消化模式"""
+
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.3, 0.1, 0.6, self)
+        self.digesting = False
+        self.digest_timer = 0  # 消化剩余时间
+        self.digest_duration = 20  # 消化持续20秒
+
+    def attack(self, target, gameTime):
+        """吞噬：直接击倒目标，然后进入消化模式"""
+        debug_print(f"{self.name}{self.id} 吞噬了 {target.name}{target.id}！")
+        # 直接击杀目标
+        target.health = 0
+        target.is_alive = False
+        target.on_death()
+        # 进入消化模式
+        self.digesting = True
+        self.digest_timer = self.digest_duration
+        self.frozen = True  # 消化期间自缚，无法移动/攻击
+
+    def on_extra_update(self, delta_time):
+        """管理消化计时"""
+        if self.digesting:
+            self.digest_timer -= delta_time
+            if self.digest_timer <= 0:
+                self.digesting = False
+                self.frozen = False
+                self.reset_attack_time()
+                debug_print(f"{self.name}{self.id} 消化完成！")
+
+
+class 沙滩车(Monster):
+    """度假区越野车 — 搭载友方单位运输到前线"""
+
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.3, 0.2, 0.5, self)
+        self.passengers = []
+        self.max_passengers = 3
+        self.load_range = 0.8
+        self.unload_range = 1.5
+        self.unloaded = False
+
+    def on_extra_update(self, delta_time):
+        # 载客：跳过自己和同类型单位（机械）
+        if len(self.passengers) < self.max_passengers and not self.unloaded:
+            for m in self.battlefield.alive_monsters:
+                if m == self or not m.is_alive or m.faction != self.faction:
+                    continue
+                if m in self.passengers or m.boss:
+                    continue
+                if isinstance(m, 沙滩车):
+                    continue  # 不互相搭载
+                if (m.position - self.position).magnitude <= self.load_range:
+                    m.can_target = False
+                    self.passengers.append(m)
+                    debug_print(f"{self.name}{self.id} 搭载了 {m.name}{m.id}")
+                    if len(self.passengers) >= self.max_passengers:
+                        break
+        # 卸客：接近敌人时释放
+        if not self.unloaded and self.passengers:
+            enemies = [t for t in self.battlefield.alive_monsters
+                       if t.faction != self.faction and t.is_alive]
+            if enemies:
+                nearest = min((t.position - self.position).magnitude for t in enemies)
+                if nearest <= self.unload_range:
+                    self._unload_all()
+                    self.unloaded = True
+
+    def _unload_all(self):
+        for p in self.passengers:
+            if p.is_alive:
+                p.can_target = True
+                p.position = self.position + FastVector(
+                    np.random.uniform(-0.3, 0.3),
+                    np.random.uniform(-0.3, 0.3))
+                p.target = p.find_target()
+                debug_print(f"{self.name}{self.id} 卸下 {p.name}{p.id}")
+        self.passengers.clear()
+
+    def on_death(self):
+        self._unload_all()
+        super().on_death()
+
+
+# ═══════════════════════════════════════════
+# 散华骑士团学徒 — 点灯骑士
+# ═══════════════════════════════════════════
+
+class 散华骑士团学徒(Monster):
+    """散华骑士团学徒 — 每25秒蓄力7秒，释放250%法伤光弹AOE"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.3, 0.2, 0.5, self)
+        self.skill_cooldown = 25.0
+        self.skill_charge = 7.0
+        self.skill_timer = 10.0  # 初始让不同单位错开
+        self.charging = False
+        self.charge_timer = 0
+
+    def on_extra_update(self, delta_time):
+        if self.charging:
+            self.charge_timer -= delta_time
+            if self.charge_timer <= 0:
+                self._fire_light_bomb()
+                self.charging = False
+        else:
+            self.skill_timer -= delta_time
+            if self.skill_timer <= 0:
+                self.charging = True
+                self.charge_timer = self.skill_charge
+                self.skill_timer = self.skill_cooldown
+                debug_print(f"{self.name}{self.id} 开始蓄力光弹！")
+
+    def _fire_light_bomb(self):
+        """释放光弹：对周围敌人造成250%法伤"""
+        pos = self.position
+        radius = 1.5
+        dmg_base = self.get_attack_power() * 2.5
+        for t in self.battlefield.alive_monsters:
+            if t.faction != self.faction and t.is_alive and \
+               (t.position - pos).magnitude <= radius:
+                dmg = calculate_normal_dmg(t.phy_def, t.magic_resist, dmg_base, DamageType.MAGIC)
+                t.take_damage(dmg, DamageType.MAGIC)
+                debug_print(f"{self.name}{self.id} 光弹命中 {t.name}{t.id} 造成{dmg:.0f}伤害")
+
+
+# ═══════════════════════════════════════════
+# 反装甲步兵 — 榴弹佣兵
+# ═══════════════════════════════════════════
+
+class 反装甲步兵(Monster):
+    """反装甲步兵 — 首次攻击发射榴弹200%物伤8格AOE，之后切换近战+200%攻击"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.4, 0.2, 0.4, self)
+        self.mode = "榴弹"  # 榴弹 / 近战
+        self.base_atk = self.attack_power
+
+    def attack(self, target, gameTime):
+        if self.mode == "榴弹":
+            # 榴弹模式：发射AOE后切换
+            self.mode = "近战"
+            self.attack_power = self.base_atk * 3.0  # +200%
+            self.attack_animation = AttackAnimation(0.15, 0.15, 0.7, self)
+            # 对目标位置8格AOE
+            from .projectiles import AOEType, AOE炸弹锁定
+            self.battlefield.projectiles_manager.spawn_projectile(
+                AOE炸弹锁定(0.2, self.base_atk * 2.0, DamageType.PHYSICAL, self, target,
+                            name="榴弹", aoeType=AOEType.Grid8))
+            debug_print(f"{self.name}{self.id} 发射榴弹！切换近战模式")
+        else:
+            # 近战模式：正常攻击
+            targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=1)
+            if not targets:
+                return
+            for t in targets:
+                damage = self.calculate_damage(t, self.get_attack_power())
+                if self.apply_damage_to_target(t, damage):
+                    t.on_hit(self, damage)
+
+
+# ═══════════════════════════════════════════
+# 水手重艇 — 匪帮欢乐船
+# ═══════════════════════════════════════════
+
+class 水手重艇(Monster):
+    """水手重艇 — 移动时撞击敌人造成伤害，死亡召唤小怪"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.3, 0.3, 0.4, self)
+        self.collision_cooldown = {}
+        self.collision_radius = 0.5
+
+    def on_extra_update(self, delta_time):
+        # 移动撞击
+        if self.velocity.magnitude < 0.01 or self.frozen or self.dizzy:
+            return
+        pos = self.position
+        now = self.battlefield.gameTime
+        for t in self.battlefield.alive_monsters:
+            if t.faction == self.faction or not t.is_alive or t == self:
+                continue
+            if (t.position - pos).magnitude <= self.collision_radius:
+                last = self.collision_cooldown.get(t.id, 0)
+                if now - last > 1.0:
+                    dmg = calculate_normal_dmg(t.phy_def, t.magic_resist,
+                                               self.get_attack_power(), DamageType.PHYSICAL)
+                    t.take_damage(dmg, DamageType.PHYSICAL)
+                    self.collision_cooldown[t.id] = now
+                    debug_print(f"{self.name}{self.id} 撞击 {t.name}{t.id} 造成{dmg:.0f}伤害")
+
+    def on_death(self):
+        # 死亡召唤水手
+        for _ in range(2):
+            pos = self.position + FastVector(
+                np.random.uniform(-0.5, 0.5),
+                np.random.uniform(-0.5, 0.5))
+            self.battlefield.append_monster_name("码头水手", self.faction, pos)
+        super().on_death()
+
+
+# ═══════════════════════════════════════════
+# 圣徒卡门 — 手炮装弹
+# ═══════════════════════════════════════════
+
+class 圣徒卡门(Monster):
+    """圣徒卡门 — 5发弹药手炮，打空后装弹5秒"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.2, 0.3, 0.5, self)
+        self.max_ammo = 5
+        self.ammo = self.max_ammo
+        self.reloading = False
+        self.reload_time = 5.0
+        self.reload_timer = 0
+
+    def attack(self, target, gameTime):
+        if self.reloading:
+            return
+        if self.ammo <= 0:
+            self._start_reload()
+            return
+
+        self.ammo -= 1
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=1)
+        if not targets:
+            return
+        for t in targets:
+            damage = self.calculate_damage(t, self.get_attack_power())
+            if self.apply_damage_to_target(t, damage):
+                t.on_hit(self, damage)
+        debug_print(f"{self.name}{self.id} 手炮射击！剩余弹药{self.ammo}")
+
+    def _start_reload(self):
+        self.reloading = True
+        self.reload_timer = self.reload_time
+        debug_print(f"{self.name}{self.id} 开始装弹...")
+
+    def _finish_reload(self):
+        self.ammo = self.max_ammo
+        self.reloading = False
+        self.reset_attack_time()
+        debug_print(f"{self.name}{self.id} 装弹完成！")
+
+    def on_extra_update(self, delta_time):
+        if self.reloading:
+            self.reload_timer -= delta_time
+            if self.reload_timer <= 0:
+                self._finish_reload()
+
+    def get_skill_bar(self):
+        return self.ammo
+
+    def get_max_skill_bar(self):
+        return self.max_ammo
+
+
+# ═══════════════════════════════════════════
+# R-11突击动力装甲 — 神射机甲
+# ═══════════════════════════════════════════
+
+class R11突击动力装甲(Monster):
+    """R-11 — 锁定连拳，对同一目标伤害递增"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.1, 0.15, 0.75, self)
+        self.combo_count = 0
+        self.last_target = None
+        self.combo_dmg_bonus = 0.2  # 每连击+20%伤害
+
+    def attack(self, target, gameTime):
+        # 多目标
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=2)
+        if not targets:
+            return
+
+        for t in targets:
+            base_dmg = self.get_attack_power()
+            if t == self.last_target:
+                self.combo_count = min(self.combo_count + 1, 5)
+            else:
+                self.combo_count = 0
+                self.last_target = t
+
+            bonus = base_dmg * self.combo_dmg_bonus * self.combo_count
+            dmg = self.calculate_damage(t, base_dmg + bonus)
+            if self.apply_damage_to_target(t, dmg):
+                t.on_hit(self, dmg)
+            debug_print(f"{self.name}{self.id} 对 {t.name}{t.id} x{self.combo_count}连击 造成{dmg:.0f}伤害")
+
+
+# ═══════════════════════════════════════════
+# R-31重型动力装甲 — 神拳机甲
+# ═══════════════════════════════════════════
+
+class R31重型动力装甲(Monster):
+    """R-31 — 重拳附带AOE溅射，0/3技力自动强力击（10秒连拳，每秒1拳）"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.2, 0.3, 0.5, self)
+        self.splash_radius = 1.0
+        self.splash_ratio = 0.5
+        self.sp = 0
+        # 强力击连拳状态
+        self._combo_active = False
+        self._combo_target = None
+        self._combo_remaining = 0
+        self._combo_timer = 0.0
+
+    def do_move(self, delta_time):
+        if self._combo_active:
+            return  # 连拳期间不移动
+        super().do_move(delta_time)
+
+    def increase_skill_cd(self, delta_time):
+        if self._combo_active:
+            super().increase_skill_cd(delta_time)
+            return  # 连拳期间不累积SP
+        self.sp += delta_time
+        if self.sp >= 3.0 and self.target and self.target.is_alive:
+            dist = (self.target.position - self.position).magnitude
+            if dist <= self.attack_range:  # 必须贴脸触发
+                self.sp = 0
+                self._start_combo(self.target)
+        super().increase_skill_cd(delta_time)
+
+    def attack(self, target, gameTime):
+        if self._combo_active:
+            return  # 连拳期间不普攻
+        # 正常普攻+溅射
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=2)
+        if not targets:
+            return
+        hit_ids = set()
+        for t in targets:
+            dmg = self.calculate_damage(t, self.get_attack_power())
+            if self.apply_damage_to_target(t, dmg):
+                t.on_hit(self, dmg)
+                hit_ids.add(t.id)
+            splash_dmg = self.get_attack_power() * self.splash_ratio
+            for m in self.battlefield.alive_monsters:
+                if m.faction == self.faction or not m.is_alive or m.id in hit_ids:
+                    continue
+                if (m.position - t.position).magnitude <= self.splash_radius:
+                    sd = calculate_normal_dmg(m.phy_def, m.magic_resist, splash_dmg, self.attack_type)
+                    m.take_damage(sd, self.attack_type)
+                    hit_ids.add(m.id)
+    
+    def _start_combo(self, target):
+        """开始强力击10连拳"""
+        if not target or not target.is_alive:
+            return
+        self._combo_active = True
+        self._combo_target = target
+        self._combo_remaining = 10
+        self._combo_timer = 0.0
+        # 重置普攻状态，防止combo期间普攻误触发
+        self.attack_state = AttackState.等待
+        self.attack_time_counter = 0
+        debug_print(f"{self.name}{self.id} 开始强力击10连拳 → {target.name}{target.id}!")
+
+    def _end_combo(self):
+        """结束连拳"""
+        self._combo_active = False
+        self._combo_target = None
+        self._combo_remaining = 0
+        self._combo_timer = 0.0
+
+    def _fire_punch(self, target):
+        """打出一拳"""
+        punch_dmg = self.get_attack_power() * 0.75
+        dmg = calculate_normal_dmg(target.phy_def, target.magic_resist, punch_dmg, DamageType.PHYSICAL)
+        target.take_damage(dmg, DamageType.PHYSICAL)
+        target.status_system.apply(BuffEffect(BuffType.DIZZY, 2.0, self))
+        target.on_hit(self, dmg)
+        punch_num = 10 - self._combo_remaining + 1
+        debug_print(f"{self.name}{self.id} 强力击第{punch_num}/10拳 → {target.name}{target.id} 伤害{dmg:.0f}")
+
+    def on_extra_update(self, delta_time):
+        super().on_extra_update(delta_time)
+        if not self._combo_active:
+            return
+        
+        target = self._combo_target
+        if not target or not target.is_alive:
+            # 目标死亡，提前结束
+            debug_print(f"{self.name}{self.id} 目标死亡，强力击中断")
+            self._end_combo()
+            return
+        
+        # 目标跑出范围则中断
+        dist = (target.position - self.position).magnitude
+        if dist > self.attack_range + 2.0:
+            debug_print(f"{self.name}{self.id} 目标脱离，强力击中断")
+            self._end_combo()
+            return
+        
+        self._combo_timer += delta_time
+        while self._combo_timer >= 1.0 and self._combo_remaining > 0:
+            self._combo_timer -= 1.0
+            self._fire_punch(target)
+            self._combo_remaining -= 1
+            if not target.is_alive:
+                break
+        
+        if self._combo_remaining <= 0 or not target.is_alive:
+            debug_print(f"{self.name}{self.id} 强力击10连拳结束!")
+            self._end_combo()
+
+
+# ═══════════════════════════════════════════
+# 寻路者信使 — 无德决斗家
+# ═══════════════════════════════════════════
+
+class 寻路者信使(Monster):
+    """寻路者信使 — 每3次攻击释放特殊技力攻击，降低目标防御"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.2, 0.3, 0.5, self)
+        self.attack_count = 0
+
+    def attack(self, target, gameTime):
+        self.attack_count += 1
+        is_special = self.attack_count % 3 == 0
+
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=2)
+        if not targets:
+            return
+
+        for t in targets:
+            dmg_mult = 1.5 if is_special else 1.0
+            dmg = self.calculate_damage(t, self.get_attack_power() * dmg_mult)
+            if self.apply_damage_to_target(t, dmg):
+                t.on_hit(self, dmg)
+                if is_special:
+                    # 降防效果
+                    t.phy_def = max(0, t.phy_def - 100)
+                    t.magic_resist = max(0, t.magic_resist - 10)
+                    debug_print(f"{self.name}{self.id} 特殊攻击降低 {t.name}{t.id} 防御!")
+
+    def get_skill_bar(self):
+        return self.attack_count % 3
+
+    def get_max_skill_bar(self):
+        return 3
+
+
+# ═══════════════════════════════════════════
+# 残党萨克斯手 — 失业萨克斯手
+# ═══════════════════════════════════════════
+
+class 残党萨克斯手(Monster):
+    """萨克斯手 — 每3次攻击释放扇形音波AOE"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.25, 0.25, 0.5, self)
+        self.attack_count = 0
+
+    def attack(self, target, gameTime):
+        self.attack_count += 1
+        is_fan = self.attack_count % 3 == 0
+
+        if is_fan:
+            self._fan_attack()
+        else:
+            targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=2)
+            for t in targets:
+                dmg = self.calculate_damage(t, self.get_attack_power())
+                if self.apply_damage_to_target(t, dmg):
+                    t.on_hit(self, dmg)
+
+    def _fan_attack(self):
+        """扇形音波攻击"""
+        pos = self.position
+        atk = self.get_attack_power()
+        targets = self.battlefield.query_monster(pos, 3.0)
+        # 确定朝向
+        if self.target:
+            dx = self.target.position.x - pos.x
+            dy = self.target.position.y - pos.y
+        else:
+            dx, dy = 1.0, 0.0
+        fwd_mag = math.sqrt(dx*dx + dy*dy)
+        if fwd_mag > 0:
+            dx /= fwd_mag
+            dy /= fwd_mag
+        half_angle = np.cos(np.radians(30))
+        for t in targets:
+            if t.faction == self.faction or not t.is_alive:
+                continue
+            tx = t.position.x - pos.x
+            ty = t.position.y - pos.y
+            dist = math.sqrt(tx*tx + ty*ty)
+            if dist < 0.01 or dist > 3.0:
+                continue
+            # 点积判断是否在扇形内
+            dot = dx * (tx/dist) + dy * (ty/dist)
+            if dot >= half_angle:
+                dmg = self.calculate_damage(t, atk * 1.2)
+                if self.apply_damage_to_target(t, dmg):
+                    t.on_hit(self, dmg)
+        debug_print(f"{self.name}{self.id} 吹奏扇形音波！")
+
+
+# ═══════════════════════════════════════════
+# 高级武装人员 — "大斧"
+# ═══════════════════════════════════════════
+
+class 高级武装人员(Monster):
+    """高级武装人员 — 大斧横扫，攻击前方小范围多目标"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.25, 0.35, 0.4, self)
+
+    def attack(self, target, gameTime):
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=3)
+        for t in targets:
+            dmg = self.calculate_damage(t, self.get_attack_power())
+            if self.apply_damage_to_target(t, dmg):
+                t.on_hit(self, dmg)
+
+
+# ═══════════════════════════════════════════
+# 萨卡兹枯朽吞噬者 — 极饿先锋
+# ═══════════════════════════════════════════
+
+class 萨卡兹枯朽吞噬者(Monster):
+    """枯朽吞噬者 — 击杀敌人回复15%生命"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.3, 0.2, 0.5, self)
+
+    def on_attack(self, target, damage):
+        if not target.is_alive or target.health <= 0:
+            heal = self.max_health * 0.15
+            self.health = min(self.max_health, self.health + heal)
+            debug_print(f"{self.name}{self.id} 吞噬回复 {heal:.0f} 生命")
+
+
+# ═══════════════════════════════════════════
+# 提亚卡乌破坏王 — 机鳄战甲
+# ═══════════════════════════════════════════
+
+class 提亚卡乌破坏王(Monster):
+    """破坏王 — 高攻，攻击附带减防"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.3, 0.15, 0.55, self)
+
+    def on_attack(self, target, damage):
+        target.phy_def = max(0, target.phy_def - 50)
+
+
+# ═══════════════════════════════════════════
+# 泥岩巨像 — 砸人的石头
+# ═══════════════════════════════════════════
+
+class 泥岩巨像(Monster):
+    """泥岩巨像 — 每15秒释放一次震地AOE"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.4, 0.4, 0.2, self)
+        self.slam_timer = 15.0
+        self.slam_radius = 2.0
+        self.slam_dmg_ratio = 2.0
+        self.boss = True
+
+    def on_extra_update(self, delta_time):
+        self.slam_timer -= delta_time
+        if self.slam_timer <= 0:
+            self.slam_timer = 15.0
+            self._slam()
+
+    def _slam(self):
+        """震地AOE"""
+        pos = self.position
+        dmg_base = self.get_attack_power() * self.slam_dmg_ratio
+        for t in self.battlefield.alive_monsters:
+            if t.faction != self.faction and t.is_alive and \
+               (t.position - pos).magnitude <= self.slam_radius:
+                dmg = self.calculate_damage(t, dmg_base)
+                if self.apply_damage_to_target(t, dmg):
+                    t.on_hit(self, dmg)
+        debug_print(f"{self.name} 震地！范围{self.slam_radius}")
+
+
+# ═══════════════════════════════════════════
+# 岁相 — 三阶段巨型BOSS
+# ═══════════════════════════════════════════
+
+class 岁相(Monster):
+    """岁相 — 三段变身：喷火→爪击→激光"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.3, 0.3, 0.4, self)
+        self.phase = 1
+        self.phase_timer = 0
+        self.phase_duration = 40.0  # 每阶段40秒
+        self.boss = True
+        self.immunity.add(BuffType.DIZZY)
+        self.immunity.add(BuffType.FROZEN)
+
+    def on_extra_update(self, delta_time):
+        self.phase_timer += delta_time
+        if self.phase_timer >= self.phase_duration:
+            self.phase_timer = 0
+            if self.phase < 3:
+                self.phase += 1
+                debug_print(f"{self.name} 进入第{self.phase}阶段！")
+                if self.phase == 2:
+                    self.attack_power *= 1.5
+                    self.attack_speed += 50
+                elif self.phase == 3:
+                    self.attack_power *= 2.0
+                    self.attack_speed += 100
+
+    def attack(self, target, gameTime):
+        if self.phase == 1:
+            self._phase1_attack(target)
+        elif self.phase == 2:
+            self._phase2_attack(target)
+        else:
+            self._phase3_attack(target)
+
+    def _phase1_attack(self, target):
+        """喷火：前方直线AOE"""
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=3)
+        for t in targets:
+            dmg = self.calculate_damage(t, self.get_attack_power())
+            if self.apply_damage_to_target(t, dmg):
+                t.on_hit(self, dmg)
+                t.status_system.apply(BuffEffect(BuffType.FIRE, 8.0, self))
+
+    def _phase2_attack(self, target):
+        """爪击：多目标高伤"""
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=5)
+        for t in targets:
+            dmg = self.calculate_damage(t, self.get_attack_power() * 1.2)
+            if self.apply_damage_to_target(t, dmg):
+                t.on_hit(self, dmg)
+
+    def _phase3_attack(self, target):
+        """激光：全屏AOE"""
+        dmg_base = self.get_attack_power() * 0.8
+        for t in self.battlefield.alive_monsters:
+            if t.faction != self.faction and t.is_alive:
+                dmg = self.calculate_damage(t, dmg_base)
+                t.take_damage(dmg, self.attack_type)
+        debug_print(f"{self.name} 释放激光全屏攻击！")
+
+
+# ═══════════════════════════════════════════
+# 奎隆，摩诃萨埵权化 — 最终BOSS
+# ═══════════════════════════════════════════
+
+class 奎隆(Monster):
+    """奎隆 — 多阶段BOSS，半血后进入二阶段"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.15, 0.15, 0.7, self)
+        self.phase = 1
+        self.boss = True
+        self.immunity.add(BuffType.DIZZY)
+        self.immunity.add(BuffType.FROZEN)
+        self.skill_timer = 15.0
+        self.base_atk = self.attack_power
+
+    def on_extra_update(self, delta_time):
+        if self.phase == 1 and self.health < self.max_health * 0.5:
+            self.phase = 2
+            self.attack_power = self.base_atk * 1.5
+            self.attack_speed += 100
+            self.move_speed *= 1.3
+            debug_print(f"{self.name} 进入第二阶段！")
+
+        self.skill_timer -= delta_time
+        if self.skill_timer <= 0:
+            self.skill_timer = 15.0
+            self._skill_attack()
+
+    def _skill_attack(self):
+        """技能：对3个目标发射剑波"""
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=False, max_targets=3)
+        for t in targets:
+            dmg = self.calculate_damage(t, self.get_attack_power() * 2.0)
+            if self.apply_damage_to_target(t, dmg):
+                t.on_hit(self, dmg)
+        debug_print(f"{self.name} 释放剑波！")
+
+    def attack(self, target, gameTime):
+        max_tgts = 2 if self.phase == 1 else 3
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=max_tgts)
+        for t in targets:
+            dmg = self.calculate_damage(t, self.get_attack_power())
+            if self.apply_damage_to_target(t, dmg):
+                t.on_hit(self, dmg)
+
+
+# ═══════════════════════════════════════════
+# 萨米的意志 — 独特机制
+# ═══════════════════════════════════════════
+
+class 萨米的意志(Monster):
+    """萨米的意志 — 攻击附带寒冷，高血量坦克"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.3, 0.2, 0.5, self)
+        self.boss = True
+        self.immunity.add(BuffType.FROZEN)
+        self.chill_interval = 3.0
+        self.chill_timer = 0
+
+    def attack(self, target, gameTime):
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=2)
+        for t in targets:
+            dmg = self.calculate_damage(t, self.get_attack_power())
+            if self.apply_damage_to_target(t, dmg):
+                t.on_hit(self, dmg)
+
+    def on_extra_update(self, delta_time):
+        self.chill_timer += delta_time
+        if self.chill_timer >= self.chill_interval:
+            self.chill_timer = 0
+            # 对周围敌人施加寒冷
+            for t in self.battlefield.alive_monsters:
+                if t.faction != self.faction and t.is_alive and \
+                   (t.position - self.position).magnitude <= 2.0:
+                    t.status_system.apply(BuffEffect(BuffType.CHILL, 5.0, self))
+            debug_print(f"{self.name} 释放冰霜领域！")
+
+
+# ═══════════════════════════════════════════
+# 凋零骑士 — 协同腐败骑士
+# ═══════════════════════════════════════════
+
+class 凋零骑士(Monster):
+    """凋零骑士 — 死亡自爆(已有行为)，出场有协同加成"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.2, 0.3, 0.5, self)
+        # 检查是否有腐败骑士在场，获得协同加成
+        self._check_synergy()
+
+    def _check_synergy(self):
+        for m in self.battlefield.alive_monsters:
+            if m.faction == self.faction and m.name == "腐败骑士" and m.is_alive:
+                self.attack_power *= 1.3
+                self.attack_speed += 30
+                debug_print(f"{self.name} 与腐败骑士协同！攻击+30% 攻速+30")
+                return
+
+
+# ═══════════════════════════════════════════
+# Mon2tr — 特殊召唤单位
+# ═══════════════════════════════════════════
+
+class Mon2tr(Monster):
+    """Mon2tr — 攻击附带眩晕"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.15, 0.2, 0.65, self)
+        self.stun_every = 3
+        self.hit_count = 0
+
+    def on_attack(self, target, damage):
+        self.hit_count += 1
+        if self.hit_count >= self.stun_every:
+            self.hit_count = 0
+            target.status_system.apply(BuffEffect(BuffType.DIZZY, 5.0, self))
+            debug_print(f"{self.name} 晕眩 {target.name}{target.id}!")
+
+
+# ═══════════════════════════════════════════
+# 凯尔希 — 调停的意志
+# ═══════════════════════════════════════════
+
+class 凯尔希(Monster):
+    """凯尔希 — 高攻速多目标"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.1, 0.1, 0.8, self)
+
+    def attack(self, target, gameTime):
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=3)
+        for t in targets:
+            dmg = self.calculate_damage(t, self.get_attack_power())
+            if self.apply_damage_to_target(t, dmg):
+                t.on_hit(self, dmg)
+
+
+
+class 庞贝(Monster):
+    """庞贝 — 法伤远程多目标，攻击灼烧，被围自爆，半血加速"""
+    def on_spawn(self):
+        self.attack_animation = AttackAnimation(0.3, 0.3, 0.4, self)
+        self._self_destruct_timer = 0.0
+        self._speed_boosted = False
+
+    def attack(self, target, gameTime):
+        # 多目标攻击(行为组件处理) + 灼烧
+        max_tgts = 4
+        from .behaviors import MultiTarget as _MT
+        for b in self.behaviors:
+            if isinstance(b, _MT):
+                max_tgts = b.max_targets
+                break
+        targets = TargetSelector.select_targets(self, self.battlefield, need_in_range=True, max_targets=max_tgts)
+        for t in targets:
+            damage = self.calculate_damage(t, self.get_attack_power())
+            self.on_attack(t, damage)
+            if self.apply_damage_to_target(t, damage):
+                t.on_hit(self, damage)
+                # 灼烧10秒
+                t.status_system.apply(BuffEffect(BuffType.FIRE, 10.0, self))
+
+    def on_extra_update(self, delta_time):
+        # 被围自爆：每10秒对周围1.4范围造成1000法伤
+        self._self_destruct_timer += delta_time
+        if self._self_destruct_timer >= 10.0:
+            self._self_destruct_timer = 0.0
+            nearby = self.battlefield.query_monster(self.position, 1.4)
+            enemies = [m for m in nearby if m.faction != self.faction and m.is_alive]
+            if enemies:
+                debug_print(f"{self.name}{self.id} 自爆！")
+                for m in enemies:
+                    dmg = calculate_normal_dmg(m.phy_def, m.magic_resist, 1000, DamageType.MAGIC)
+                    m.take_damage(dmg, DamageType.MAGIC)
+        
+        # 半血以下攻速+40
+        if not self._speed_boosted and self.health < self.max_health * 0.5:
+            self._speed_boosted = True
+            self.attack_speed += 40
+            debug_print(f"{self.name}{self.id} 半血以下，攻速+40！")
+        
+        return super().on_extra_update(delta_time)
+
 class MonsterFactory:
     _monster_classes = {
         "酸液源石虫·α": AcidSlug,
@@ -2179,6 +2973,7 @@ class MonsterFactory:
         "沸血骑士团精锐": 沸血骑士团精锐,
         "湖畔志愿者": 湖畔志愿者,
         "门": 门,
+        "“庞贝”": 庞贝,
         "爱蟹者": 爱蟹者,
         "绵羊": 绵羊,
         "雷德": 雷德,
@@ -2186,7 +2981,29 @@ class MonsterFactory:
         # "扎罗": 扎罗,
 
         # 添加更多映射...
-        "炮击组长": 炮击组长
+        "炮击组长": 炮击组长,
+        "暴走食人花": 暴走食人花,
+        "全封闭沙滩车": 沙滩车,
+
+        # ═══ 新子类注册 ═══
+        "散华骑士团学徒": 散华骑士团学徒,
+        "反装甲步兵": 反装甲步兵,
+        "水手重艇": 水手重艇,
+        "圣徒卡门": 圣徒卡门,
+        "R-11突击动力装甲": R11突击动力装甲,
+        "R-31重型动力装甲": R31重型动力装甲,
+        "寻路者信使": 寻路者信使,
+        "残党萨克斯手": 残党萨克斯手,
+        "高级武装人员": 高级武装人员,
+        "萨卡兹枯朽吞噬者": 萨卡兹枯朽吞噬者,
+        "提亚卡乌破坏王": 提亚卡乌破坏王,
+        "泥岩巨像": 泥岩巨像,
+        "岁相": 岁相,
+        "奎隆，摩诃萨埵权化": 奎隆,
+        "“萨米的意志”": 萨米的意志,
+        "凋零骑士": 凋零骑士,
+        "Mon2tr": Mon2tr,
+        "凯尔希": 凯尔希,
     }
 
     @classmethod
@@ -2196,5 +3013,11 @@ class MonsterFactory:
             m = cls._monster_classes[monster_type](data, faction, position, battlefield)
             m.on_spawn()
             return m
-        else:
-            return Monster(data, faction, position, battlefield)  # 默认类型
+        # 去除书名号/引号后重试
+        clean = monster_type.strip('“”《》"')
+        if clean in cls._monster_classes:
+            m = cls._monster_classes[clean](data, faction, position, battlefield)
+            m.on_spawn()
+            return m
+        return Monster(data, faction, position, battlefield)
+
