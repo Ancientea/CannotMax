@@ -8,7 +8,7 @@ project_root = os.path.abspath(os.getcwd())
 
 # ── 主程序分析 ──────────────────────────────────────────────
 a_main = Analysis(
-    ['src/cannotmax/console.py', 'src/cannotmax/_multi.py'],
+    ['src/cannotmax/console.py'],
     pathex=[project_root, os.path.join(project_root, 'src')],
     binaries=collect_dynamic_libs('maa'),
     datas=[
@@ -43,18 +43,6 @@ pyz_main = PYZ(a_main.pure, a_main.zipped_data, cipher=block_cipher)
 exe_main = EXE(
     pyz_main, a_main.scripts, [],
     exclude_binaries=True, name='cannotmax', debug=False,
-    bootloader_ignore_signals=False, strip=False, upx=True, console=True,
-    disable_windowed_traceback=False, argv_emulation=False,
-    target_arch=None, codesign_identity=None, entitlements_file=None,
-    icon=['ico\\icon_64x64.ico'],
-)
-
-_multi_scripts = [s for s in a_main.scripts if '_multi' in s[0]] + \
-                 [s for s in a_main.scripts if '_multi' not in s[0]]
-
-exe_multi = EXE(
-    pyz_main, _multi_scripts, [],
-    exclude_binaries=True, name='多开管理器', debug=False,
     bootloader_ignore_signals=False, strip=False, upx=True, console=True,
     disable_windowed_traceback=False, argv_emulation=False,
     target_arch=None, codesign_identity=None, entitlements_file=None,
@@ -102,7 +90,6 @@ exe_sim = EXE(
 # ── 合并输出 ─────────────────────────────────────────────────
 coll = COLLECT(
     exe_main,
-    exe_multi,
     exe_sim,
     a_main.binaries,
     a_sim.binaries,
