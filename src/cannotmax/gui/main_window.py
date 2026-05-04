@@ -530,6 +530,14 @@ class ArknightsApp(QMainWindow):
         self.recognizer.avatar_regions = None
         self.recognizer.number_regions = None
 
+        if mode in ("ADB", "PC"):
+            from cannotmax.config.settings import RECOGNITION_PARAMS
+
+            params = RECOGNITION_PARAMS.get(mode, {})
+            self.recognizer.crop_ratio = params.get("crop_regions")
+            self.recognizer.avatar_regions = params.get("avatar_regions")
+            self.recognizer.number_regions = params.get("number_regions")
+
         is_win = mode == "WIN"
         is_adb = mode == "ADB"
         self.choose_window_button.setEnabled(is_win)
