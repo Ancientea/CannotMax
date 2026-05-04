@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### WIN 模式识别重构
+- 重写 `process_regions` 中 WIN 模式逻辑：用户 ROI → find_monster_zone 识别 → 坐标映射回全屏截图 → 裁剪完整怪物条
+- 新增 `utils/roi_transform.py` 坐标变换工具，支持归一化坐标与像素坐标间的批量转换
+- 修复 `find_monster_zone` 返回坐标超出 [0,1] 范围时导致的除零错误，添加边界检查和 debug 日志
+
 ### 路径表重构
 - 扩展 `config/paths.py`，新增 14 个路径常量：`ICO_DIR`、`MONSTER_IMAGES_DIR`（修复了之前错误指向 `images/` 的问题）、`PROCESS_IMAGES_DIR`、`LOGIN_IMAGES_DIR`、`SAMPLES_IMAGES_DIR`、`THIRDPARTY_DIR`、`ADB_PATH`、`BATTLEFIELD_RECOGNIZE_DIR`、`ARKNIGHTS_DATA_CSV`、`MONSTER_GREENVINE_CSV`、`MONSTER_CSV`、`MULTI_PORTS_FILE`、`OUTPUT_DIR`
 - 替换 `gui/`、`core/`、`config/` 中所有硬编码路径字符串，改为引用 `paths.py` 常量
