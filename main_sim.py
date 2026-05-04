@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk
 import math
+import numpy as np
 from unit import Unit  # 确保 Unit 已导入
 import json  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
 import random  # REMOVED_TEAM_INTERFACE: Added missing import for the main block
@@ -115,8 +116,17 @@ class SandboxSimulator:
 
         self.simulating = False  # 战斗模拟是否进行中
         self.simulation_id = None
-        self.speed_multiplier = 10  # 默认速度
+        self.speed_multiplier = 1000  # 默认速度
         self.is_paused = False  # 新增：暂停状态
+
+        # 自动批量模拟
+        self.batch_running = False
+        self.batch_count = 5
+        self.batch_battles = []
+        self.batch_wins_left = 0
+        self.batch_wins_right = 0
+        self.batch_total = 0
+        self.batch_id = None
 
         self.monster_data = []  # 在 load_assets 中加载
         self.load_assets()  # 先加载资源，特别是 self.monster_data
@@ -145,6 +155,8 @@ class SandboxSimulator:
             text=states['deploy']['text']
         )
         self.confirm_start_button.config(state=states['confirm_start']['state'])
+        if hasattr(self, 'batch_button') and self.batch_button.winfo_exists():
+            self.batch_button.config(state=states['deploy']['state'] if not self.batch_running else tk.NORMAL)
         self.pause_button.config(
             state=states['pause']['state'],
             text=states['pause']['text']
@@ -173,29 +185,53 @@ class SandboxSimulator:
 
             return
 
-        for i in range(self.num_monsters):
-            image_file_id = i + 1
+        for i, md in enumerate(self.monster_data):
             try:
-                image = Image.open(f'images/{image_file_id}.png')
-                self.icons[i] = {
-                    "red": ImageTk.PhotoImage(image.resize((40, 40))),
-                    "blue": ImageTk.PhotoImage(image.resize((40, 40)).transpose(Image.FLIP_LEFT_RIGHT))
-                }
-            except Exception as e:
-                # 同样，show_message_below_button 可能还不可用
-                logger.error(f"加载图标错误 (图标键: {i}, 文件名ID: {image_file_id}): {str(e)}")
-                self.icons[i] = {
-                    "red": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray")),
-                    "blue": ImageTk.PhotoImage(Image.new("RGB", (40, 40), "gray"))
-                }
+                name = md["名字"]
+                import csv, cv2
+                with open('monster_greenvine.csv','r',encoding='utf-8-sig') as cf:
+                    display_to_orig = {row['名称'].strip().strip('"').strip("'").strip(): 
+                                       row['原始名称'].strip().strip('"').strip("'").strip()
+                                       for row in csv.DictReader(cf)}
+                orig = display_to_orig.get(name, name)
+                img_path = f"images/{orig}.png"
+                cv_img = cv2.imdecode(np.fromfile(img_path, dtype=np.uint8), cv2.IMREAD_COLOR)
+                if cv_img is not None:
+                    temp = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+                    image = Image.fromarray(temp)
+                else:
+                    image = Image.new("RGB", (40, 40), "gray")
+            except Exception:
+                image = Image.new("RGB", (40, 40), "gray")
+            self.icons[i] = {
+                "red": ImageTk.PhotoImage(image.resize((40, 40))),
+                "blue": ImageTk.PhotoImage(image.resize((40, 40)).transpose(Image.FLIP_LEFT_RIGHT))
+            }
 
     def init_battlefield_for_setup(self):
         self.state_machine.transition_to(AppState.SETUP)
         self.battle_field = Battlefield(self.monster_data)
         self.units = []
 
-        left_army_config = self.battle_data.get("left", {})
-        right_army_config = self.battle_data.get("right", {})
+        # 名字映射（硬编码+模糊去引号）
+        ALIASES = {
+            '"钳钳生风"': '"钳钳生风"',
+            '钳钳生风': '"钳钳生风"',
+            '玉双剑': '玉双剑',
+            '枣大刀': '枣大刀',
+            '炭长矛': '炭长矛',
+        }
+        def _resolve(name):
+            if name in ALIASES: return ALIASES[name]
+            if any(m["名字"] == name for m in self.monster_data): return name
+            clean = name.replace('\u201c','').replace('\u201d','').replace('"','').replace('"','')
+            for m in self.monster_data:
+                if m["名字"].replace('\u201c','').replace('\u201d','').replace('"','').replace('"','') == clean:
+                    return m["名字"]
+            return name
+
+        left_army_config = {_resolve(k): v for k, v in self.battle_data.get("left", {}).items()}
+        right_army_config = {_resolve(k): v for k, v in self.battle_data.get("right", {}).items()}
 
         self.battle_field.setup_battle(left_army_config, right_army_config, self.monster_data)
         while self.battle_field.gameTime < 6.0:
@@ -239,6 +275,10 @@ class SandboxSimulator:
                                               state=tk.DISABLED)
         self.confirm_start_button.pack(side=tk.LEFT, padx=5)
 
+        self.batch_button = tk.Button(top_control_frame, text="批量模拟",
+                                      command=self.toggle_batch_sim, bg="#e0ffe0")
+        self.batch_button.pack(side=tk.LEFT, padx=5)
+
         self.clear_button = tk.Button(top_control_frame, text="清空战场", command=self.clear_sandbox)
         self.clear_button.pack(side=tk.LEFT, padx=5)
         self.timer_label = tk.Label(top_control_frame, text="0.00秒")
@@ -257,6 +297,9 @@ class SandboxSimulator:
         # 用于显示提示信息的标签，放置在按钮行的下方
         self.message_label = tk.Label(control_frame, text="", fg="black")
         self.message_label.pack(pady=2)
+
+        self.winrate_label = tk.Label(control_frame, text="", fg="#3333aa", font=("Arial", 11, "bold"))
+        self.winrate_label.pack(pady=2)
 
         self.canvas = tk.Canvas(self.master, width=self.canvas_width, height=self.canvas_height, bg='white')
         self.canvas.pack(pady=10)
@@ -369,12 +412,19 @@ class SandboxSimulator:
                 ui_unit.x = monster.position.x
                 ui_unit.y = monster.position.y
                 ui_unit.team = 'red' if monster.faction == Faction.LEFT else 'blue'
-                display_id_for_icon = REVERSE_MONSTER_MAPPING.get(monster.name)
-                if display_id_for_icon is None:
-                    logger.error(f"怪物名 {monster.name} 在 REVERSE_MONSTER_MAPPING 中未找到!")
-                    self.show_message_below_button(f"怪物名 {monster.name} 在 REVERSE_MONSTER_MAPPING 中未找到!",
-                                                   is_error=True)
-                    display_id_for_icon = 0
+                display_id_for_icon = 0
+                # 直接用 monsters.json 里的索引（和 load_assets 中 icons 对应）
+                for idx, md in enumerate(self.monster_data):
+                    if md["名字"] == monster.name:
+                        display_id_for_icon = idx
+                        break
+                if display_id_for_icon == 0 and self.monster_data:
+                    # 兜底：去引号匹配
+                    clean = monster.name.replace('\u201c','').replace('\u201d','').replace('"','').replace('"','')
+                    for idx, md in enumerate(self.monster_data):
+                        if md["名字"].replace('\u201c','').replace('\u201d','').replace('"','').replace('"','') == clean:
+                            display_id_for_icon = idx
+                            break
                 ui_unit.unit_id = display_id_for_icon
                 ui_unit.health = monster.health
                 ui_unit.max_health = monster.max_health
@@ -534,6 +584,93 @@ class SandboxSimulator:
 
     def show_result(self, message):  # 此方法现在主要被画布显示和按钮下方提示替代
         self.show_message_below_button(message)
+
+    def toggle_batch_sim(self):
+        """开始/停止自动批量模拟"""
+        if self.batch_running:
+            self._stop_batch()
+        else:
+            self._start_batch()
+
+    def _start_batch(self):
+        """启动5局自动模拟"""
+        if not self.battle_field.monsters:
+            self.show_message_below_button("请先部署怪物", is_error=True)
+            return
+        self.batch_running = True
+        self.batch_button.config(text="停止模拟", bg="#ffe0e0")
+        self.batch_wins_left = 0
+        self.batch_wins_right = 0
+        self.batch_total = 0
+        self.batch_battles = []
+        self._init_batch_battles()
+        self._run_batch_step()
+
+    def _stop_batch(self):
+        """停止批量模拟"""
+        self.batch_running = False
+        self.batch_button.config(text="自动模拟(5局)", bg="#e0ffe0")
+        if self.batch_id:
+            self.master.after_cancel(self.batch_id)
+            self.batch_id = None
+
+    def _init_batch_battles(self):
+        """初始化5个独立战场"""
+        left_army = {}
+        right_army = {}
+        for m in self.battle_field.monsters:
+            info = {m.name: 1}
+        # 从battle_data获取
+        for name, count in self.battle_data.get("left", {}).items():
+            left_army[name] = count
+        for name, count in self.battle_data.get("right", {}).items():
+            right_army[name] = count
+
+        self.batch_battles = []
+        for _ in range(self.batch_count):
+            bf = Battlefield(self.monster_data)
+            bf.setup_battle(left_army, right_army, self.monster_data)
+            self.batch_battles.append(bf)
+
+    def _run_batch_step(self):
+        """批量推进所有战场，每帧1000步"""
+        if not self.batch_running:
+            return
+        active = []
+        for bf in self.batch_battles:
+            if bf.run_one_frame() is None:
+                active.append(bf)
+            else:
+                # 战斗结束
+                winner = bf.check_victory()
+                if winner == Faction.LEFT:
+                    self.batch_wins_left += 1
+                else:
+                    self.batch_wins_right += 1
+                self.batch_total += 1
+                # 启动新的一局替换
+                left_army = {}
+                right_army = {}
+                for name, count in self.battle_data.get("left", {}).items():
+                    left_army[name] = count
+                for name, count in self.battle_data.get("right", {}).items():
+                    right_army[name] = count
+                new_bf = Battlefield(self.monster_data)
+                new_bf.setup_battle(left_army, right_army, self.monster_data)
+                active.append(new_bf)
+
+        self.batch_battles = active
+        self._update_winrate()
+        self.batch_id = self.master.after(1, self._run_batch_step)
+
+    def _update_winrate(self):
+        """更新胜率显示"""
+        if self.batch_total > 0:
+            rate = self.batch_wins_left / self.batch_total * 100
+            self.winrate_label.config(
+                text=f"左胜率: {rate:.1f}% ({self.batch_wins_left}W/{self.batch_wins_right}L | 总{self.batch_total}局)")
+        else:
+            self.winrate_label.config(text="模拟中...")
 
     def clear_sandbox(self):
         if self.state_machine.state == AppState.SIMULATING:

@@ -1,113 +1,97 @@
-import json
-import math
-import random
-import time
-from enum import Enum
+"""批量战斗模拟 — 从 CSV 加载真实对战数据，验证沙盘预测准确率"""
+import json, sys, os
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from .battle_field import Battlefield, Faction
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from simulator.battle_field import Battlefield, Faction
+from simulator.utils import MONSTER_MAPPING
 
-from .utils import MONSTER_MAPPING, VISUALIZATION_MODE
-
+# 根据 MONSTER_COUNT 动态计算列数
+MONSTER_COUNT = len(MONSTER_MAPPING)
+FIELD_COLS = 0  # 当前绿藤城数据无场地特征
+FEATURES_PER_SIDE = MONSTER_COUNT + FIELD_COLS
+TOTAL_COLS = FEATURES_PER_SIDE * 2 + 1  # 左78 + 右78 + 结果
 
 def process_battle_data(csv_path):
-    """
-    处理战斗数据CSV文件
-    :param csv_path: 输入CSV文件路径
-    """
-    # 读取CSV文件（假设没有表头）
-    df = pd.read_csv(csv_path, header=1)
+    """处理战斗数据CSV — 自动适配怪物数列数"""
+    df = pd.read_csv(csv_path, header=None, skiprows=1)
+    expected = df.shape[1]
+    if expected < TOTAL_COLS:
+        print(f"CSV 列数 ({expected}) < 预期 ({TOTAL_COLS})，尝试跳过表头")
+        df = pd.read_csv(csv_path, header=None)
     
-    # 数据结构化处理
     battle_records = []
-    
     for _, row in df.iterrows():
-        # 分解左右阵营数据
-        left_data = row[0:56]    # 1-56列 (0-based索引0-55)
-        right_data = row[56:112]  # 56-112列 (0-based索引56-111)
-        winner = row[112]         # 69列 (0-based索引112)
+        left_data = row[0:FEATURES_PER_SIDE]
+        right_data = row[FEATURES_PER_SIDE:FEATURES_PER_SIDE*2]
+        winner = row[FEATURES_PER_SIDE*2]
         
-        # 构建阵营字典（ID从1开始）
-        left_army = {MONSTER_MAPPING[i]: int(count) for i, count in enumerate(left_data) if count > 0}
-        right_army = {MONSTER_MAPPING[i]: int(count) for i, count in enumerate(right_data) if count > 0}
+        left_army = {MONSTER_MAPPING[i]: int(count) 
+                     for i, count in enumerate(left_data) if count > 0}
+        right_army = {MONSTER_MAPPING[i]: int(count) 
+                      for i, count in enumerate(right_data) if count > 0}
         
-        # 构建记录格式
-        battle_record = {
-            "left": left_army,
-            "right": right_army,
-            "result": "left" if winner == 'L' else "right"
-        }
-        
-        battle_records.append(battle_record)
-    
+        battle_records.append({
+            "left": left_army, "right": right_army,
+            "result": "left" if str(winner).strip().upper() == 'L' else "right"
+        })
     return battle_records
 
-def main():
-    """主函数"""
-    # 加载怪物数据
-    with open("arknight/monsters.json", encoding='utf-8') as f:
+
+def main(csv_path=None, num_matches=50, sim_runs=3, parallel=1):
+    """批量模拟 — 支持多线程"""
+    import concurrent.futures
+    
+    monster_file = os.path.join(os.path.dirname(__file__), "monsters.json")
+    with open(monster_file, encoding='utf-8') as f:
         monster_data = json.load(f)["monsters"]
+    print(f"怪物: {len(monster_data)} 只 | MAPPING: {len(MONSTER_MAPPING)}")
+
+    if csv_path and os.path.exists(csv_path):
+        records = process_battle_data(csv_path)[:num_matches]
+    else:
+        records = [
+            {"left": {"易爆源石虫": 5}, "right": {"过气水手": 3}, "result": "right"},
+            {"left": {"大喷蛛": 2}, "right": {"群集之瘴": 3}, "result": "left"},
+        ]
     
-    # with open("scene.json", encoding='utf-8') as f:
-    #     scene_config = json.load(f)
-
-    # 使用示例，直接修改这里的csv文件就可以跑模拟
-    battle_data = process_battle_data("arknight/56fin2_66k.csv")
-
+    total = len(records)
+    print(f"对战: {total} | 每场{sim_runs}次 | 并行{parallel}线程\n")
     
-    win = 0
-    matches = 0
-    for scene_config in tqdm(battle_data):
-        if VISUALIZATION_MODE:
-            scene_config = {"left": {"宿主流浪者": 7, "污染躯壳": 14, "凋零萨卡兹": 5}, "right": {"大喷蛛": 4, "杰斯顿·威廉姆斯": 1, "衣架": 10}, "result": "right"}
-
-
-        #{ "left": { "护盾哥": 5, "污染躯壳": 11, "船长": 5 }, "right": { "炮击组长": 4, "沸血骑士团精锐": 4, "雪境精锐": 4}, "result": "left" }
-
-        # 用户配置
-        left_army = scene_config["left"]
-        right_army = scene_config["right"]
-    
-        # 初始化战场
+    def sim_one(rec):
         leftWins = 0
-        for i in range(3):
-            battlefield = Battlefield(monster_data)
-            if not battlefield.setup_battle(left_army, right_army, monster_data):
+        for _ in range(sim_runs):
+            bf = Battlefield(monster_data)
+            if not bf.setup_battle(rec["left"], rec["right"], monster_data):
                 continue
-            
-            # 开始战斗
-            if battlefield.run_battle(visualize=VISUALIZATION_MODE) == Faction.LEFT:
+            if bf.run_battle() == Faction.LEFT:
                 leftWins += 1
-            if leftWins >= 2:
+            if leftWins >= sim_runs // 2 + 1:
                 break
-            if i >= 1 and leftWins == 0:
+            if (sim_runs - _ - 1) + leftWins < sim_runs // 2 + 1:
                 break
-
-        left_win = leftWins >= 2
-        
-        if (left_win and scene_config["result"] == "left") or (not left_win and scene_config["result"] == "right"):
-            win += 1
-        else:
-            with open("errors.json", encoding='utf-8', mode='+a') as f:
-                f.write(json.dumps(scene_config, ensure_ascii=False))
-                f.write('\n')
-        
-
-        matches += 1
-        print(f"当前胜率：{win} / {matches}")
-        if VISUALIZATION_MODE:
-            break
+        return "left" if leftWins >= sim_runs // 2 + 1 else "right"
+    
+    if parallel > 1:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as pool:
+            results = list(tqdm(pool.map(sim_one, records), total=total, desc="模拟"))
+    else:
+        results = [sim_one(r) for r in tqdm(records, desc="模拟")]
+    
+    win = sum(1 for p, r in zip(results, records) if p == r["result"])
+    acc = win / total * 100
+    print(f"\n准确率: {win}/{total} = {acc:.1f}%")
+    return acc
 
 
 if __name__ == "__main__":
-    # import cProfile
-    # import pstats
-
-    # profiler = cProfile.Profile()
-    # profiler.enable()
-    main()
-    # profiler.disable()
-    # stats = pstats.Stats(profiler)
-    # stats.sort_stats('tottime').print_stats(25)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--csv", help="对战数据CSV路径")
+    parser.add_argument("--num", type=int, default=50, help="模拟对局数")
+    parser.add_argument("--runs", type=int, default=3, help="每场模拟次数")
+    parser.add_argument("--parallel", type=int, default=1, help="并行线程数")
+    args = parser.parse_args()
+    main(args.csv, args.num, args.runs, args.parallel)

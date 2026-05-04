@@ -1,0 +1,4 @@
+  File "G:\314\CannotMax-main\tools\_smart_classify.py", line 16
+    "风情街"星术师"": (4.5, 3.0, "法术"),
+              ^
+SyntaxError: ':' expected after dictionary key

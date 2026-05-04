@@ -17,17 +17,18 @@ import PyQt6.QtCore as QtCore
 
 import loadData
 import auto_fetch
-from maa_adb_connector import MaaAdbConnector, MaaFrameworkDetector
-from gui.dark_mode_style_fix import DarkModeStyleFix
-from gui.similar_history_match import HistoryMatch
-from gui.similar_history_match_ui import HistoryMatchUI
+import similar_history_match
 import recognize
 from recognize import MONSTER_COUNT
 from specialmonster import SpecialMonsterHandler
 import data_package
 import winrt_capture
 from config import FIELD_FEATURE_COUNT, MONSTER_DATA
+from simular_history_match_ui import HistoryMatchUI
 from input_panel_ui import InputPanelUI
+from simulator.battle_field import Battlefield
+from simulator.utils import Faction, MONSTER_MAPPING, REVERSE_MONSTER_MAPPING
+from simulator.monsters import MonsterFactory
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.getLogger("PIL").setLevel(logging.INFO)
@@ -42,36 +43,29 @@ logger.setLevel(logging.DEBUG)
 
 
 try:
-    from core.predict import CannotModel
+    from predict import CannotModel
     from train import UnitAwareTransformer
 
     logger.info("Using PyTorch model for predictions.")
 except:
-    from core.predict_onnx import CannotModel
+    from predict_onnx import CannotModel
 
     logger.info("Using ONNX model for predictions.")
 
 
 class ADBConnectorThread(QThread):
     """
-    Worker thread to run MaaAdbConnector.connect() without blocking the UI.
+    Worker thread to run loadData.AdbConnector.connect() without blocking the UI.
     """
 
     connect_finished = pyqtSignal()
 
-    def __init__(self, app: "ArknightsApp", device_index: int = -1, custom_address: str = ""):
+    def __init__(self, app: "ArknightsApp"):
         super().__init__()
         self.app = app
-        self.device_index = device_index
-        self.custom_address = custom_address
 
     def run(self):
-        if self.custom_address:
-            self.app.adb_connector.connect_custom(self.custom_address)
-        elif self.device_index >= 0:
-            self.app.adb_connector.connect(self.device_index)
-        else:
-            self.app.adb_connector.connect(0)
+        self.app.adb_connector.connect()
         self.connect_finished.emit()
 
 class ArknightsApp(QMainWindow):
@@ -80,7 +74,6 @@ class ArknightsApp(QMainWindow):
     update_monster_signal = pyqtSignal(list)
     update_prediction_signal = pyqtSignal(float)
     update_statistics_signal = pyqtSignal()  # 用于更新统计信息
-    update_package_button_signal = pyqtSignal(bool)  # 用于更新打包按钮启用状态
     qt_button_style = """
         QPushButton {
             background-color: #313131;
@@ -104,7 +97,7 @@ class ArknightsApp(QMainWindow):
         self.current_capture_mode = "ADB"
 
         # 尝试连接模拟器
-        self.adb_connector = MaaAdbConnector()
+        self.adb_connector = loadData.AdbConnector()
         self.pc_connector = loadData.PcConnector()
         self.adb_connector_thread = ADBConnectorThread(self)
         self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
@@ -123,7 +116,7 @@ class ArknightsApp(QMainWindow):
         # 初始化UI后加载历史数据
         logger.info("尝试获取错题本")
         self.history_match = None
-        self.history_match = HistoryMatch()
+        self.history_match = similar_history_match.HistoryMatch()
         # Ensure feat_past and N_history are initialized
         try:
             self.history_match.feat_past = np.hstack([self.history_match.past_left, self.history_match.past_right])
@@ -154,9 +147,9 @@ class ArknightsApp(QMainWindow):
         model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
         self.setWindowTitle(f"铁鲨鱼_Arknights Neural Network - v{version} - model: {model_name}")
         self.setWindowIcon(QIcon("ico/icon.ico"))
-        self.setGeometry(100, 100, 570, 570)
-        self.setMinimumWidth(570)
-        self.setMaximumWidth(570)
+        self.setGeometry(100, 100, 500, 580)
+        self.setMinimumWidth(580)
+        self.setMaximumWidth(580)
         self.background = QPixmap("ico/background.png")
 
         # 初始化动画对象
@@ -169,9 +162,9 @@ class ArknightsApp(QMainWindow):
         main_layout = QHBoxLayout(main_widget)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        # 输入面板
+        # 左侧面板
         self.input_panel = InputPanelUI()
-        self.input_panel.setFixedWidth(640)
+        self.input_panel.setFixedWidth(528)
         self.input_panel.predict_requested.connect(self.predict)
         self.input_panel.reset_requested.connect(self.reset_entries)
         self.input_panel.input_changed.connect(self.update_input_display)
@@ -243,15 +236,19 @@ class ArknightsApp(QMainWindow):
         self.result_label = QLabel("预测结果将显示在这里")
         self.result_label.setFont(QFont("Microsoft YaHei", 12))
         self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.result_label.setStyleSheet("color: #313131;")
         result_layout.addWidget(self.result_label)
 
+
         # 添加模型名称显示
-        model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
-        self.model_name_label = QLabel(f"model: {model_name}")
-        self.model_name_label.setFont(QFont("Microsoft YaHei", 8))
+        model_names = getattr(self.cannot_model, "model_names", [])
+        if model_names:
+            names_text = "\n".join(f"• {n}" for n in model_names)
+        else:
+            names_text = "未加载"
+        self.model_name_label = QLabel(names_text)
+        self.model_name_label.setFont(QFont("Microsoft YaHei", 7))
         self.model_name_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-        self.model_name_label.setStyleSheet("color: #666666;")
+        self.model_name_label.setStyleSheet("color: #888888;")
         result_layout.addWidget(self.model_name_label)
 
         # 第二行按钮result_identify_group
@@ -271,6 +268,20 @@ class ArknightsApp(QMainWindow):
 
         result_layout.addWidget(result_identify_group)
 
+        # 反馈按钮（左胜/右胜，可选不按）
+        self.feedback_group = QWidget()
+        fb_layout = QHBoxLayout(self.feedback_group)
+        fb_layout.setContentsMargins(0, 5, 0, 0)
+        self.left_btn = QPushButton("◀ 左胜")
+        self.left_btn.clicked.connect(lambda: self._give_feedback(0))
+        self.left_btn.setStyleSheet("color:#E23F25;font-weight:bold;padding:3px 12px;")
+        self.right_btn = QPushButton("右胜 ▶")
+        self.right_btn.clicked.connect(lambda: self._give_feedback(1))
+        self.right_btn.setStyleSheet("color:#25ace2;font-weight:bold;padding:3px 12px;")
+        fb_layout.addWidget(self.left_btn)
+        fb_layout.addWidget(self.right_btn)
+        result_layout.addWidget(self.feedback_group)
+
         center_layout.addWidget(result_group)
 
         # 底部区域 - 控制面板和连接设置
@@ -284,7 +295,7 @@ class ArknightsApp(QMainWindow):
         control_group = QGroupBox("控制面板")
         control_layout = QVBoxLayout(control_group)
 
-        # 第一行按钮 - 基础设置
+        # 第一行按钮
         row1 = QWidget()
         row1_layout = QHBoxLayout(row1)
         row1_layout.setContentsMargins(0, 0, 0, 0)
@@ -293,33 +304,21 @@ class ArknightsApp(QMainWindow):
         self.duration_entry = QLineEdit("325")
         self.duration_entry.setFixedWidth(50)
 
+        self.auto_fetch_button = QPushButton("自动获取数据")
+        self.auto_fetch_button.clicked.connect(self.toggle_auto_fetch)
+
         self.mode_menu = QComboBox()
         self.mode_menu.addItems(["单人", "30人"])
         self.mode_menu.currentTextChanged.connect(self.update_game_mode)
-
-        self.predict_enabled_checkbox = QCheckBox("预测")
-        self.predict_enabled_checkbox.setChecked(True)
-        self.predict_enabled_checkbox.toggled.connect(self._on_predict_toggled)
 
         self.invest_checkbox = QCheckBox("投资")
         self.invest_checkbox.stateChanged.connect(self.update_invest_status)
 
         row1_layout.addWidget(self.duration_label)
         row1_layout.addWidget(self.duration_entry)
+        row1_layout.addWidget(self.auto_fetch_button)
         row1_layout.addWidget(self.mode_menu)
-        row1_layout.addWidget(self.predict_enabled_checkbox)
         row1_layout.addWidget(self.invest_checkbox)
-        row1_layout.addStretch()
-
-        # 第二行按钮 - 自动获取数据配置
-        row_config = QWidget()
-        row_config_layout = QHBoxLayout(row_config)
-        row_config_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.auto_fetch_button = QPushButton("自动获取数据")
-        self.auto_fetch_button.clicked.connect(self.toggle_auto_fetch)
-
-        row_config_layout.addWidget(self.auto_fetch_button)
 
         # 第二行按钮 - 数据操作和统计
         row2 = QWidget()
@@ -329,6 +328,24 @@ class ArknightsApp(QMainWindow):
         self.package_data_button = QPushButton("数据打包")
         self.package_data_button.clicked.connect(self.package_data_and_show)
         row2_layout.addWidget(self.package_data_button)
+
+        # 等权模式复选框
+        self.equal_weight_checkbox = QCheckBox("等权模式")
+        self.equal_weight_checkbox.setToolTip("勾选后所有模型权重=3.0，忽略 LR 选择结果")
+        self.equal_weight_checkbox.stateChanged.connect(self.toggle_equal_weight)
+        row2_layout.addWidget(self.equal_weight_checkbox)
+
+        # 全模型加载复选框
+        self.full_load_checkbox = QCheckBox("全模型加载")
+        self.full_load_checkbox.setToolTip("勾选后加载全部 19 个模型（~5GB 显存），不勾选仅加载权重内的 5 个")
+        self.full_load_checkbox.stateChanged.connect(self.toggle_full_load)
+        row2_layout.addWidget(self.full_load_checkbox)
+
+        # 更新模型权重按钮
+        self.update_weights_button = QPushButton("更新权重")
+        self.update_weights_button.setToolTip("运行 model_selection.py 重新计算最优模型组合权重")
+        self.update_weights_button.clicked.connect(self.run_model_selection)
+        row2_layout.addWidget(self.update_weights_button)
 
         # 统计信息显示
         self.stats_label = QLabel()
@@ -347,7 +364,6 @@ class ArknightsApp(QMainWindow):
 
         # 添加到控制布局
         control_layout.addWidget(row1)
-        control_layout.addWidget(row_config)
         control_layout.addWidget(row2)
         control_layout.addWidget(github_label)
 
@@ -401,31 +417,18 @@ class ArknightsApp(QMainWindow):
         conn_row1_layout = QHBoxLayout(conn_row1)
         conn_row1_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.serial_label = QLabel("ADB设备:")
+        self.serial_label = QLabel("模拟器序列号:")
         self.serial_entry = QComboBox()
         self.serial_entry.setEditable(True)
-        self.serial_entry.setFixedWidth(200)
-        self.serial_entry.lineEdit().setPlaceholderText("选择设备或输入地址")
-        self.serial_entry.currentIndexChanged.connect(self.on_device_selected)
+        self.serial_entry.setFixedWidth(150)
+        self.serial_entry.lineEdit().setPlaceholderText("127.0.0.1:5555")
 
-        self.serial_button = QPushButton("刷新")
-        self.serial_button.clicked.connect(self.refresh_and_connect)
-
-        self.connect_button = QPushButton("连接")
-        self.connect_button.clicked.connect(self.connect_custom_address)
+        self.serial_button = QPushButton("更新")
+        self.serial_button.clicked.connect(self.update_device_serial)
 
         conn_row1_layout.addWidget(self.serial_label)
         conn_row1_layout.addWidget(self.serial_entry)
         conn_row1_layout.addWidget(self.serial_button)
-        conn_row1_layout.addWidget(self.connect_button)
-
-        # MAA状态行
-        self.maa_status_label = QLabel("")
-        self.maa_status_label.setStyleSheet("color: #666666; font-size: 10px;")
-        self.maa_status_label.setWordWrap(True)
-
-        connection_layout.addWidget(conn_row1)
-        connection_layout.addWidget(self.maa_status_label)
 
         # 捕获设置行
         conn_row2 = QWidget()
@@ -478,6 +481,14 @@ class ArknightsApp(QMainWindow):
         self.always_on_top_button.setStyleSheet(self.qt_button_style)
         row5_layout.addWidget(self.always_on_top_button)
 
+        # 批量模拟按钮
+        self.batch_sim_button = QPushButton("批量模拟")
+        self.batch_sim_button.clicked.connect(self.toggle_batch_sim)
+        self.batch_sim_button.setStyleSheet(self.qt_button_style)
+        row5_layout.addWidget(self.batch_sim_button)
+
+
+
         # 排布底部布局
         self.bottom_layout.addLayout(left_column)
         self.bottom_layout.addWidget(row5)
@@ -502,9 +513,7 @@ class ArknightsApp(QMainWindow):
         self.update_monster_signal.connect(self.update_monster)
         self.update_prediction_signal.connect(self.update_prediction)
         self.update_statistics_signal.connect(self.update_statistics)
-        self.update_package_button_signal.connect(self.package_data_button.setEnabled)
         self.refresh_device_list()
-        DarkModeStyleFix.apply(QApplication.instance())
 
     def toggle_input_panel(self):
         """切换输入面板的显示"""
@@ -544,36 +553,8 @@ class ArknightsApp(QMainWindow):
             return self.pc_connector
         return self.adb_connector
 
-    def _set_mode_button_checked(self, mode):
-        mode_btn_map = {
-            "ADB": self.adb_mode_btn,
-            "PC": self.pc_mode_btn,
-            "WIN": self.win_mode_btn,
-        }
-        btn = mode_btn_map.get(mode)
-        if btn is not None:
-            btn.setChecked(True)
-
     def on_mode_changed(self, mode):
         """切换捕获模式"""
-        previous_mode = self.current_capture_mode
-
-        if mode == "PC" and not is_user_admin():
-            reply = QMessageBox.question(
-                self,
-                "需要管理员权限",
-                "切换到 PC 模式需要管理员权限，是否现在重启并尝试提权？",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                if relaunch_as_admin(capture_mode="PC"):
-                    QApplication.instance().quit()
-                else:
-                    QMessageBox.warning(self, "提权失败", "未能启动管理员进程，请稍后重试。")
-            self._set_mode_button_checked(previous_mode)
-            return
-
         self.current_capture_mode = mode
         logger.info(f"切换捕获模式为: {mode}")
 
@@ -589,13 +570,12 @@ class ArknightsApp(QMainWindow):
         self.serial_label.setEnabled(is_adb_mode)
         self.serial_entry.setEnabled(is_adb_mode)
         self.serial_button.setEnabled(is_adb_mode)
-        self.connect_button.setEnabled(is_adb_mode)
 
         if mode == "ADB":
             self.refresh_device_list()
             self.recognizer = recognize.RecognizeMonster(method="ADB")
-            if not self.adb_connector.is_connected:
-                self.refresh_and_connect()
+            if not self.adb_connector.device_serial:
+                self.adb_connector_thread.start()
         elif mode == "WIN":
             if self.recognizer.method != "WIN":
                 self.recognizer = recognize.RecognizeMonster(method="WIN")
@@ -610,14 +590,6 @@ class ArknightsApp(QMainWindow):
 
     def on_adb_connected(self):
         logger.info("模拟器初始化完成")
-        if self.adb_connector.is_connected:
-            device = self.adb_connector.selected_device
-            name = device.name if device else self.adb_connector.device_serial
-            self.maa_status_label.setText(f"MAA Framework已连接: {name}")
-            self.maa_status_label.setStyleSheet("color: #00aa00; font-size: 10px;")
-        else:
-            self.maa_status_label.setText("MAA Framework连接失败")
-            self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
 
     def choose_capture_window(self):
         """弹出窗口选择器，切换 WinRT 截屏源（窗口标题或整屏）。"""
@@ -723,7 +695,16 @@ class ArknightsApp(QMainWindow):
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         try:
-            pixmap = QPixmap(f"images/{MONSTER_DATA['原始名称'][monster_id]}.png")
+            orig_name = MONSTER_DATA['原始名称'][monster_id]
+            img_path = f"images/{orig_name}.png"
+            import cv2, numpy as np
+            img = cv2.imdecode(np.fromfile(img_path, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if img is None:
+                raise FileNotFoundError(img_path)
+            h, w, c = img.shape
+            from PyQt6.QtGui import QImage
+            qimg = QImage(img.data, w, h, 3*w, QImage.Format.Format_BGR888)
+            pixmap = QPixmap.fromImage(qimg)
             if not pixmap.isNull():
                 pixmap = pixmap.scaled(
                     70, 70, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
@@ -759,6 +740,12 @@ class ArknightsApp(QMainWindow):
 
         return widget
 
+    def _give_feedback(self, actual):
+        """actual=0(左胜) 或 1(右胜)。调整权重并刷新显示。"""
+        self.cannot_model.adjust_weights(actual)
+        self.predict()
+        logger.info(f"反馈: {'左胜' if actual < 0.5 else '右胜'}, 权重已更新")
+
     def reset_entries(self):
         self.result_label.setText("预测结果将显示在这里")
         self.result_label.setStyleSheet("color: black;")
@@ -782,6 +769,8 @@ class ArknightsApp(QMainWindow):
             full_features = self.input_panel.build_terrain_features(left_counts, right_counts)
 
             prediction = self.cannot_model.get_prediction_with_terrain(full_features)
+            # 同时获取各模型独立预测用于互相参照
+            self.individual_preds = self.cannot_model.get_individual_predictions_with_terrain(full_features)
             return prediction
         except FileNotFoundError:
             QMessageBox.critical(self, "错误", "未找到模型文件，请先训练")
@@ -815,14 +804,37 @@ class ArknightsApp(QMainWindow):
             self.result_label.setStyleSheet("color: #25ace2; font: bold,14px;")
 
         left_monsters_dict, right_monsters_dict = self.input_panel.get_monster_counts()
-        # 生成结果文本
-        if winner != "难说":
-            result_text = f"预测胜方: {winner}\n" f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n"
-        else:
-            result_text = (
-                f"这一把{winner}\n" f"左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}\n" f"难道说？难道说？难道说？\n"
-            )
-            self.result_label.setStyleSheet("color: black; font: bold,24px;")
+        # 生成结果文本 — HTML 格式支持分模型着色
+        result_text = f"<p><b>集成: {winner}</b> | 左 {left_win_prob:.2%} | 右 {right_win_prob:.2%}</p>"
+        result_text += "<hr>"
+        if hasattr(self, "individual_preds") and self.individual_preds:
+            idx = 0
+            for k in sorted(self.individual_preds.keys()):
+                if k == "ensemble":
+                    continue
+                p = self.individual_preds[k]
+                w = "左" if p < 0.5 else "右"
+                color = "#E23F25" if p < 0.5 else "#25ace2"
+                short = f"model_{idx+1}"
+                name = self.cannot_model.model_names[idx] if idx < len(getattr(self.cannot_model, "model_names", [])) else short
+                wt = self.cannot_model.model_weights.get(name, 3.0) if hasattr(self.cannot_model, "model_weights") else 3.0
+                result_text += f"<p style='margin:2px 0'><span style='color:{color};font-weight:bold'>{short}: {w}胜</span> ({1-p:.2%} | {p:.2%}) <span style='font-size:9px;color:#888'>×{wt:.1f}</span></p>"
+                idx += 1
+        self.result_label.setTextFormat(Qt.TextFormat.RichText)
+
+        # 反馈按钮（左胜/右胜）
+        self.feedback_group = QWidget()
+        feedback_layout = QHBoxLayout(self.feedback_group)
+        feedback_layout.setContentsMargins(0, 0, 0, 0)
+        self.left_btn = QPushButton("◀ 左胜")
+        self.left_btn.clicked.connect(lambda: self._give_feedback(0))
+        self.left_btn.setStyleSheet("color:#E23F25;font-weight:bold;padding:3px 10px;")
+        self.right_btn = QPushButton("右胜 ▶")
+        self.right_btn.clicked.connect(lambda: self._give_feedback(1))
+        self.right_btn.setStyleSheet("color:#25ace2;font-weight:bold;padding:3px 10px;")
+        feedback_layout.addWidget(self.left_btn)
+        feedback_layout.addWidget(self.right_btn)
+
 
         # 添加特殊干员提示
         special_messages = self.special_monster_handler.check_special_monsters(
@@ -834,6 +846,8 @@ class ArknightsApp(QMainWindow):
         self.result_label.setText(result_text)
 
     def predict(self):
+        if hasattr(self, 'batch_running') and self.batch_running:
+            self._stop_batch_sim()
         prediction = self.get_prediction()
         self.update_prediction(prediction)
         self.update_input_display()
@@ -855,6 +869,7 @@ class ArknightsApp(QMainWindow):
                 screenshot = self.active_connector.capture_screenshot()
             if screenshot is None:
                 logger.error(f"{self.current_capture_mode} 截图失败")
+                return []
             
             results = self.recognizer.process_regions(screenshot)
         else:
@@ -882,10 +897,14 @@ class ArknightsApp(QMainWindow):
         self.input_panel.set_monster_counts(left_counts, right_counts)
 
     def recognize_only(self):
+        if hasattr(self, 'batch_running') and self.batch_running:
+            self._stop_batch_sim()
         recognize_results = self.get_recognize()
         self.update_monster(recognize_results)
 
     def recognize_and_predict(self):
+        if hasattr(self, 'batch_running') and self.batch_running:
+            self._stop_batch_sim()
         recognize_results = self.get_recognize()
         self.update_monster(recognize_results)
         prediction = self.get_prediction()
@@ -929,8 +948,6 @@ class ArknightsApp(QMainWindow):
                 start_callback=self.start_callback,
                 stop_callback=self.stop_callback,
                 training_duration=float(self.duration_entry.text()) * 3600,  # 获取训练时长
-                recognizer=self.recognizer,
-                cannot_model=self.cannot_model if self.predict_enabled_checkbox.isChecked() else None,
             )
             self.auto_fetch.start_auto_fetch()
         else:
@@ -941,64 +958,39 @@ class ArknightsApp(QMainWindow):
         hours, remainder = divmod(elapsed_time, 3600)
         minutes, _ = divmod(remainder, 60)
         stats_text = (
-            f"总次数: {self.auto_fetch.total_fill_count}, "
-            f"填写×次数: {self.auto_fetch.incorrect_fill_count}, "
-            f"运行: {int(hours)}小时{int(minutes)}分钟"
+            f"总共填写次数: {self.auto_fetch.total_fill_count},    "
+            f"填写×次数: {self.auto_fetch.incorrect_fill_count},    "
+            f"当次运行时长: {int(hours)}小时{int(minutes)}分钟"
         )
         self.stats_label.setText(stats_text)
 
     def refresh_device_list(self):
-        """刷新ADB设备下拉列表"""
+        """刷新并更新模拟器序列号下拉列表"""
         current_text = self.serial_entry.currentText()
-        device_names = self.adb_connector.get_device_list()
+        devices = self.adb_connector.get_device_list()
         self.serial_entry.clear()
-        if device_names:
-            self.serial_entry.addItems(device_names)
-            if current_text in device_names:
+        if devices:
+            self.serial_entry.addItems(devices)
+            if current_text in devices:
                 self.serial_entry.setCurrentText(current_text)
             else:
                 self.serial_entry.setCurrentIndex(0)
         else:
-            self.serial_entry.addItem("未发现设备")
-            self.serial_entry.setCurrentIndex(0)
+            self.serial_entry.addItem("127.0.0.1:5555")
+            self.serial_entry.setCurrentText(current_text if current_text else "127.0.0.1:5555")
 
-    def refresh_and_connect(self):
-        """刷新设备列表并连接选中设备"""
-        self.refresh_device_list()
-        device_index = self.serial_entry.currentIndex()
-        if device_index < 0:
-            device_index = 0
-        if self.adb_connector.devices:
-            self.adb_connector_thread = ADBConnectorThread(self, device_index)
-            self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
-            self.adb_connector_thread.start()
-
-    def on_device_selected(self, index):
-        """下拉框选择设备后自动连接"""
-        if index < 0 or not self.adb_connector.devices:
-            return
-        if index < len(self.adb_connector.devices):
-            self.adb_connector_thread = ADBConnectorThread(self, device_index=index)
-            self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
-            self.adb_connector_thread.start()
-
-    def connect_custom_address(self):
-        """手动输入地址后连接（支持未知模拟器）"""
-        address = self.serial_entry.currentText().strip()
-        if not address:
-            QMessageBox.warning(self, "提示", "请输入设备地址，如 127.0.0.1:5555")
-            return
-        self.adb_connector_thread = ADBConnectorThread(self, custom_address=address)
-        self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
-        self.adb_connector_thread.start()
+    def update_device_serial(self):
+        new_serial = self.serial_entry.currentText()
+        device_serial = self.adb_connector.update_device_serial(new_serial)
+        self.adb_connector.connect()  # 尝试连接新设备
+        self.serial_entry.setCurrentText(device_serial)
+        QMessageBox.information(self, "提示", f"已更新模拟器序列号为: {device_serial}")
 
     def start_callback(self):
         self.update_button_signal.emit("停止自动获取数据")
-        self.update_package_button_signal.emit(False)
 
     def stop_callback(self):
         self.update_button_signal.emit("自动获取数据")
-        self.update_package_button_signal.emit(True)
 
     def update_monster_callback(self, results: list):
         self.update_monster_signal.emit(results)
@@ -1090,11 +1082,6 @@ class ArknightsApp(QMainWindow):
     def update_invest_status(self, state):
         self.is_invest = state == Qt.CheckState.Checked.value
 
-    def _on_predict_toggled(self, checked):
-        self.invest_checkbox.setEnabled(checked)
-        if not checked:
-            self.invest_checkbox.setChecked(False)
-
     def update_result(self, text):
         self.result_label.setText(text)
 
@@ -1121,6 +1108,72 @@ class ArknightsApp(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"打包数据时发生错误: {str(e)}")
 
+    def toggle_equal_weight(self):
+        """切换等权模式：勾选 → 所有模型权重=3.0；取消 → 恢复 LR 权重"""
+        if not self.cannot_model.is_model_loaded:
+            return
+        if self.equal_weight_checkbox.isChecked():
+            for name in self.cannot_model.model_names:
+                self.cannot_model.model_weights[name] = 3.0
+            self.cannot_model._save_weights()
+            logger.info("等权模式：所有模型权重=3.0（LR 权重已忽略）")
+        else:
+            self.cannot_model._load_weights()
+            logger.info("恢复 LR 权重")
+
+    def toggle_full_load(self):
+        """切换全加载模式：勾选 → 重新加载全部 19 个模型"""
+        was_checked = self.full_load_checkbox.isChecked()
+        reply = QMessageBox.question(
+            self, "重启模型",
+            f"{'启用' if was_checked else '关闭'}全加载需要重新加载模型，当前预测状态将清空。继续？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            self.full_load_checkbox.blockSignals(True)
+            self.full_load_checkbox.setChecked(not was_checked)
+            self.full_load_checkbox.blockSignals(False)
+            return
+        self.cannot_model = CannotModel(load_all=was_checked)
+        if self.cannot_model.is_model_loaded:
+            count = len(self.cannot_model.model_names)
+            logger.info(f"全加载模式{'已启用' if was_checked else '已关闭'}，{count} 个模型")
+            names = getattr(self.cannot_model, "model_names", [])
+            self.model_name_label.setText("\n".join(f"• {n}" for n in names) if names else "未加载")
+        else:
+            QMessageBox.warning(self, "错误", "模型重新加载失败")
+
+    def run_model_selection(self):
+        """后台运行 model_selection.py 重新计算最优组合权重"""
+        import subprocess, os
+        reply = QMessageBox.question(
+            self, "确认", "将运行 model_selection.py 重新计算模型组合权重。\n"
+                          "预计耗时 2-5 分钟，期间 GUI 可能卡顿。\n继续？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self.update_weights_button.setEnabled(False)
+        self.update_weights_button.setText("运行中...")
+        QApplication.processEvents()
+        try:
+            result = subprocess.run(
+                [sys.executable, "model_selection.py"],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                capture_output=True, text=True, timeout=600
+            )
+            if result.returncode == 0:
+                self.cannot_model._load_weights()
+                QMessageBox.information(self, "完成", "模型权重已更新。")
+            else:
+                QMessageBox.warning(self, "失败", f"model_selection.py 异常退出:\n{result.stderr[-500:]}")
+        except subprocess.TimeoutExpired:
+            QMessageBox.critical(self, "超时", "model_selection.py 运行超过 10 分钟，已终止。")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", str(e))
+        finally:
+            self.update_weights_button.setEnabled(True)
+            self.update_weights_button.setText("更新权重")
 
     def toggle_always_on_top(self):
         if self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint:
@@ -1131,78 +1184,110 @@ class ArknightsApp(QMainWindow):
             self.always_on_top_button.setText("取消置顶")
         self.show() # Reapply window flags
 
+    def toggle_batch_sim(self):
+        if hasattr(self, 'batch_running') and self.batch_running:
+            self._stop_batch_sim()
+        else:
+            self._start_batch_sim()
+
+    def _start_batch_sim(self):
+        left_dict, right_dict = self.input_panel.get_monster_counts()
+        left_army, right_army = {}, {}
+        for mid, entry in left_dict.items():
+            c = entry.text()
+            if c.isdigit() and int(c) > 0:
+                try:
+                    n = self.get_monster_name_by_id(int(mid))
+                    if n: left_army[n] = int(c)
+                except: pass
+        for mid, entry in right_dict.items():
+            c = entry.text()
+            if c.isdigit() and int(c) > 0:
+                try:
+                    n = self.get_monster_name_by_id(int(mid))
+                    if n: right_army[n] = int(c)
+                except: pass
+        if not left_army or not right_army:
+            QMessageBox.warning(self, "提示", "请先在输入面板中设置怪物")
+            return
+        self.batch_running = True
+        self.batch_wins_left = 0
+        self.batch_wins_right = 0
+        self.batch_total = 0
+        self.batch_sim_button.setText("停止模拟")
+        self.batch_sim_button.setStyleSheet("background-color: #ffe0e0; " + self.qt_button_style)
+        import json
+        with open("simulator/monsters.json", encoding='utf-8') as f:
+            self.batch_mdata = json.load(f)["monsters"]
+        self.batch_battles = []
+        self._batch_base_html = self.result_label.text()  # 保存原始预测HTML
+        import os, math
+        cpu_cores = os.cpu_count() or 4
+        parallel = max(3, math.ceil(cpu_cores / 3))  # 最多占1/3核心
+        for _ in range(parallel):
+            bf = Battlefield(self.batch_mdata)
+            bf.setup_battle(left_army, right_army, self.batch_mdata)
+            self.batch_battles.append(bf)
+        self.batch_left_army = left_army
+        self.batch_right_army = right_army
+        self.batch_timer = QtCore.QTimer()
+        self.batch_timer.timeout.connect(self._batch_step)
+        self.batch_timer.start(0)
+
+    def _stop_batch_sim(self):
+        self.batch_running = False
+        if hasattr(self, 'batch_timer') and self.batch_timer:
+            self.batch_timer.stop()
+        # 停止模拟，保留最后胜率不清除
+        self.batch_sim_button.setText("批量模拟")
+        self.batch_sim_button.setStyleSheet(self.qt_button_style)
+
+    def _batch_step(self):
+        if not self.batch_running:
+            return
+        active = []
+        for bf in self.batch_battles:
+            for _ in range(200):
+                result = bf.run_one_frame()
+                if result is not None:
+                    if result == Faction.LEFT:
+                        self.batch_wins_left += 1
+                    else:
+                        self.batch_wins_right += 1
+                    self.batch_total += 1
+                    new_bf = Battlefield(self.batch_mdata)
+                    new_bf.setup_battle(self.batch_left_army, self.batch_right_army, self.batch_mdata)
+                    active.append(new_bf)
+                    break
+            else:
+                active.append(bf)
+        self.batch_battles = active
+        # 注入批量胜率到 result_label 的 HTML 中
+        if self.batch_total > 0:
+            rate = self.batch_wins_left / self.batch_total * 100
+            batch_html = f'<p style="color:#2e7d32;font-weight:bold;margin:2px 0">批量模拟: 左胜率 {rate:.1f}% ({self.batch_wins_left}W/{self.batch_wins_right}L)</p>'
+            if hasattr(self, '_batch_base_html') and self._batch_base_html:
+                base = self._batch_base_html
+                if '<hr>' in base:
+                    # 有预测结果：插入到集成行下方
+                    updated = base.replace('<hr>', batch_html + '<hr>', 1)
+                else:
+                    # 还没点预测：直接追加
+                    updated = base + batch_html
+                self.result_label.setText(updated)
+        # 上限100局
+        if self.batch_total >= 100:
+            self._stop_batch_sim()
+
     def closeEvent(self, event):
         """窗口关闭时的处理"""
         if hasattr(self, "auto_fetch") and self.auto_fetch.auto_fetch_running:
             self.auto_fetch.stop_auto_fetch()
-        try:
-            self.adb_connector.disconnect()
-            self.adb_connector.stop_adb_server()
-        except Exception as e:
-            logger.warning(f"退出时清理ADB失败: {e}")
         event.accept()
-
-
-def is_user_admin():
-    import ctypes
-    try:
-        return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except:
-        return False
-
-
-def _build_capture_mode_args(capture_mode=None):
-    args = list(sys.argv)
-    if capture_mode is None:
-        return args
-
-    filtered_args = []
-    skip_next = False
-    for index, arg in enumerate(args):
-        if skip_next:
-            skip_next = False
-            continue
-        if index == 0:
-            filtered_args.append(arg)
-            continue
-        if arg == "--capture-mode":
-            skip_next = True
-            continue
-        if arg.startswith("--capture-mode="):
-            continue
-        filtered_args.append(arg)
-
-    filtered_args.extend(["--capture-mode", capture_mode])
-    return filtered_args
-
-
-def relaunch_as_admin(capture_mode=None):
-    import ctypes
-
-    params = " ".join([f'"{arg}"' for arg in _build_capture_mode_args(capture_mode)])
-    result = ctypes.windll.shell32.ShellExecuteW(
-        None, "runas", sys.executable,
-        params,
-        None, 1
-    )
-    return result > 32
-
-
-def get_startup_capture_mode():
-    args = sys.argv[1:]
-    for index, arg in enumerate(args):
-        if arg == "--capture-mode" and index + 1 < len(args):
-            return args[index + 1].upper()
-        if arg.startswith("--capture-mode="):
-            return arg.split("=", 1)[1].upper()
-    return None
 
 
 if __name__ == "__main__":
     app = QApplication([])
     window = ArknightsApp()
     window.show()
-    startup_mode = get_startup_capture_mode()
-    if startup_mode in {"ADB", "PC", "WIN"}:
-        window.on_mode_changed(startup_mode)
     app.exec()

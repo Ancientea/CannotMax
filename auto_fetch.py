@@ -1,7 +1,3 @@
-import os
-# 设置 OpenCV 日志级别为 ERROR，减少 libpng 警告
-os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
-
 import csv
 import datetime
 from enum import Enum, auto
@@ -13,14 +9,22 @@ from typing import Literal
 import cv2
 import numpy as np
 import loadData
-from recognize import intelligent_workers_debug
+from recognize import intelligent_workers_debug, RecognizeMonster
 from config import MONSTER_COUNT, FIELD_FEATURE_COUNT
 from collections.abc import Callable
 from collections import deque
-from login import LoginManager
+if FIELD_FEATURE_COUNT > 0:
+    from field_recognition import FieldRecognizer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+try:
+    from predict import CannotModel
+    logger.info("Using PyTorch model for predictions.")
+except ImportError:
+    from predict_onnx import CannotModel
+    logger.info("Using ONNX model for predictions.")
 
 class GameState(Enum):
     MAIN_MENU = auto()
@@ -44,17 +48,12 @@ class AutoFetch:
         start_callback: Callable[[], None],
         stop_callback: Callable[[], None],
         training_duration,
-        recognizer=None,
-        cannot_model=None,
-        field_recognizer=None,
-        start_timestamp=None,  
     ):
         self.connector = connector
         self.game_mode = game_mode  # 游戏模式（30人或自娱自乐）
         self.is_invest = is_invest  # 是否投资
         self.current_prediction = 0.5  # 当前预测结果，初始值为0.5
         self.recognize_results = []  # 识别结果列表
-        self.field_recognizer = field_recognizer  # 场地识别实例
         self.field_recognize_result = {}  # 场地识别结果
         self.incorrect_fill_count = 0  # 填写错误次数
         self.total_fill_count = 0  # 总填写次数
@@ -65,43 +64,26 @@ class AutoFetch:
         self.stop_callback = stop_callback
         self.monster_image = None  # 当前轮次怪物图片
         self.auto_fetch_running = False  # 自动获取数据的状态
-        self.auto_fetch_thread = None  # 线程引用
-        self.start_time = start_timestamp if start_timestamp is not None else time.time()  # 使用预先确定的时间戳
+        self.start_time = time.time()  # 记录开始时间
         self.training_duration = training_duration  # 训练时长
         self.data_folder = Path(f"data")  # 数据文件夹路径
         self.image_buffer = deque(maxlen=5)  # 图片缓存队列，设置队列长短来保存结算前的图片
-        self.recognizer = recognizer  # 使用传入的识别器
-        self.cannot_model = cannot_model  # 使用传入的模型
+        self.recognizer = RecognizeMonster(method="ADB")
+        self.cannot_model = CannotModel()
         self.last_state = GameState.UNKNOWN
-        self.login_manager = LoginManager(connector)
-        self.state_start_time = time.time()  # 记录当前状态的开始时间
 
         # 初始化状态匹配模板，缩小匹配尺寸提高速度
         self.MATCH_WIDTH = 1920 // 4
         self.MATCH_HEIGHT = 1080 // 4 // 4
-        
-        # 初始化模板
         self.processed_template = []
         self._init_templates()
-        
-        # 根据 FIELD_FEATURE_COUNT 决定是否启用场地识别器（使用传入的实例）
+        # 根据 FIELD_FEATURE_COUNT 决定是否初始化场地识别器
         if FIELD_FEATURE_COUNT > 0:
-            if self.field_recognizer is not None:
-                logger.info(f"场地识别已启用，特征数量: {FIELD_FEATURE_COUNT}")
-            else:
-                logger.warning(f"FIELD_FEATURE_COUNT={FIELD_FEATURE_COUNT} > 0 但未传入 field_recognizer，场地识别将被禁用")
-                self.field_recognizer = None
+            self.field_recognizer = FieldRecognizer()  # 场地识别器
+            logger.info(f"场地识别已启用，特征数量: {FIELD_FEATURE_COUNT}")
         else:
             self.field_recognizer = None
             logger.info("场地识别已禁用，仅收集怪物数据")
-    
-    def _log(self, level, message):
-        """生成带有设备序列号的日志消息"""
-        serial = getattr(self.connector, "device_serial", None)
-        if serial:
-            logger.log(level, f"[{serial}] {message}")
-        else:
-            logger.log(level, message)
 
     def _init_templates(self):
         for i in range(16):
@@ -130,7 +112,7 @@ class AutoFetch:
             results.append((idx, max_val))
         return results
 
-    def fill_data(self, battle_result, recognize_results, monster_image, result_image, field_recognize_result):
+    def fill_data(self, battle_result, recoginze_results, monster_image, result_image, field_recoginze_result):
         # 获取队列头的图片
         if self.image_buffer:
             _, previous_image, _ = self.image_buffer[0]  # 获取队列头的图片
@@ -142,45 +124,34 @@ class AutoFetch:
             logger.error("未找到2秒前的图片，无法保存")
             return
 
-        image_name = self.get_image_name(recognize_results, battle_result)  # 生成图片名称
-
-        # 确保images文件夹存在
-        images_folder = self.data_folder / "images"
-        try:
-            images_folder.mkdir(parents=True, exist_ok=True)
-            # logger.info(f"确保images文件夹存在: {images_folder}")
-        except Exception as e:
-            logger.error(f"创建images文件夹失败: {e}")
+        image_name = self.get_image_name(recoginze_results, battle_result)  # 生成图片名称
 
         if intelligent_workers_debug:  # 如果处于debug模式，保存人工审核图片到本地
             if monster_image is not None:
-                try:
-                    resized_monster_img = cv2.resize(monster_image, (960, 540)) # 调整分辨率为 960x540
-                    image_path = images_folder / (image_name + ".jpg")
-                    cv2.imwrite(image_path, resized_monster_img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-                    # logger.info(f"保存怪物图片到 {image_path}")
-                except Exception as e:
-                    logger.error(f"保存怪物图片失败: {e}")
+                image_path = self.data_folder / "images" / (image_name + ".jpg")
+                cv2.imwrite(image_path, monster_image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+
+            # if previous_image is not None:
+            #     image_path = self.data_folder / "images" / (image_name+"1s.jpg")
+            #     cv2.imwrite(image_path, previous_image)
+            #     logger.info(f"保存1秒前的图片到 {image_path}")
 
             # 新增保存结果图片逻辑
             if image_name:
-                try:
-                    result_image_name = image_name + "_result.jpg"
-                    # 缩放到128像素高度
-                    (h, w) = result_image.shape[:2]
-                    new_height = 128
-                    resized_image = cv2.resize(result_image, (int(w * (new_height / h)), new_height))
-                    image_path = images_folder / result_image_name
-                    cv2.imwrite(image_path, resized_image)
-                    logger.info(f"保存结果图片到 {image_path}")
-                except Exception as e:
-                    logger.error(f"保存结果图片失败: {e}")
+                result_image_name = image_name + "_result.jpg"
+                # 缩放到128像素高度
+                (h, w) = result_image.shape[:2]
+                new_height = 128
+                resized_image = cv2.resize(result_image, (int(w * (new_height / h)), new_height))
+                image_path = self.data_folder / "images" / result_image_name
+                cv2.imwrite(image_path, resized_image)
+                logger.info(f"保存结果图片到 {image_path}")
         
         # 原始怪物数据
         left_monster_data = np.zeros(MONSTER_COUNT)
         right_monster_data = np.zeros(MONSTER_COUNT)
 
-        for res in recognize_results:
+        for res in recoginze_results:
             region_id = res["region_id"]
             if "error" not in res:
                 matched_id = res["matched_id"]
@@ -285,101 +256,52 @@ class AutoFetch:
 
         height, width, _ = image.shape
 
-        # 增加多个采样点，提高识别稳定性
-        sample_points = [
-            (0.1, 0.1),  # 左上区域
-            (0.1, 0.5),  # 左中区域
-            (0.9, 0.1),  # 右上区域
-            (0.9, 0.5),  # 右中区域
-        ]
+        # 避开边缘（如PC端的标题栏或黑边），向内偏移 5% 并取一个 10x10 的区域计算平均颜色
+        y_offset = int(height * 0.05)
+        x_offset = int(width * 0.05)
         
-        sample_size = 20  # 增大采样区域
-        left_saturations = []
-        right_saturations = []
-        
-        for y_ratio, x_ratio in sample_points:
-            y_offset = int(height * y_ratio)
-            
-            # 左侧采样点
-            x_left_offset = int(width * 0.1)
-            y_end = min(y_offset + sample_size, height)
-            x_left_end = min(x_left_offset + sample_size, width)
-            if y_end > y_offset and x_left_end > x_left_offset:
-                left_region = image[y_offset:y_end, x_left_offset:x_left_end]
-                left_mean = left_region.mean(axis=(0, 1))
-                left_saturations.append(get_saturation(left_mean))
-            
-            # 右侧采样点
-            x_right_offset = int(width * 0.9 - sample_size)
-            x_right_end = min(x_right_offset + sample_size, width)
-            if y_end > y_offset and x_right_end > x_right_offset:
-                right_region = image[y_offset:y_end, x_right_offset:x_right_end]
-                right_mean = right_region.mean(axis=(0, 1))
-                right_saturations.append(get_saturation(right_mean))
-        
-        if not left_saturations or not right_saturations:
-            logger.error("无法获取有效的采样区域")
-            return None
-        
-        # 计算平均饱和度
-        avg_sat_left = sum(left_saturations) / len(left_saturations)
-        avg_sat_right = sum(right_saturations) / len(right_saturations)
-        
+        # 确保区域不会越界
+        y_end = min(y_offset + 10, height)
+        x_left_end = min(x_offset + 10, width)
+        x_right_start = max(width - x_offset - 10, 0)
+        x_right_end = max(width - x_offset, 1)
+
+        left_region = image[y_offset:y_end, x_offset:x_left_end]
+        right_region = image[y_offset:y_end, x_right_start:x_right_end]
+
+        left_top = left_region.mean(axis=(0, 1))
+        right_top = right_region.mean(axis=(0, 1))
+
+        # 计算饱和度
+        sat_left = get_saturation(left_top)
+        sat_right = get_saturation(right_top)
+
         # 计算饱和度差值
-        saturation_diff = avg_sat_left - avg_sat_right
-        
-        # 使用自适应阈值，根据整体饱和度水平调整
-        base_threshold = 15
-        # 如果整体饱和度较低，降低阈值
-        avg_overall_sat = (avg_sat_left + avg_sat_right) / 2
-        if avg_overall_sat < 50:
-            threshold = 10
-        elif avg_overall_sat < 100:
-            threshold = 12
-        else:
-            threshold = base_threshold
-        
-        # 检查差值是否符合要求
-        if abs(saturation_diff) <= threshold:
-            logger.warning(f"饱和度差值不足 (左:{avg_sat_left:.1f} vs 右:{avg_sat_right:.1f}, 阈值:{threshold})")
-            # 尝试使用亮度差异作为备选方案
-            return AutoFetch.calculate_brightness_diff(image)
+        saturation_diff = sat_left - sat_right
 
-        # 返回左侧是否比右侧饱和度更高
-        return saturation_diff > 0
-    
-    @staticmethod
-    def calculate_brightness_diff(image):
-        """使用亮度差异作为胜负识别的备选方案"""
-        if image is None:
+        # 检查差值是否符合要求，平局或者其他两边相等会被这个筛选掉
+        if abs(saturation_diff) <= 20:
+            logger.error(f"饱和度差值不足20 (左:{sat_left:.1f} vs 右:{sat_right:.1f})")
             return None
-        
-        height, width, _ = image.shape
-        
-        # 转换为灰度图
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
-        # 定义左侧和右侧区域
-        left_region = gray[:, :width//2]
-        right_region = gray[:, width//2:]
-        
-        # 计算平均亮度
-        left_brightness = left_region.mean()
-        right_brightness = right_region.mean()
-        
-        # 计算亮度差值
-        brightness_diff = left_brightness - right_brightness
-        
-        # 使用亮度阈值
-        brightness_threshold = 10
-        if abs(brightness_diff) <= brightness_threshold:
-            logger.warning(f"亮度差值不足 (左:{left_brightness:.1f} vs 右:{right_brightness:.1f})")
-            return None
-        
-        # 返回左侧是否比右侧亮
-        return brightness_diff > 0
 
+        # 返回左上角是否比右上角饱和度更高
+        return saturation_diff > 20
 
+    def cut_recognize_image(self, screenshot):
+        """
+        裁切复核图片
+        """
+        roi_rel = RecognizeMonster.ROI_RELATIVE
+        x1 = int(roi_rel[0][0] * self.connector.screen_width)
+        y1 = int(roi_rel[0][1] * self.connector.screen_height)
+        x2 = int(roi_rel[1][0] * self.connector.screen_width)
+        y2 = int(roi_rel[1][1] * self.connector.screen_height)
+        # 截取指定区域
+        roi = screenshot[y1:y2, x1:x2]
+        current_image = cv2.resize(
+            roi, (roi.shape[1] // 2, roi.shape[0] // 2)
+        )  # 保存缩放后的图片到内存
+        return current_image
 
     @staticmethod
     def get_image_name(recognize_results, battle_result=None):
@@ -405,7 +327,7 @@ class AutoFetch:
         stats_text = (
             f"总共填写次数: {self.total_fill_count}\n"
             f"填写×次数: {self.incorrect_fill_count}\n"
-            f"运行: {int(hours)}小时{int(minutes)}分钟\n"
+            f"当次运行时长: {int(hours)}小时{int(minutes)}分钟\n"
         )
         with open("log.txt", "a", encoding="utf-8") as log_file:
             log_file.write(stats_text)
@@ -454,7 +376,7 @@ class AutoFetch:
             else:
                 logger.error("识别结果有错误，本轮跳过")
         # 选择预测方法
-        if self.cannot_model and self.cannot_model.is_model_loaded:
+        if self.cannot_model.is_model_loaded:
             if self.field_recognizer is not None:
                 # 构建包含地形的完整特征向量
                 full_features = self.build_terrain_features(left_counts, right_counts)
@@ -471,30 +393,27 @@ class AutoFetch:
             self.monster_image=screenshot
 
     def battle_result(self, result_image):
-        result = self.calculate_average_yellow(result_image)
-        if result is None:
-            logger.warning("战斗结果识别失败，需要重试")
-            return False
-        
-        if result:
-            self.fill_data(
-                "L", self.recognize_results, self.monster_image, result_image, self.field_recognize_result
-            )
-            if self.current_prediction > 0.5:
-                self.incorrect_fill_count += 1
-            self._log(logging.INFO, "填写数据左赢")
-        else:
-            self.fill_data(
-                "R", self.recognize_results, self.monster_image, result_image, self.field_recognize_result
-            )
-            if self.current_prediction < 0.5:
-                self.incorrect_fill_count += 1
-            self._log(logging.INFO, "填写数据右赢")
-        self.total_fill_count += 1
-        self.updater()
-        self._log(logging.INFO, "下一轮")
-        return True
-
+        # 判断本次是否填写错误，结果不等于None（不是平局或者其他）才能继续
+        if self.calculate_average_yellow(result_image) != None:
+            if self.calculate_average_yellow(result_image):
+                self.fill_data(
+                    "L", self.recognize_results, self.monster_image, result_image, self.field_recognize_result
+                )
+                if self.current_prediction > 0.5:
+                    self.incorrect_fill_count += 1  # 更新填写×次数
+                logger.info("填写数据左赢")
+            else:
+                self.fill_data(
+                    "R", self.recognize_results, self.monster_image, result_image, self.field_recognize_result
+                )
+                if self.current_prediction < 0.5:
+                    self.incorrect_fill_count += 1  # 更新填写×次数
+                logger.info("填写数据右赢")
+            self.total_fill_count += 1  # 更新总填写次数
+            self.updater()  # 更新统计信息
+            logger.info("下一轮")
+            # 为填写数据操作设置冷却期
+            # 平局或者其他也照常休息5秒
 
     def auto_fetch_data(self):
         relative_points = [
@@ -507,31 +426,13 @@ class AutoFetch:
         timea = time.time()
         screenshot = self.connector.capture_screenshot()
         if screenshot is None:
-            self._log(logging.ERROR, "截图失败，尝试自动登录")
-            
-            # 使用 LoginManager 的自动登录（带重启重试）
-            if not self.login_manager.auto_login_with_restart(lambda: self.auto_fetch_running):
-                self._log(logging.ERROR, "自动登录失败，无法继续操作")
-                return
-            
-            # 检查是否已经收到停止信号
-            if not self.auto_fetch_running:
-                self._log(logging.INFO, "检测到停止信号，取消后续操作")
-                return
-            self._log(logging.INFO, "自动登录成功，等待页面加载...")
-            if not self._sleep_with_check(3):
-                return
-            self._log(logging.INFO, "重新获取截图")
-            screenshot = self.connector.capture_screenshot()
-            if screenshot is None:
-                self._log(logging.ERROR, "登录后仍然无法获取截图，无法继续操作")
-                return
+            logger.error("截图失败，无法继续操作")
+            return
 
         # 保存当前截图及其信息到缓冲区
         timestamp = int(time.time())
         self.image_buffer.append((timestamp, screenshot.copy(), []))
 
-        # 先进行状态识别
         results = self.match_images(screenshot)
         results = sorted(results, key=lambda x: x[1], reverse=True)
         # logger.debug(f"处理图片总用时：{time.time()-timea:.3f}s")
@@ -540,99 +441,53 @@ class AutoFetch:
         # 状态判断：取匹配度最高的一个
         current_state = GameState.UNKNOWN
         best_idx = -1
-        if results:
-            best_idx, best_score = results[0]
-            if best_score > 0.7:
-                if best_idx == 0:
-                    current_state = GameState.MAIN_MENU
-                elif best_idx == 1:
-                    current_state = GameState.MODE_SELECTION_UNSELECTED
-                elif best_idx == 2:
-                    current_state = GameState.MODE_SELECTION_SELECTED
-                elif best_idx in [3, 4, 5, 15]:
-                    current_state = GameState.PRE_BATTLE
-                elif best_idx in [6, 7, 14]:
-                    current_state = GameState.IN_BATTLE
-                elif best_idx in [8, 9, 10, 11]:
-                    current_state = GameState.SETTLEMENT
-                elif best_idx in [12, 13]:
-                    current_state = GameState.FINISHED
-                if self.last_state != current_state:
-                    logger.info(f"匹配到状态: {self.last_state.name} -> {current_state.name}, score:{best_score:.4f}")
-            else:
-                # logger.info(f"状态机匹配置信度过低: idx:{best_idx}, score:{best_score:.4f}")
-                pass
-
-        # 处理状态发生变化时的逻辑
-        if current_state != self.last_state:
-            old_state = self.last_state
-            self.last_state = current_state
-            elapsed = time.time() - self.state_start_time
-            
-            # 不记录 PRE_BATTLE -> IN_BATTLE 的状态变化
-            if not (old_state == GameState.PRE_BATTLE and current_state == GameState.IN_BATTLE):
-                self._log(logging.INFO, f"游戏状态变化: {old_state.name} -> {current_state.name}, 持续时间: {elapsed:.2f} 秒")
-            
-            # 如果成功进入稳定状态且重启计数器非零，重置重启计数器
-            _stable_states = {GameState.MAIN_MENU, GameState.IN_BATTLE, GameState.SETTLEMENT, GameState.FINISHED}
-            if current_state in _stable_states and self.login_manager.restart_count > 0:
-                self.login_manager.reset_restart_count()
-            
-            self.state_start_time = time.time()  # 重置状态开始时间
-        
-        # 全局超时检测：无论什么状态，只要超过时间都可能触发重启
-        # 非战斗状态：超过 50 秒触发重启
-        # 战斗流程状态：超过 120 秒触发重启（防止战斗卡死）
-        elapsed_time = time.time() - self.state_start_time
-        is_battle_state = self.last_state in [GameState.PRE_BATTLE, GameState.IN_BATTLE, GameState.SETTLEMENT, GameState.FINISHED]
-        timeout_threshold = 120.0 if is_battle_state else 50.0
-        
-        # 检查是否超时
-        if elapsed_time > timeout_threshold:
-            state_name = self.last_state.name if self.last_state else "NONE"
-            self._log(logging.WARNING, f"在状态 '{state_name}' 停留超过 {elapsed_time:.2f} 秒（阈值: {timeout_threshold:.0f} 秒），触发重启")
-            
-            # 使用 LoginManager 的重启登录方法
-            if not self.login_manager.can_restart():
-                self._log(logging.ERROR, f"已达到最大重启次数 {self.login_manager.max_restart_count} 次，停止运行")
-                self.auto_fetch_running = False
-                self.stop_callback()
-            elif not self.login_manager.restart_and_login(first_start=False, stop_callback=lambda: self.auto_fetch_running):
-                self._log(logging.WARNING, "本次重启登录失败，将在下次超时后重试")
-            
-            # 检测完毕后，无论结果如何，重置计时器，避免频繁阻塞
-            self.state_start_time = time.time()
-            self._log(logging.INFO, "重置状态计时器")
+        best_idx, best_score = results[0]
+        if best_score > 0.7:
+            if best_idx == 0:
+                current_state = GameState.MAIN_MENU
+            elif best_idx == 1:
+                current_state = GameState.MODE_SELECTION_UNSELECTED
+            elif best_idx == 2:
+                current_state = GameState.MODE_SELECTION_SELECTED
+            elif best_idx in [3, 4, 5, 15]:
+                current_state = GameState.PRE_BATTLE
+            elif best_idx in [6, 7, 14]:
+                current_state = GameState.IN_BATTLE
+            elif best_idx in [8, 9, 10, 11]:
+                current_state = GameState.SETTLEMENT
+            elif best_idx in [12, 13]:
+                current_state = GameState.FINISHED
+            if self.last_state != current_state:
+                logger.info(f"匹配到状态: {self.last_state} -> {current_state}, score:{best_score:.4f}")
+                self.last_state = current_state
+        else:
+            # logger.info(f"状态机匹配置信度过低: idx:{best_idx}, score:{best_score:.4f}")
+            pass
 
         # 状态执行
         match current_state:
             case GameState.MAIN_MENU:
                 # 活动主界面状态，点击加入赛事跳转到选择模式界面（未选择）状态
                 self.connector.click(relative_points[0])
-                self._log(logging.INFO, "加入赛事")
+                logger.info("加入赛事")
             case GameState.MODE_SELECTION_UNSELECTED:
                 # 选择模式界面（未选择），点击模式跳转到已选择
                 if self.game_mode == "30人":
                     self.connector.click(relative_points[1])
-                    self._log(logging.INFO, "竞猜对决30人")
-                    if not self._sleep_with_check(2):
-                        return
+                    logger.info("竞猜对决30人")
+                    time.sleep(2)
                     self.connector.click(relative_points[0])
-                    self._log(logging.INFO, "开始游戏")
-                    time.sleep(1)
+                    logger.info("开始游戏")
                 else:
                     self.connector.click(relative_points[2])
-                    self._log(logging.INFO, "自娱自乐")
-                    time.sleep(1)
+                    logger.info("自娱自乐")
             case GameState.MODE_SELECTION_SELECTED:
                 # 选择模式界面（已选择），点击开始游戏跳转到怪物数量界面状态
                 self.connector.click(relative_points[0])
-                self._log(logging.INFO, "开始游戏")
-                time.sleep(1)
+                logger.info("开始游戏")
             case GameState.PRE_BATTLE:
                 # 怪物数量界面状态，识别并开始游戏，跳转到等待结算状态
-                if not self._sleep_with_check(1):
-                    return
+                time.sleep(1)
                 # 识别怪物类型数量和地形
                 screenshot = self.connector.capture_screenshot()
                 self.recognize_and_predict(screenshot)
@@ -645,41 +500,33 @@ class AutoFetch:
                             self.connector.click(relative_points[0])
                         else:
                             self.connector.click(relative_points[2])
-                        self._log(logging.INFO, "投资右")
-                        if not self._sleep_with_check(3):
-                            return
+                        logger.info("投资右")
+                        time.sleep(3)
                     else:
                         if best_idx == 4:
                             self.connector.click(relative_points[1])
                         else:
                             self.connector.click(relative_points[3])
-                        self._log(logging.INFO, "投资左")
-                        if not self._sleep_with_check(3):
-                            return
+                        logger.info("投资左")
+                        time.sleep(3)
                     if self.game_mode == "30人":
-                        self._log(logging.INFO, "30人模式下，投资后需要等待20秒")
-                        if not self._sleep_with_check(5):
-                            return
+                        time.sleep(20)  # 30人模式下，投资后需要等待20秒
                 else:  # 不投资
                     self.connector.click(relative_points[4])
-                    self._log(logging.INFO, "本轮观望")
-                    if not self._sleep_with_check(3):
-                        return
+                    logger.info("本轮观望")
+                    time.sleep(3)
             case GameState.IN_BATTLE:
                 # 等待结算状态，战斗中界面，保持状态
-                # self._log(logging.INFO, "等待战斗结束")
+                # logger.info("等待战斗结束")
                 pass
             case GameState.SETTLEMENT:
-                if not self.battle_result(screenshot):
-                    new_screenshot = self.connector.capture_screenshot()
-                    if new_screenshot is not None and not self.battle_result(new_screenshot):
-                        self._log(logging.ERROR, "战斗结果识别失败，跳过本轮")
-                if not self._sleep_with_check(5):
-                    return
+                # 结算状态，该轮次结算界面，识别结果并等待画面变化，根据画面跳转到下一轮次准备阶段或结束状态
+                self.battle_result(screenshot)
+                time.sleep(5)
             case GameState.FINISHED:
                 # 结束状态，所有轮次结束界面，返回主页并跳转到活动主界面状态
                 self.connector.click(relative_points[0])
-                self._log(logging.INFO, "返回主页")
+                logger.info("返回主页")
             case _:
                 # 未匹配到有效界面，保持状态
                 pass
@@ -687,67 +534,57 @@ class AutoFetch:
     def auto_fetch_loop(self):
         while self.auto_fetch_running:
             try:
-                # 每次循环开始时检查状态
-                if not self.auto_fetch_running:
-                    break
- 
-                self.updater() # 多开器如果不更新会强制停止
                 self.auto_fetch_data()
-
-                # 每次循环结束时检查状态
-                if not self.auto_fetch_running:
-                    break
-                
                 elapsed_time = time.time() - self.start_time
                 if self.training_duration != -1 and elapsed_time >= self.training_duration:
-                    self._log(logging.INFO, "已达到设定时长，结束自动获取")
+                    logger.info("已达到设定时长，结束自动获取")
                     break
                 # 检测一次间隔时间——————————————————————————————————
-                time.sleep(0.05)
+                time.sleep(0.1)
             except Exception as e:
                 logger.exception(f"自动获取数据出错:\n{e}")
-                self._log(logging.ERROR, f"自动获取数据出错:\n{e}")
                 break
-
+            # time.sleep(2)
         else:
-            self._log(logging.INFO, "auto_fetch_running is False, exiting loop")
+            logger.info("auto_fetch_running is False, exiting loop")
             return
         # 不通过按钮结束自动获取
-        self._log(logging.INFO, "break auto_fetch_loop")
+        logger.info("break auto_fetch_loop")
         self.stop_auto_fetch()
 
     def start_auto_fetch(self):
         if not self.auto_fetch_running:
             self.auto_fetch_running = True
-            # 使用初始化时设置的时间戳，不重新获取当前时间
+            self.start_time = time.time()
             start_time = datetime.datetime.fromtimestamp(self.start_time).strftime(
                 r"%Y_%m_%d__%H_%M_%S"
             )
             self.data_folder = Path(f"data/{start_time}")
-            self._log(logging.INFO, f"创建文件夹: {self.data_folder}")
+            logger.info(f"创建文件夹: {self.data_folder}")
             self.data_folder.mkdir(parents=True, exist_ok=True)  # 创建文件夹
             (self.data_folder / "images").mkdir(parents=True, exist_ok=True)
-
-            def get_expected_header():
-                """根据配置生成预期表头"""
-                if FIELD_FEATURE_COUNT > 0:
-                    header = [f"{i + 1}L" for i in range(MONSTER_COUNT)]
-                    header += [f"{i + 1}LF" for i in range(MONSTER_COUNT, MONSTER_COUNT + FIELD_FEATURE_COUNT)]
-                    header += [f"{i + 1}R" for i in range(MONSTER_COUNT)]
-                    header += [f"{i + 1}RF" for i in range(MONSTER_COUNT, MONSTER_COUNT + FIELD_FEATURE_COUNT)]
-                    header += ["Result", "ImgPath"]
-                else:
-                    header = [f"{i + 1}L" for i in range(MONSTER_COUNT)]
-                    header += [f"{i + 1}R" for i in range(MONSTER_COUNT)]
-                    header += ["Result", "ImgPath"]
-                return header
-
-            # 创建CSV表头
             with open(self.data_folder / "arknights.csv", "w", newline="") as file:
-                header = get_expected_header()
+                # 创建CSV表头
+                if self.field_recognizer is not None:
+                    # 获取场地特征列数
+                    num_field_features = len(self.field_recognizer.get_feature_columns())
+                    
+                    # 按照data_cleaning_with_field_recognize_gpu.py的格式创建表头
+                    header = [f"{i+1}L" for i in range(MONSTER_COUNT)]  # 1L-77L
+                    header += [f"{i+1}LF" for i in range(MONSTER_COUNT, MONSTER_COUNT + num_field_features)]  # 78LF-83LF (场地特征)
+                    header += [f"{i+1}R" for i in range(MONSTER_COUNT)]  # 1R-77R 
+                    header += [f"{i+1}RF" for i in range(MONSTER_COUNT, MONSTER_COUNT + num_field_features)]  # 78RF-83RF (场地特征)
+                    header += ["Result", "ImgPath"]
+                    logger.info(f"创建包含场地特征的CSV表头，场地特征数: {num_field_features}")
+                else:
+                    # 仅怪物数据的格式
+                    header = [f"{i+1}L" for i in range(MONSTER_COUNT)]  # 左侧怪物数据
+                    header += [f"{i+1}R" for i in range(MONSTER_COUNT)]  # 右侧怪物数据
+                    header += ["Result", "ImgPath"]
+                    logger.info("创建仅包含怪物数据的CSV表头")
+                
                 writer = csv.writer(file)
                 writer.writerow(header)
-
             self.log_file_handler = logging.FileHandler(
                 self.data_folder / f"AutoFetch_{start_time}.log", "a", "utf-8"
             )
@@ -756,35 +593,21 @@ class AutoFetch:
             )
             self.log_file_handler.setFormatter(file_formatter)
             self.log_file_handler.setLevel(logging.INFO)
-            logger.addHandler(self.log_file_handler)
-            
-            # 启动自动获取数据线程
-            self.auto_fetch_thread = threading.Thread(target=self.auto_fetch_loop)
-            self.auto_fetch_thread.start()
+            logging.getLogger().addHandler(self.log_file_handler)
+            threading.Thread(target=self.auto_fetch_loop).start()
             logger.info("自动获取数据已启动")
             self.start_callback()
         else:
             logger.warning("自动获取数据已在运行中，请勿重复启动。")
 
-    def _sleep_with_check(self, seconds):
-        """带停止检查的睡眠，可被中断"""
-        start_time = time.time()
-        while time.time() - start_time < seconds:
-            if not self.auto_fetch_running:
-                return False
-            time.sleep(0.1)
-        return True
-    
     def stop_auto_fetch(self):
         if not self.auto_fetch_running:
             return
-        # 强制设置停止标志，不等待线程退出
         self.auto_fetch_running = False
-        self._log(logging.INFO, "强制停止自动获取")
-        
-        # 不等待线程退出，让线程在下一次循环时自己检测到停止标志
         self.save_statistics_to_log()
+        logger.info("停止自动获取")
         self.stop_callback()
         if hasattr(self, "log_file_handler"):
-            logger.removeHandler(self.log_file_handler)
+            logging.getLogger().removeHandler(self.log_file_handler)
             self.log_file_handler.close()
+        # 结束自动获取数据的线程

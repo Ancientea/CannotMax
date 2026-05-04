@@ -1,0 +1,25 @@
+2746:         self.immunity.add(BuffType.DIZZY)
+2747:         self.immunity.add(BuffType.FROZEN)
+2748: 
+2749:     def on_extra_update(self, delta_time):
+2750:         self.phase_timer += delta_time
+2751:         if self.phase_timer >= self.phase_duration:
+2752:             self.phase_timer = 0
+2753:             if self.phase < 3:
+2754:                 self.phase += 1
+2755:                 debug_print(f"{self.name} ½øÈëµÚ{self.phase}½×¶Î£¡")
+2756:                 if self.phase == 2:
+2757:                     self.attack_power *= 1.5
+2758:                     self.attack_speed += 50
+2759:                 elif self.phase == 3:
+2760:                     self.attack_power *= 2.0
+2761:                     self.attack_speed += 100
+2762: 
+2763:     def attack(self, target, gameTime):
+2764:         if self.phase == 1:
+2765:             self._phase1_attack(target)
+2766:         elif self.phase == 2:
+2767:             self._phase2_attack(target)
+2768:         else:
+2769:             self._phase3_attack(target)
+2770: 

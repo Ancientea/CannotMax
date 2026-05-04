@@ -73,8 +73,18 @@ class Battlefield:
         self.hash_grid.insert(monster.position, monster.id)
     
     def append_monster_name(self, name, faction, pos) -> 'Monster':
-        """添加一个怪物到战场，只需要名字"""
+        """添加一个怪物到战场，仅需名字。找不到时从 MONSTER_MAPPING 回退"""
         data = next((m for m in self.monster_data if m["名字"] == name), None)
+        if data is None:
+            # 回退：尝试 MONSTER_MAPPING 反向查找
+            from .utils import REVERSE_MONSTER_MAPPING
+            alt_name = REVERSE_MONSTER_MAPPING.get(name)
+            if alt_name:
+                data = next((m for m in self.monster_data if m["名字"] == alt_name), None)
+            if data is None:
+                data = next((m for m in self.monster_data if m["名字"].replace('"','').replace('"','') == name.replace('"','').replace('"','')), None)
+        if data is None:
+            return None
         id = self.globalId
         monster = MonsterFactory.create_monster(data, faction, pos, self)
         monster.id = id
@@ -87,30 +97,46 @@ class Battlefield:
         return self.monsters[id]
     
     def setup_battle(self, left_army, right_army, monster_data):
-        """二维战场初始化"""
+        """二维战场初始化（使用 self.monster_data 以应用绿藤城规则）"""
+        from .utils import REVERSE_MONSTER_MAPPING
+        md = self.monster_data  # 使用已调整的数据
         # 左阵营生成在左上区域
         for (name, count) in left_army.items():
-            data = next((m for m in monster_data if m["名字"] == name), None)
+            data = next((m for m in md if m["名字"] == name), None)
+            if data is None:
+                alt = REVERSE_MONSTER_MAPPING.get(name)
+                if alt:
+                    data = next((m for m in md if m["名字"] == alt), None)
             if data is None:
                 raise ValueError(f"左侧怪物 {name} 在 monster_data 中未找到!")
+            allies = data.get("协同", [])
             for _ in range(count):
-                pos = FastVector(
-                    random.uniform(0, 0.5),
-                    random.uniform(0, MAP_SIZE[1])
-                )
+                pos = FastVector(random.uniform(0, SPAWN_AREA), random.uniform(0, MAP_SIZE[1]))
                 self.monster_temporal_area_left.append( MonsterFactory.create_monster(data, Faction.LEFT, pos, self))
+                for ally_name in allies:
+                    ally_data = next((m for m in md if m["名字"] == ally_name), None)
+                    if ally_data:
+                        pos = FastVector(random.uniform(0, SPAWN_AREA), random.uniform(0, MAP_SIZE[1]))
+                        self.monster_temporal_area_left.append( MonsterFactory.create_monster(ally_data, Faction.LEFT, pos, self))
 
         # 右阵营生成在右下区域
         for (name, count) in right_army.items():
-            data = next((m for m in monster_data if m["名字"] == name), None)
+            data = next((m for m in md if m["名字"] == name), None)
+            if data is None:
+                alt = REVERSE_MONSTER_MAPPING.get(name)
+                if alt:
+                    data = next((m for m in md if m["名字"] == alt), None)
             if data is None:
                 raise ValueError(f"右侧怪物 {name} 在 monster_data 中未找到!")
+            allies = data.get("协同", [])
             for _ in range(count):
-                pos = FastVector(
-                    random.uniform(MAP_SIZE[0]-0.5, MAP_SIZE[0]),
-                    random.uniform(0, MAP_SIZE[1])
-                )
+                pos = FastVector(random.uniform(MAP_SIZE[0]-SPAWN_AREA, MAP_SIZE[0]), random.uniform(0, MAP_SIZE[1]))
                 self.monster_temporal_area_right.append(MonsterFactory.create_monster(data, Faction.RIGHT, pos, self))
+                for ally_name in allies:
+                    ally_data = next((m for m in md if m["名字"] == ally_name), None)
+                    if ally_data:
+                        pos = FastVector(random.uniform(MAP_SIZE[0]-0.5, MAP_SIZE[0]), random.uniform(0, MAP_SIZE[1]))
+                        self.monster_temporal_area_right.append(MonsterFactory.create_monster(ally_data, Faction.RIGHT, pos, self))
 
         self.alive_monsters = self.monsters
         self.gameTime = 0

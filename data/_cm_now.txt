@@ -1,0 +1,4 @@
+  File "<string>", line 1
+    "c=open(r'G:\314\CannotMax-main\simulator\monsters.py',encoding='utf-8').read();i=c.find('def
+    ^
+SyntaxError: unterminated string literal (detected at line 1)

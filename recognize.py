@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 import cv2
 import numpy as np
 from PIL import ImageGrab
@@ -145,6 +146,11 @@ class RecognizeMonster:
                 y1 = min(self.roi_box[0][1], self.roi_box[1][1])
                 x2 = max(self.roi_box[0][0], self.roi_box[1][0])
                 y2 = max(self.roi_box[0][1], self.roi_box[1][1])
+                # 检查最小区域 (至少 20×20 像素)
+                if x2 - x1 < 20 or y2 - y1 < 20:
+                    logger.warning(f"选择区域过小 ({x2-x1}×{y2-y1})，请拖拽框选后按 Enter")
+                    self.roi_box = []
+                    continue
                 logger.info(f"选择区域: {[(x1, y1), (x2, y2)]}")
                 self.main_roi = [(x1, y1), (x2, y2)]
                 return [(x1, y1), (x2, y2)]
@@ -179,8 +185,11 @@ class RecognizeMonster:
         return best_id, confidence
 
     def get_manual_screenshot(self) -> cv2.typing.MatLike:
-        logger.info(f"获取区域 {self.main_roi} 的屏幕截图")
         (x1, y1), (x2, y2) = self.main_roi
+        # 防御: 零面积区域直接报错，不传空bbox给截图函数
+        if x1 >= x2 or y1 >= y2:
+            raise ValueError(f"主区域无效 (面积=0): {self.main_roi}，请重新框选")
+        logger.info(f"获取区域 {self.main_roi} 的屏幕截图")
         bbox = (x1, y1, x2, y2)
         if self.method == "WIN" and self._winrt is not None:
             logger.info("使用 WinRT 进行截图")
@@ -448,7 +457,18 @@ def load_ref_images(ref_dir="images"):
         if i == 0:
             img = MONSTER_IMAGES.get("empty")
         else:
-            img = MONSTER_IMAGES.get(MONSTER_DATA["原始名称"][i])
+            name = MONSTER_DATA["原始名称"][i]
+            img = MONSTER_IMAGES.get(name)
+            if img is None:
+                # 兜底: 直接读文件 (CSV无名→文件名可能包裹中文引号)
+                for try_name in [name,
+                                 f'\u201c{name}\u201d',     # "门"
+                                 f'"{name}"']:              # "门"
+                    fpath = Path(f"images/{try_name}.png")
+                    if fpath.exists():
+                        img = cv2.imdecode(np.fromfile(fpath, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        if img is not None:
+                            break
 
         if img is None:
             logger.error(f"无法加载参考图片 i={i}, 名称={MONSTER_DATA['原始名称'][i] if i > 0 else 'empty'}")
