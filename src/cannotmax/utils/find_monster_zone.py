@@ -671,9 +671,7 @@ def find_monster_zone(image):
 # ──────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    from cannotmax.config.paths import TMP_IMAGES_DIR
-
-    image = cv2.imread(TMP_IMAGES_DIR / "zone1.png")
+    image = cv2.imread("images/tests/adb_original_screenshot_1.png")
     height, width, _ = image.shape
 
     # 独立运行一次检测并可视化

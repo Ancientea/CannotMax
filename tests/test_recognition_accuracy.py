@@ -72,12 +72,12 @@ class TestAdbRecognitionAccuracy:
 
     @pytest.mark.parametrize("index", [1, 2, 3])
     def test_process_regions_returns_six_results(self, index):
-        path = Path("images/tests", f"adb_original_screenshort_{index}.png")
+        path = Path("images/tests", f"adb_original_screenshot_{index}.png")
         if not path.exists():
-            pytest.skip(f"adb_original_screenshort_{index}.png not found")
+            pytest.skip(f"adb_original_screenshot_{index}.png not found")
         img = cv2.imread(str(path))
         if img is None:
-            pytest.skip(f"Cannot read adb_original_screenshort_{index}.png")
+            pytest.skip(f"Cannot read adb_original_screenshot_{index}.png")
         recognizer = RecognizeMonster(crop_ratio=_DEFAULT_CROP_RATIO)
         results = recognizer.process_regions(img, mode="ADB")
         assert isinstance(results, list)
@@ -85,12 +85,12 @@ class TestAdbRecognitionAccuracy:
 
     @pytest.mark.parametrize("index", [1, 2, 3])
     def test_correct_numbers_detected(self, index):
-        path = Path("images/tests", f"adb_original_screenshort_{index}.png")
+        path = Path("images/tests", f"adb_original_screenshot_{index}.png")
         if not path.exists():
-            pytest.skip(f"adb_original_screenshort_{index}.png not found")
+            pytest.skip(f"adb_original_screenshot_{index}.png not found")
         img = cv2.imread(str(path))
         if img is None:
-            pytest.skip(f"Cannot read adb_original_screenshort_{index}.png")
+            pytest.skip(f"Cannot read adb_original_screenshot_{index}.png")
         recognizer = RecognizeMonster(crop_ratio=_DEFAULT_CROP_RATIO)
         results = recognizer.process_regions(img, mode="ADB")
 
