@@ -734,6 +734,10 @@ class ArknightsApp(QMainWindow):
     def reselect_roi(self):
         try:
             screenshot = self.connector.capture_screenshot()
+            if screenshot is None:
+                QMessageBox.warning(self, "错误", "无法获取截图，请稍后重试")
+                return
+
             roi = self.roi_selector.select_roi(
                 screenshot,
                 example_image_path=SAMPLES_IMAGES_DIR / "roi_selecting_eg.png",

@@ -236,6 +236,11 @@ class PcConnector(BaseConnector):
         """Capture using WinRT."""
         if not self._winrt_capture:
             return None
+
+        if not self._winrt_capture.wait_first_frame(timeout_sec=3.0):
+            logger.error("WinRT capture failed: 首帧未就绪")
+            return None
+
         try:
             return self._winrt_capture.snapshot()
         except Exception as e:
