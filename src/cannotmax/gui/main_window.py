@@ -552,7 +552,7 @@ class ArknightsApp(QMainWindow):
         self.connection_type_combo.setEnabled(is_adb)
         self.input_method_label.setEnabled(is_adb)
         self.input_method_combo.setEnabled(is_adb)
-        self.auto_fetch_button.setEnabled(True)
+        self.auto_fetch_button.setEnabled(mode != "WIN")
 
         kwargs = self._get_connector_kwargs(mode)
         new_connector = self.connector_factory.get_connector(mode, **kwargs)
