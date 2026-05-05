@@ -34,6 +34,7 @@ from cannotmax.config.paths import (
     ICO_DIR,
     SAMPLES_IMAGES_DIR,
 )
+from cannotmax.config.settings import RECOGNITION_PARAMS
 from cannotmax.core import auto_fetch, recognize
 from cannotmax.core.connector.factory import ConnectorFactory, ConnectorState
 from cannotmax.core.connector.maa_registry import (
@@ -114,7 +115,9 @@ class ArknightsApp(QMainWindow):
         self.game_mode = "单人"
 
         self.cannot_model = CannotModel()
-        self.recognizer = recognize.RecognizeMonster()
+
+        adb_params = RECOGNITION_PARAMS.get("ADB", {})
+        self.recognizer = recognize.RecognizeMonster(**adb_params)
         self.roi_selector = ROISelector()
 
         logger.info("尝试获取错题本")
@@ -534,7 +537,7 @@ class ArknightsApp(QMainWindow):
             from cannotmax.config.settings import RECOGNITION_PARAMS
 
             params = RECOGNITION_PARAMS.get(mode, {})
-            self.recognizer.crop_ratio = params.get("crop_regions")
+            self.recognizer.crop_ratio = params.get("crop_ratio")
             self.recognizer.avatar_regions = params.get("avatar_regions")
             self.recognizer.number_regions = params.get("number_regions")
 

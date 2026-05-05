@@ -223,7 +223,11 @@ class RecognizeMonster:
         from cannotmax.utils import find_monster_zone
         from cannotmax.utils.roi_transform import transform_coords
 
-        detected_zones = None
+        detected_zones = (
+            (self.avatar_regions, self.number_regions)
+            if self.avatar_regions and self.number_regions
+            else None
+        )
 
         # Save original screenshot for debugging
         if DEBUG_MODE:

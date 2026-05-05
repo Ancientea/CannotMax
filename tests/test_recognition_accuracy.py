@@ -9,9 +9,6 @@ import pytest
 from cannotmax.config.settings import RECOGNITION_PARAMS
 from cannotmax.core.recognize import RecognizeMonster
 
-_ADB_CROP_RATIO = RECOGNITION_PARAMS["ADB"]["crop_regions"]
-_PC_CROP_RATIO = RECOGNITION_PARAMS["PC"]["crop_regions"]
-
 
 class TestRecognizeMonsterCropRatio:
     """Test crop_ratio handling."""
@@ -39,7 +36,7 @@ class TestCropByRatio:
     def test_crop_by_ratio_default(self):
         recognizer = RecognizeMonster()
         img = np.zeros((1080, 1920, 3), dtype=np.uint8)
-        cropped = recognizer._crop_by_ratio(img, _ADB_CROP_RATIO)
+        cropped = recognizer._crop_by_ratio(img, ((0.2464, 0.8410), (0.7542, 0.9510)))
         expected_h = int(0.9510 * 1080) - int(0.8410 * 1080)
         expected_w = int(0.7542 * 1920) - int(0.2464 * 1920)
         assert cropped.shape[0] == expected_h
@@ -68,7 +65,7 @@ class TestAdbRecognitionAccuracy:
         img = cv2.imread(str(path))
         if img is None:
             pytest.skip(f"Cannot read adb_original_screenshot_{index}.png")
-        recognizer = RecognizeMonster(crop_ratio=_ADB_CROP_RATIO)
+        recognizer = RecognizeMonster(**RECOGNITION_PARAMS["ADB"])
         results = recognizer.process_regions(img, mode="ADB")
         assert isinstance(results, list)
         assert len(results) == 6
@@ -81,7 +78,7 @@ class TestAdbRecognitionAccuracy:
         img = cv2.imread(str(path))
         if img is None:
             pytest.skip(f"Cannot read adb_original_screenshot_{index}.png")
-        recognizer = RecognizeMonster(crop_ratio=_ADB_CROP_RATIO)
+        recognizer = RecognizeMonster(**RECOGNITION_PARAMS["ADB"])
         results = recognizer.process_regions(img, mode="ADB")
 
         detected = set()
@@ -109,12 +106,12 @@ class TestPcRecognitionAccuracy:
         img = cv2.imread(str(path))
         if img is None:
             pytest.skip(f"Cannot read pc_original_screenshot_{index}.png")
-        recognizer = RecognizeMonster(crop_ratio=_PC_CROP_RATIO)
+        recognizer = RecognizeMonster(**RECOGNITION_PARAMS["PC"])
         results = recognizer.process_regions(img, mode="PC")
         assert isinstance(results, list)
         assert len(results) == 6
 
-    @pytest.mark.parametrize("index", [1])
+    @pytest.mark.parametrize("index", [1, 2])
     def test_pc_correct_numbers_detected(self, index):
         path = Path("images/tests", f"pc_original_screenshot_{index}.png")
         if not path.exists():
@@ -122,7 +119,7 @@ class TestPcRecognitionAccuracy:
         img = cv2.imread(str(path))
         if img is None:
             pytest.skip(f"Cannot read pc_original_screenshot_{index}.png")
-        recognizer = RecognizeMonster(crop_ratio=_PC_CROP_RATIO)
+        recognizer = RecognizeMonster(**RECOGNITION_PARAMS["PC"])
         results = recognizer.process_regions(img, mode="PC")
 
         detected = set()
