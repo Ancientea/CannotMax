@@ -6,9 +6,11 @@ import cv2
 import numpy as np
 import pytest
 
+from cannotmax.config.settings import RECOGNITION_PARAMS
 from cannotmax.core.recognize import RecognizeMonster
 
-_DEFAULT_CROP_RATIO = ((0.2464, 0.8410), (0.7542, 0.9510))
+_ADB_CROP_RATIO = RECOGNITION_PARAMS["ADB"]["crop_regions"]
+_PC_CROP_RATIO = RECOGNITION_PARAMS["PC"]["crop_regions"]
 
 
 class TestRecognizeMonsterCropRatio:
@@ -22,18 +24,6 @@ class TestRecognizeMonsterCropRatio:
         ratio = ((0.1, 0.2), (0.8, 0.9))
         recognizer = RecognizeMonster(crop_ratio=ratio)
         assert recognizer.crop_ratio == ratio
-
-    def test_resolve_fallback_returns_custom(self):
-        ratio = ((0.1, 0.2), (0.8, 0.9))
-        recognizer = RecognizeMonster(crop_ratio=ratio)
-        result = recognizer._resolve_crop_ratio()
-        assert result == ratio
-
-    def test_resolve_no_fallback_returns_custom(self):
-        ratio = ((0.1, 0.2), (0.8, 0.9))
-        recognizer = RecognizeMonster(crop_ratio=ratio)
-        result = recognizer._resolve_crop_ratio()
-        assert result == ratio
 
 
 class TestCropByRatio:
@@ -49,7 +39,7 @@ class TestCropByRatio:
     def test_crop_by_ratio_default(self):
         recognizer = RecognizeMonster()
         img = np.zeros((1080, 1920, 3), dtype=np.uint8)
-        cropped = recognizer._crop_by_ratio(img, _DEFAULT_CROP_RATIO)
+        cropped = recognizer._crop_by_ratio(img, _ADB_CROP_RATIO)
         expected_h = int(0.9510 * 1080) - int(0.8410 * 1080)
         expected_w = int(0.7542 * 1920) - int(0.2464 * 1920)
         assert cropped.shape[0] == expected_h
@@ -57,9 +47,9 @@ class TestCropByRatio:
 
 
 class TestProcessRegions:
-    """Test process_regions with auto_fallback flag."""
+    """Test process_regions method with dummy image."""
 
-    def test_process_regions_no_fallback_with_roi_no_crash(self):
+    def test_process_regions_with_roi_no_crash(self):
         recognizer = RecognizeMonster(crop_ratio=((0.25, 0.80), (0.75, 0.95)))
         img = np.zeros((1080, 1920, 3), dtype=np.uint8)
         results = recognizer.process_regions(img)
@@ -78,7 +68,7 @@ class TestAdbRecognitionAccuracy:
         img = cv2.imread(str(path))
         if img is None:
             pytest.skip(f"Cannot read adb_original_screenshot_{index}.png")
-        recognizer = RecognizeMonster(crop_ratio=_DEFAULT_CROP_RATIO)
+        recognizer = RecognizeMonster(crop_ratio=_ADB_CROP_RATIO)
         results = recognizer.process_regions(img, mode="ADB")
         assert isinstance(results, list)
         assert len(results) == 6
@@ -91,7 +81,7 @@ class TestAdbRecognitionAccuracy:
         img = cv2.imread(str(path))
         if img is None:
             pytest.skip(f"Cannot read adb_original_screenshot_{index}.png")
-        recognizer = RecognizeMonster(crop_ratio=_DEFAULT_CROP_RATIO)
+        recognizer = RecognizeMonster(crop_ratio=_ADB_CROP_RATIO)
         results = recognizer.process_regions(img, mode="ADB")
 
         detected = set()
@@ -119,7 +109,7 @@ class TestPcRecognitionAccuracy:
         img = cv2.imread(str(path))
         if img is None:
             pytest.skip(f"Cannot read pc_original_screenshot_{index}.png")
-        recognizer = RecognizeMonster(crop_ratio=_DEFAULT_CROP_RATIO)
+        recognizer = RecognizeMonster(crop_ratio=_PC_CROP_RATIO)
         results = recognizer.process_regions(img, mode="PC")
         assert isinstance(results, list)
         assert len(results) == 6
@@ -132,7 +122,7 @@ class TestPcRecognitionAccuracy:
         img = cv2.imread(str(path))
         if img is None:
             pytest.skip(f"Cannot read pc_original_screenshot_{index}.png")
-        recognizer = RecognizeMonster(crop_ratio=_DEFAULT_CROP_RATIO)
+        recognizer = RecognizeMonster(crop_ratio=_PC_CROP_RATIO)
         results = recognizer.process_regions(img, mode="PC")
 
         detected = set()
