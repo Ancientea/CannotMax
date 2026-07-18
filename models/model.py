@@ -1,163 +1,168 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 
 
+class PhasePreservingLinearMHA(nn.Module):
+    """
+    线性注意力：
+    线性注意力使用 φ(x)=elu(x)+1 作为核特征映射，将 O(L²d) 降为 O(Ld²)，
+    引入强低秩平滑先验，在小数据下防止过拟合到少数关键交互。
+    相位保持：
+    相位保持将注意力输出投影回 query 方向，只保留沿 query 的分量，
+    强制模型以查询为中心聚合信息，是一种额外的几何正则化。
+    """
+    def __init__(self, embed_dim, num_heads, dropout=0.0):
+        super().__init__()
+        assert embed_dim % (2 * num_heads) == 0, "embed_dim 必须能被 2 * num_heads 整除（相位保持要求）"
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        self.half_head_dim = self.head_dim // 2
+
+        # Q/K/V 投影及输出投影
+        self.q_proj = nn.Linear(embed_dim, embed_dim)
+        self.k_proj = nn.Linear(embed_dim, embed_dim)
+        self.v_proj = nn.Linear(embed_dim, embed_dim)
+        self.out_proj = nn.Linear(embed_dim, embed_dim)
+        self.dropout = nn.Dropout(dropout)
+        self._reset_parameters()
+
+    def _reset_parameters(self):
+        nn.init.xavier_uniform_(self.q_proj.weight)
+        nn.init.xavier_uniform_(self.k_proj.weight)
+        nn.init.xavier_uniform_(self.v_proj.weight)
+        nn.init.xavier_uniform_(self.out_proj.weight)
+        for p in [self.q_proj, self.k_proj, self.v_proj, self.out_proj]:
+            if p.bias is not None:
+                nn.init.zeros_(p.bias)
+
+    @staticmethod
+    def feature_map(x):
+        """
+        φ(x) = relu(x) + 1，非负，数值稳定
+        此外，这里用 relu 而非常规的 elu，尽可能保证映射不变形
+        """
+        return F.relu(x) + 1.0
+
+    def forward(self, query, key, value, key_padding_mask=None):
+        B, Lq, _ = query.shape
+        Lk = key.shape[1]
+
+        # 1. 线性投影 + 多头重塑
+        q = self.q_proj(query).reshape(B, Lq, self.num_heads, self.head_dim)
+        k = self.k_proj(key).reshape(B, Lk, self.num_heads, self.head_dim)
+        v = self.v_proj(value).reshape(B, Lk, self.num_heads, self.head_dim)
+
+        q = q.permute(0, 2, 1, 3)   # (B, H, Lq, d)
+        k = k.permute(0, 2, 1, 3)   # (B, H, Lk, d)
+        v = v.permute(0, 2, 1, 3)
+
+        # 2. 特征映射到非负空间
+        q_prime = self.feature_map(q)
+        k_prime = self.feature_map(k)
+
+        # 3. 处理 mask：无效位置（如填充怪物）的 value 和 k 特征置 0，使其不参与注意力聚合
+        if key_padding_mask is not None:
+            mask = key_padding_mask.unsqueeze(1).unsqueeze(-1).to(v.dtype)  # (B, 1, Lk, 1)
+            v = v * mask
+            k_prime = k_prime * mask
+        # 若无 mask，则无需特殊处理
+
+        # 4. 线性注意力核心计算
+        #    attn_out = φ(q) (φ(k)^T v) / (φ(q) (φ(k)^T 1) + eps)
+        k_trans = k_prime.transpose(-2, -1)              # (B, H, d, Lk)
+        kv = torch.matmul(k_trans, v)                    # (B, H, d, d)
+        k_sum = k_trans.sum(dim=-1, keepdim=True)        # (B, H, d, 1) 即 φ(k)^T 1
+
+        numerator = torch.matmul(q_prime, kv)            # (B, H, Lq, d)
+        denominator = torch.matmul(q_prime, k_sum) + 1e-8 # (B, H, Lq, 1)
+
+        attn_out = numerator / denominator
+        # 防御性处理：应对极端数值（如全 mask 行或 fp16 下溢）
+        attn_out = torch.nan_to_num(attn_out, nan=0.0, posinf=1e4, neginf=-1e4)
+        attn_out = self.dropout(attn_out)
+
+        # 5. 相位保持：将注意力输出投影到 query 的复数域方向上
+        #    复数表示允许模型在“幅度”和“相位”两个维度上保留信息，
+        #    而相位保持强制输出只取 query 方向的分量，等价于一种归一化且避免正交噪声。
+        attn_out_c = attn_out.reshape(B, self.num_heads, Lq, self.half_head_dim, 2)
+        q_c = q.reshape(B, self.num_heads, Lq, self.half_head_dim, 2)
+
+        # 计算 attn_out 在 q 上的投影系数
+        dot = (attn_out_c * q_c).sum(dim=(-2, -1))         # (B, H, Lq)
+        q_norm_sq = (q_c * q_c).sum(dim=(-2, -1)) + 1e-8
+        q_norm_sq = torch.clamp(q_norm_sq, min=1e-8)         # 防除零
+        coef = dot / q_norm_sq
+        coef = torch.clamp(coef, min=-10.0, max=10.0)       # 限制投影系数范围，稳定训练
+
+        # 重建沿 q 方向的输出
+        out_c = coef.unsqueeze(-1).unsqueeze(-1) * q_c   # (B, H, Lq, hd, 2)
+        out_c = out_c.permute(0, 2, 1, 3, 4).reshape(B, Lq, self.num_heads * self.half_head_dim, 2)
+        out = out_c.reshape(B, Lq, self.embed_dim)
+
+        return self.out_proj(out)
+
+
+class ResidualFFN(nn.Module):
+    """
+    标准残差前馈网络：Linear → ReLU → Linear → Dropout，然后加上残差连接。
+    提供非线性特征变换能力，同时通过残差保持梯度流动。
+    """
+    def __init__(self, embed_dim, dropout=0.1, hidden_factor=2):
+        super().__init__()
+        hidden_dim = embed_dim * hidden_factor
+        self.linear1 = nn.Linear(embed_dim, hidden_dim)
+        self.linear2 = nn.Linear(hidden_dim, embed_dim)
+        self.dropout = nn.Dropout(dropout)
+        self.activation = nn.ReLU()
+        self._reset_parameters()
+
+    def _reset_parameters(self):
+        nn.init.kaiming_uniform_(self.linear1.weight, a=math.sqrt(5))
+        nn.init.kaiming_uniform_(self.linear2.weight, a=math.sqrt(5))
+        if self.linear1.bias is not None:
+            nn.init.zeros_(self.linear1.bias)
+        if self.linear2.bias is not None:
+            nn.init.zeros_(self.linear2.bias)
+
+    def forward(self, x):
+        residual = x
+        out = self.linear1(x)
+        out = self.activation(out)
+        out = self.linear2(out)
+        out = self.dropout(out)
+        return residual + out
+
+
 class UnitAwareTransformer(nn.Module):
     def __init__(self, num_units, embed_dim=256, num_heads=4, num_layers=3, dropout=0.3):
         super().__init__()
-        # num_units = 怪物种类数 + 场地特征种类数
         self.num_units = num_units
-        self.monster_count = MONSTER_COUNT
-        self.field_count = FIELD_FEATURE_COUNT
         self.embed_dim = embed_dim
         self.num_layers = num_layers
-        self.dropout_rate = dropout
 
-        # 嵌入层
+        # 嵌入层：为每种怪物和场地特征学习一个稠密向量
         self.unit_embed = nn.Embedding(num_units, embed_dim)
         nn.init.normal_(self.unit_embed.weight, mean=0.0, std=0.02)
 
-        self.value_ffn = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim * 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(embed_dim * 2, embed_dim),
-        )
+        # 输入侧的残差 FFN：为每个单位提供非线性微扰，
+        # 使基础战斗力不再只是数量的线性函数，可以捕捉规模非线性（如边际递减效应）。
+        self.value_ffn = ResidualFFN(embed_dim, dropout)
 
-        # 注意力层与 FFN
+        # 敌方/友方注意力模块和对应的 FFN（逐层独立参数）
         self.enemy_attentions = nn.ModuleList()
         self.friend_attentions = nn.ModuleList()
         self.enemy_ffn = nn.ModuleList()
         self.friend_ffn = nn.ModuleList()
 
-        # 门控投影层
-        self.enemy_gate_proj_q = nn.ModuleList()
-        self.enemy_gate_proj_k = nn.ModuleList()
-        self.friend_gate_proj_q = nn.ModuleList()
-        self.friend_gate_proj_k = nn.ModuleList()
-
         for _ in range(num_layers):
-            # 敌方注意力层
-            self.enemy_attentions.append(
-                nn.MultiheadAttention(embed_dim, num_heads, batch_first=True, dropout=dropout)
-            )
-            self.enemy_ffn.append(
-                nn.Sequential(
-                    nn.Linear(embed_dim, embed_dim * 2),
-                    nn.ReLU(),
-                    nn.Dropout(dropout),
-                    nn.Linear(embed_dim * 2, embed_dim),
-                )
-            )
-
-            # 友方注意力层
-            self.friend_attentions.append(
-                nn.MultiheadAttention(embed_dim, num_heads, batch_first=True, dropout=dropout)
-            )
-            self.friend_ffn.append(
-                nn.Sequential(
-                    nn.Linear(embed_dim, embed_dim * 2),
-                    nn.ReLU(),
-                    nn.Dropout(dropout),
-                    nn.Linear(embed_dim * 2, embed_dim),
-                )
-            )
-
-            # 初始化注意力层参数
-            nn.init.xavier_uniform_(self.enemy_attentions[-1].in_proj_weight)
-            nn.init.xavier_uniform_(self.friend_attentions[-1].in_proj_weight)
-
-            # 门控机制：通过减轻不重要交互的干扰，使模型更专注于克制与互补关系。
-            # 实验表明该设计略微降低了测试集损失。
-            # 初始门控权重为零，使 sigmoid 输出接近 0.5，避免早期训练对注意力施加过大压力。
-            gate_q = nn.Linear(embed_dim, 1, bias=False)
-            gate_k = nn.Linear(embed_dim, 1, bias=False)
-            nn.init.zeros_(gate_q.weight)
-            nn.init.zeros_(gate_k.weight)
-            self.enemy_gate_proj_q.append(gate_q)
-            self.enemy_gate_proj_k.append(gate_k)
-
-            gate_q = nn.Linear(embed_dim, 1, bias=False)
-            gate_k = nn.Linear(embed_dim, 1, bias=False)
-            nn.init.zeros_(gate_q.weight)
-            nn.init.zeros_(gate_k.weight)
-            self.friend_gate_proj_q.append(gate_q)
-            self.friend_gate_proj_k.append(gate_k)
-
-    def _gated_attention(self, attention_module, q, k, v, key_padding_mask, gate_q_proj, gate_k_proj):
-        embed_dim = attention_module.embed_dim
-        num_heads = attention_module.num_heads
-        head_dim = embed_dim // num_heads
-        dropout_p = attention_module.dropout
-
-        w = attention_module.in_proj_weight
-        b = attention_module.in_proj_bias
-
-        if b is not None:
-            q_proj = F.linear(q, w[:embed_dim], b[:embed_dim])
-            k_proj = F.linear(k, w[embed_dim:2*embed_dim], b[embed_dim:2*embed_dim])
-            v_proj = F.linear(v, w[2*embed_dim:], b[2*embed_dim:])
-        else:
-            q_proj = F.linear(q, w[:embed_dim])
-            k_proj = F.linear(k, w[embed_dim:2*embed_dim])
-            v_proj = F.linear(v, w[2*embed_dim:])
-
-        N, k_len, _ = q.shape
-        q_mh = q_proj.view(N, k_len, num_heads, head_dim).transpose(1, 2)
-        k_mh = k_proj.view(N, k_len, num_heads, head_dim).transpose(1, 2)
-        v_mh = v_proj.view(N, k_len, num_heads, head_dim).transpose(1, 2)
-
-        scale = head_dim ** -0.5
-        attn_logits = torch.matmul(q_mh, k_mh.transpose(-2, -1)) * scale
-
-        # 门控
-        log_gate = self._apply_gate(q, k, gate_q_proj, gate_k_proj)  # (N, k, k)
-        log_gate = log_gate.unsqueeze(1)  # (N, 1, k, k)
-        attn_logits = attn_logits + log_gate
-
-        # key_padding_mask
-        if key_padding_mask is not None:
-            expand_mask = key_padding_mask.unsqueeze(1).unsqueeze(2)  # (N, 1, 1, k)
-            # 如果一行全为 False，softmax 会 NaN，用一个小值填充而非 -inf
-            # 但先确保 -inf 不变，然后后处理检测全 mask 行
-            attn_logits = attn_logits.masked_fill(~expand_mask, float('-inf'))
-
-        # 防止整行全为 -inf 导致 softmax 输出 NaN
-        # 计算每行最大值，若为 -inf，则说明全 mask，此时将 logits 置为 0，使权重均匀
-        row_max = attn_logits.max(dim=-1, keepdim=True).values
-        full_masked = row_max == float('-inf')
-        if full_masked.any():
-            attn_logits = attn_logits.masked_fill(full_masked, 0.0)  # 让 softmax 输出均匀分布
-
-        # 数值稳定的 softmax
-        attn_weights = torch.softmax(attn_logits, dim=-1)
-        # 如果原来全 mask 的行，再次强制设为零（防止 softmax 后非零）
-        if full_masked.any():
-            attn_weights = attn_weights.masked_fill(full_masked, 0.0)
-
-        attn_weights = F.dropout(attn_weights, p=dropout_p, training=self.training)
-        attn_output = torch.matmul(attn_weights, v_mh)
-        attn_output = attn_output.transpose(1, 2).contiguous().view(N, k_len, embed_dim)
-
-        if attention_module.out_proj is not None:
-            attn_output = attention_module.out_proj(attn_output)
-
-        return attn_output
-
-    def _apply_gate(self, q, k, gate_q_proj, gate_k_proj):
-        # 采用 2N 自由度的低秩分解，当查询和键的特征匹配时，门控被激活
-        # 可解释性示例：群攻属性匹配数量属性、法伤匹配法抗等场景下门控被激活
-        s = gate_q_proj(q).squeeze(-1)      # (N, k)
-        t = gate_k_proj(k).squeeze(-1)      # (N, k)
-        raw_sum = s.unsqueeze(-1) + t.unsqueeze(-2)   # (N, k, k)
-        # 裁剪和到合理范围，避免 sigmoid 饱和
-        # raw_sum = torch.clamp(raw_sum, min=-10.0, max=10.0)
-        gate = torch.sigmoid(raw_sum)
-        log_gate = torch.log(gate + 1e-8)
-        # log_gate = torch.clamp(log_gate, min=-20.0, max=0.0)   # 防止极端的负值
-        return log_gate
+            self.enemy_attentions.append(PhasePreservingLinearMHA(embed_dim, num_heads, dropout))
+            self.enemy_ffn.append(ResidualFFN(embed_dim, dropout))
+            self.friend_attentions.append(PhasePreservingLinearMHA(embed_dim, num_heads, dropout))
+            self.friend_ffn.append(ResidualFFN(embed_dim, dropout))
 
     def forward(self, left_signs, left_counts, right_signs, right_counts):
         # 提取 TopK 特征（怪物 + 场地）
@@ -168,8 +173,8 @@ class UnitAwareTransformer(nn.Module):
 
         # 嵌入层，base 保留单体的原始特征
         # AI 可解释性结果表明，怪物单体的原始特征对模型预测很重要
-        left_base = self.unit_embed(left_indices)  # (B, k, embed_dim)
-        right_base = self.unit_embed(right_indices)  # (B, k, embed_dim)
+        left_base = self.unit_embed(left_indices)   # (B, k, embed_dim)
+        right_base = self.unit_embed(right_indices)
 
         # 直接用模长表示战斗力
         # 早期尝试 PINN 结构时，线性项权重占比过高且泛化性差。
@@ -178,8 +183,8 @@ class UnitAwareTransformer(nn.Module):
         right_feat = right_base * right_values.unsqueeze(-1)
 
         # FFN 提供非线性微扰，使模型能捕捉非线性的战斗力增长
-        left_feat = left_feat + self.value_ffn(left_feat)
-        right_feat = right_feat + self.value_ffn(right_feat)
+        left_feat = self.value_ffn(left_feat)
+        right_feat = self.value_ffn(right_feat)
 
         # 生成 mask (B, k)，使用 0.1 阈值防止浮点误差
         left_mask = left_values > 0.1
@@ -200,37 +205,39 @@ class UnitAwareTransformer(nn.Module):
             # mask 重复 2 次
             mask_enemy = torch.cat([right_mask.repeat(2, 1), left_mask.repeat(2, 1)], dim=0)
 
-            out_enemy = self._gated_attention(
-                self.enemy_attentions[i], q_enemy, k_enemy, k_enemy,
-                mask_enemy,
-                self.enemy_gate_proj_q[i], self.enemy_gate_proj_k[i]
+            out_enemy = self.enemy_attentions[i](
+                query=q_enemy, key=k_enemy, value=k_enemy,
+                key_padding_mask=mask_enemy,
             )
-
-            # 拆分为 4 个 (B, k, d) 张量，分别对应四组交互
+            # 拆分回 4 组结果，对应地加到各自的特征上
             out_enemy = out_enemy.unflatten(0, (4, B))
             # 等效于：left_feat += attn(left_base, right_feat) + attn(left_feat, right_base)
             left_feat = left_feat + out_enemy[:2].sum(dim=0)
             right_feat = right_feat + out_enemy[2:].sum(dim=0)
-            left_feat = left_feat + self.enemy_ffn[i](left_feat)
-            right_feat = right_feat + self.enemy_ffn[i](right_feat)
 
-            # 友方注意力
+            # FFN 后处理
+            left_feat = self.enemy_ffn[i](left_feat)
+            right_feat = self.enemy_ffn[i](right_feat)
+
+            # ---- 友方注意力 ----
+            # 同阵营内 base 与 feat 的交互，捕捉兵种间的协同或互补关系
             q_friend = torch.cat([left_feat, left_base, right_feat, right_base], dim=0)
             k_friend = torch.cat([left_base, left_feat, right_base, right_feat], dim=0)
             mask_friend = torch.cat([left_mask.repeat(2, 1), right_mask.repeat(2, 1)], dim=0)
 
-            out_friend = self._gated_attention(
-                self.friend_attentions[i], q_friend, k_friend, k_friend,
-                mask_friend,
-                self.friend_gate_proj_q[i], self.friend_gate_proj_k[i]
+            out_friend = self.friend_attentions[i](
+                query=q_friend, key=k_friend, value=k_friend,
+                key_padding_mask=mask_friend,
             )
-
             out_friend = out_friend.unflatten(0, (4, B))
             left_feat = left_feat + out_friend[:2].sum(dim=0)
             right_feat = right_feat + out_friend[2:].sum(dim=0)
-            left_feat = left_feat + self.friend_ffn[i](left_feat)
-            right_feat = right_feat + self.friend_ffn[i](right_feat)
-            # 不进行 LayerNorm：保留嵌入向量的模长信息作为战斗力度量，归一化会破坏模长的物理含义
+
+            left_feat = self.friend_ffn[i](left_feat)
+            right_feat = self.friend_ffn[i](right_feat)
+
+            # 注意：此处不进行 LayerNorm，以保留嵌入向量的模长作为战斗力度量。
+            # 对向量进行归一化会破坏模长，而模长直接与数量关联，是重要的线性基础信息。
             # left_feat = self.norm[i](left_feat)
             # right_feat = self.norm[i](right_feat)
 
@@ -244,5 +251,4 @@ class UnitAwareTransformer(nn.Module):
         L = (L_norms * left_mask).sum(dim=1)
         R = (R_norms * right_mask).sum(dim=1)
 
-        output = torch.sigmoid(R - L)
-        return output
+        return torch.sigmoid(R - L)
