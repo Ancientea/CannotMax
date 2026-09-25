@@ -7,16 +7,15 @@ from config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 
 class PhasePreservingLinearMHA(nn.Module):
     """
-    线性注意力：
-    线性注意力使用 φ(x)=elu(x)+1 作为核特征映射，将 O(L²d) 降为 O(Ld²)，
-    引入强低秩平滑先验，在小数据下防止过拟合到少数关键交互。
-    相位保持：
-    相位保持将注意力输出投影回 query 方向，只保留沿 query 的分量，
-    强制模型以查询为中心聚合信息，是一种额外的几何正则化。
+    线性注意力 + 相位保持
+    — 线性注意力使用 φ(x)=elu(x)+1 作为核特征映射，将 O(L²d) 降为 O(Ld²)，
+      引入强低秩平滑先验，在小数据下防止过拟合到少数关键交互。
+    — 相位保持将注意力输出投影回 query 方向，只保留沿 query 的分量，
+      强制模型以查询为中心聚合信息，是一种额外的几何正则化。
     """
     def __init__(self, embed_dim, num_heads, dropout=0.0):
         super().__init__()
-        assert embed_dim % (2 * num_heads) == 0, "embed_dim 必须能被 2 * num_heads 整除（相位保持要求）"
+        assert embed_dim % (2 * num_heads) == 0, "embed_dim 必须能被 2*num_heads 整除（相位保持要求）"
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
@@ -78,7 +77,11 @@ class PhasePreservingLinearMHA(nn.Module):
         k_sum = k_trans.sum(dim=-1, keepdim=True)        # (B, H, d, 1) 即 φ(k)^T 1
 
         numerator = torch.matmul(q_prime, kv)            # (B, H, Lq, d)
-        denominator = torch.matmul(q_prime, k_sum) + 1e-8 # (B, H, Lq, 1)
+        # 全部 key 被 mask 时，分子和未保护的分母都是 0。1e-8 在 FP16
+        # 中会下溢为 0，产生 0/0；使用当前 dtype 可表示的正数作下限。
+        denominator = torch.matmul(q_prime, k_sum).clamp_min(
+            max(1e-6, torch.finfo(q_prime.dtype).tiny)
+        )  # (B, H, Lq, 1)
 
         attn_out = numerator / denominator
         # 防御性处理：应对极端数值（如全 mask 行或 fp16 下溢）
@@ -92,14 +95,13 @@ class PhasePreservingLinearMHA(nn.Module):
         q_c = q.reshape(B, self.num_heads, Lq, self.half_head_dim, 2)
 
         # 计算 attn_out 在 q 上的投影系数
-        dot = (attn_out_c * q_c).sum(dim=(-2, -1))         # (B, H, Lq)
-        q_norm_sq = (q_c * q_c).sum(dim=(-2, -1)) + 1e-8
-        q_norm_sq = torch.clamp(q_norm_sq, min=1e-8)         # 防除零
+        dot = (attn_out_c.float() * q_c.float()).sum(dim=(-2, -1))
+        q_norm_sq = q_c.float().square().sum(dim=(-2, -1)).clamp_min(1e-8)
         coef = dot / q_norm_sq
         coef = torch.clamp(coef, min=-10.0, max=10.0)       # 限制投影系数范围，稳定训练
 
         # 重建沿 q 方向的输出
-        out_c = coef.unsqueeze(-1).unsqueeze(-1) * q_c   # (B, H, Lq, hd, 2)
+        out_c = (coef.unsqueeze(-1).unsqueeze(-1) * q_c.float()).to(q_c.dtype)
         out_c = out_c.permute(0, 2, 1, 3, 4).reshape(B, Lq, self.num_heads * self.half_head_dim, 2)
         out = out_c.reshape(B, Lq, self.embed_dim)
 
@@ -138,6 +140,19 @@ class ResidualFFN(nn.Module):
 
 
 class UnitAwareTransformer(nn.Module):
+    """
+    主模型：线性注意力 + 相位保持的 Transformer 结构。
+    针对“不同种类怪物数量预测胜负”任务，通过低秩平滑的线性注意力、
+    相位保持的几何先验、以及敌方/友方交叉注意力设计，在小样本数据上实现良好泛化。
+
+    核心设计：
+    - 每个怪物（及场地）由可学习嵌入表示，数量作为缩放因子。
+    - 局部残差 FFN 提供非线性微扰，补充基础战斗力。
+    - 敌方注意力：左方单位关注右方单位（跨阵营），实现克制关系建模。
+    - 友方注意力：同阵营内单位互相关注，实现协同/互补建模。
+    - 多层堆叠，最后以 L2 范数之和作为总战力，sigmoid 输出胜率。
+    - 不进行 LayerNorm，以保留向量模长作为战斗力度量（归一化会破坏模长的物理含义）。
+    """
     def __init__(self, num_units, embed_dim=256, num_heads=4, num_layers=3, dropout=0.3):
         super().__init__()
         self.num_units = num_units
@@ -165,44 +180,36 @@ class UnitAwareTransformer(nn.Module):
             self.friend_ffn.append(ResidualFFN(embed_dim, dropout))
 
     def forward(self, left_signs, left_counts, right_signs, right_counts):
-        # 提取 TopK 特征（怪物 + 场地）
-        # 每方最多 3 个怪物 + 1 个场地特征，k = 4 可覆盖全部
-        k = min(4, left_counts.shape[1])  # 确保 k 不超过实际特征数
+        # 取每方数量最多的 k 个单位（最多 4 个，覆盖 3 怪物 + 1 场地）
+        k = min(4, left_counts.shape[1])
         left_values, left_indices = torch.topk(left_counts, k=k, dim=1)
         right_values, right_indices = torch.topk(right_counts, k=k, dim=1)
 
-        # 嵌入层，base 保留单体的原始特征
-        # AI 可解释性结果表明，怪物单体的原始特征对模型预测很重要
+        # 嵌入查找，保留原始单位特征（用于后续与数量相乘）
         left_base = self.unit_embed(left_indices)   # (B, k, embed_dim)
         right_base = self.unit_embed(right_indices)
 
-        # 直接用模长表示战斗力
-        # 早期尝试 PINN 结构时，线性项权重占比过高且泛化性差。
-        # 因此改用线性 + 微扰设计：基础战斗力由模长表示，微扰来自 FFN
+        # 基础战斗力：单位嵌入的模长被数量缩放，形成线性基础项
         left_feat = left_base * left_values.unsqueeze(-1)
         right_feat = right_base * right_values.unsqueeze(-1)
 
-        # FFN 提供非线性微扰，使模型能捕捉非线性的战斗力增长
+        # 残差 FFN 提供非线性微扰，打破纯线性假设
         left_feat = self.value_ffn(left_feat)
         right_feat = self.value_ffn(right_feat)
 
-        # 生成 mask (B, k)，使用 0.1 阈值防止浮点误差
+        # 生成 mask：数量大于 0.1 的单位参与后续交互（过滤填充位）
         left_mask = left_values > 0.1
         right_mask = right_values > 0.1
-
-        # 动态获取 Batch Size，供后续 unflatten 使用
         B = left_feat.size(0)
 
         for i in range(self.num_layers):
-            # 敌方注意力
-            # 设计 4 组交互：(left_feat, right_base)、(left_base, right_feat)、
-            # (right_feat, left_base)、(right_base, left_feat)。实验表明这种交叉交互优于全量组合
-            # 利用批处理，合并左右之间的交互，从而加速运算
-            # 旧代码的 1×2 组交互，也可通过批处理合并计算以加速
-            # l 和 r 互看，base 和 feat 互看
+            # ---- 敌方注意力 ----
+            # 构建四组跨阵营交互：(left_feat, right_base)、(left_base, right_feat)、
+            # (right_feat, left_base)、(right_base, left_feat)。
+            # 实验表明这种精简的交叉组合比全量组合更高效，且能明确区分“我方看敌方特征”
+            # 与“我方特征被敌方关注”两种方向。
             q_enemy = torch.cat([left_feat, left_base, right_feat, right_base], dim=0)
             k_enemy = torch.cat([right_base, right_feat, left_base, left_feat], dim=0)
-            # mask 重复 2 次
             mask_enemy = torch.cat([right_mask.repeat(2, 1), left_mask.repeat(2, 1)], dim=0)
 
             out_enemy = self.enemy_attentions[i](
@@ -211,7 +218,6 @@ class UnitAwareTransformer(nn.Module):
             )
             # 拆分回 4 组结果，对应地加到各自的特征上
             out_enemy = out_enemy.unflatten(0, (4, B))
-            # 等效于：left_feat += attn(left_base, right_feat) + attn(left_feat, right_base)
             left_feat = left_feat + out_enemy[:2].sum(dim=0)
             right_feat = right_feat + out_enemy[2:].sum(dim=0)
 
@@ -233,22 +239,16 @@ class UnitAwareTransformer(nn.Module):
             left_feat = left_feat + out_friend[:2].sum(dim=0)
             right_feat = right_feat + out_friend[2:].sum(dim=0)
 
-            left_feat = self.friend_ffn[i](left_feat)
-            right_feat = self.friend_ffn[i](right_feat)
-
             # 注意：此处不进行 LayerNorm，以保留嵌入向量的模长作为战斗力度量。
             # 对向量进行归一化会破坏模长，而模长直接与数量关联，是重要的线性基础信息。
-            # left_feat = self.norm[i](left_feat)
-            # right_feat = self.norm[i](right_feat)
 
-        # 战斗力评估：先计算各特征的 L2 范数，再求和，避免先求和再取模（会丢失非线性信息）
-        # 注意力模块已处理了特征间非线性交互
-        # 这里不进行如下的全连接输出，会过参数化降低泛化性能
-        # L = self.output_ffn(left_feat).squeeze(-1) * left_mask
-        # R = self.output_ffn(right_feat).squeeze(-1) * right_mask
+        # 战斗力评估：对各单位的特征向量求 L2 范数，按 mask 加权求和，
+        # 得到左右两方的总战斗力标量。
+        # 采用先求范数再求和（而非先求和再求范数），可以保留各单位内部非线性交互后的模长差异。
         L_norms = torch.norm(left_feat, p=2, dim=-1)
         R_norms = torch.norm(right_feat, p=2, dim=-1)
         L = (L_norms * left_mask).sum(dim=1)
         R = (R_norms * right_mask).sum(dim=1)
 
+        # sigmoid 输出胜率（R - L > 0 表示右侧优势，预测为右侧胜）
         return torch.sigmoid(R - L)
