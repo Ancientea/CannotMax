@@ -173,7 +173,8 @@ class ArknightsDataset(Dataset):
         )
 
 
-def train_one_epoch(model, train_loader, criterion, muon_opt, lion_opt, scaler=None):
+def train_one_epoch(model, train_loader, criterion, muon_opt, lion_opt,
+                    scaler=None, autocast_dtype=None):
     model.train()
     total_loss = 0
     correct = 0
@@ -214,7 +215,9 @@ def train_one_epoch(model, train_loader, criterion, muon_opt, lion_opt, scaler=N
 
         try:
             with torch.amp.autocast_mode.autocast(
-                    device_type=device.type, enabled=(scaler is not None)
+                    device_type=device.type,
+                    dtype=autocast_dtype or torch.float16,
+                    enabled=autocast_dtype is not None,
             ):
                 outputs = model(ls, lc, rs, rc).squeeze()
                 # 确保输出在合理范围内
@@ -264,7 +267,7 @@ def train_one_epoch(model, train_loader, criterion, muon_opt, lion_opt, scaler=N
     return total_loss / max(1, len(train_loader)), 100 * correct / max(1, total)
 
 
-def evaluate(model, data_loader, criterion):
+def evaluate(model, data_loader, criterion, autocast_dtype=None):
     model.eval()
     total_loss = 0
     correct = 0
@@ -296,7 +299,9 @@ def evaluate(model, data_loader, criterion):
 
             try:
                 with torch.amp.autocast_mode.autocast(
-                        device_type=device.type, enabled=(device.type == "cuda")
+                        device_type=device.type,
+                        dtype=autocast_dtype or torch.float16,
+                        enabled=autocast_dtype is not None,
                 ):
                     outputs = model(ls, lc, rs, rc).squeeze()
                     # 确保输出在合理范围内
@@ -346,16 +351,23 @@ def main():
     # 配置参数
     config = {
         "data_file": "arknights.csv",
-        "batch_size": 1024,
+        "batch_size": 4096,
         "test_size": 0.1,
-        "embed_dim": 256,
+        "embed_dim": 128,
         "n_layers": 3,
         "num_heads": 4,
-        "dropout": 0.3,  # Dropout 设置
-        "lr": 3e-4,  # 新优化器可以改大一点
-        "lion_lr": 3e-4 / 10,  # 论文指出 Lion 优化器需要更小的学习率
-        "epochs": 50,
-        "seed": 42,  # 随机数种子
+        "dropout": 0.25,  # Dropout 设置
+        "lr": 3e-3,  # 新优化器可以改大一点
+        "lion_lr": 3e-3 / 10,  # 论文指出 Lion 优化器需要更小的学习率
+        "precision": "bf16",  # 更宽的指数范围；也可选已修复除零问题的 fp16 或 fp32
+        "reduce_lr_on_plateau": False,
+        # 本任务通常在 20 个 epoch 内达到验证集上限。
+        "epochs": 20,
+        "lr_plateau_factor": 0.2,
+        "lr_plateau_patience": 0,
+        "early_stopping_patience": 5,
+        # 5 个 epoch 不改善触发早停
+        "seed": 174,  # 随机数种子
         "save_dir": "models",  # 存到哪里
         "max_feature_value": 100,  # 限制特征最大值，防止极端值造成不稳定
         "num_workers": 0 if torch.cuda.is_available() else 0,  # 根据CUDA可用性设置num_workers
@@ -373,14 +385,27 @@ def main():
     # 设置设备
     print(f"使用设备: {device}")
 
-    # 初始化 GradScaler
+    precision = config["precision"]
+    if precision not in {"fp32", "bf16", "fp16"}:
+        raise ValueError(f"不支持的精度模式: {precision}")
+    if precision == "bf16" and (
+        device.type != "cuda" or not torch.cuda.is_bf16_supported()
+    ):
+        print("当前设备不支持 CUDA BF16，改用 FP32。")
+        precision = "fp32"
+    if precision == "fp16" and device.type != "cuda":
+        raise ValueError("FP16 模式仅支持 CUDA。")
+    autocast_dtype = {"fp32": None, "bf16": torch.bfloat16, "fp16": torch.float16}[precision]
+    print(f"训练精度: {precision}")
+
+    # FP16 需要 GradScaler；BF16 和 FP32 不需要。
     scaler = None
-    if device.type == "cuda":
+    if precision == "fp16":
         try:
             scaler = torch.amp.grad_scaler.GradScaler("cuda")
         except (AttributeError, TypeError):
             scaler = torch.amp.grad_scaler.GradScaler()  # 如果是老版本
-        print("CUDA可用，已启用混合精度训练的GradScaler。")
+        print("已启用 FP16 GradScaler。")
 
     # 检查CUDA可用性
     if str(device) == "cuda":
@@ -444,13 +469,34 @@ def main():
     muon_opt, lion_opt = get_muon_lion_optimizers(
         model, muon_lr=config["lr"], lion_lr=config["lion_lr"], weight_decay=1e-1
     )
-    scheduler_muon = optim.lr_scheduler.CosineAnnealingLR(muon_opt, T_max=config["epochs"])
-    scheduler_lion = optim.lr_scheduler.CosineAnnealingLR(lion_opt, T_max=config["epochs"])
+    scheduler_muon = scheduler_lion = None
+    if config["reduce_lr_on_plateau"]:
+        scheduler_muon = optim.lr_scheduler.ReduceLROnPlateau(
+            muon_opt,
+            mode="min",
+            factor=config["lr_plateau_factor"],
+            patience=config["lr_plateau_patience"],
+            threshold=1e-4,
+            threshold_mode="rel",
+            cooldown=1,
+            min_lr=1e-6,
+        )
+        scheduler_lion = optim.lr_scheduler.ReduceLROnPlateau(
+            lion_opt,
+            mode="min",
+            factor=config["lr_plateau_factor"],
+            patience=config["lr_plateau_patience"],
+            threshold=1e-4,
+            threshold_mode="rel",
+            cooldown=1,
+            min_lr=1e-6,
+        )
 
     # 训练历史记录
     train_losses, val_losses, train_accs, val_accs = [], [], [], []
     # 训练设置
     best_acc, best_loss = 0, float("inf")
+    epochs_without_improvement = 0
 
     # 训练循环
     for epoch in range(config["epochs"]):
@@ -458,14 +504,15 @@ def main():
 
         # 训练
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, muon_opt, lion_opt, scaler
+            model, train_loader, criterion, muon_opt, lion_opt, scaler, autocast_dtype
         )
         # 验证
-        val_loss, val_acc = evaluate(model, val_loader, criterion)
+        val_loss, val_acc = evaluate(model, val_loader, criterion, autocast_dtype)
 
         # 更新学习率
-        scheduler_muon.step()
-        scheduler_lion.step()
+        if scheduler_muon is not None:
+            scheduler_muon.step(val_loss)
+            scheduler_lion.step(val_loss)
 
         # 记录历史
         train_losses.append(train_loss)
@@ -480,13 +527,23 @@ def main():
             print("保存了新的最佳准确率模型!")
 
         # 保存最佳模型（基于损失）
-        if val_loss < best_loss:
+        improved_loss = val_loss < best_loss
+        if improved_loss:
             best_loss = val_loss
             torch.save(model, Path(config["save_dir"]) / "best_model_loss.pth")
+            # full 文件也保存验证损失最佳的模型，避免最后一轮退化模型覆盖最佳结果。
+            torch.save(model, Path(config["save_dir"]) / "best_model_full.pth")
+            epochs_without_improvement = 0
             print("保存了新的最佳损失模型!")
+        else:
+            epochs_without_improvement += 1
 
         print(f"最佳准确率为: {best_acc:.2f}, 最佳损失为: {best_loss:.4f}")
-        torch.save(model, Path(config["save_dir"]) / "best_model_full.pth")
+        print(
+            "当前学习率: "
+            f"Muon={muon_opt.param_groups[0]['lr']:.2e}, "
+            f"Lion={lion_opt.param_groups[0]['lr']:.2e}"
+        )
 
         # 保存最新模型
         # torch.save({
@@ -517,6 +574,13 @@ def main():
             epoch_start_time = current_time  # Reset for next epoch
 
         print("-" * 40)
+
+        if epochs_without_improvement >= config["early_stopping_patience"]:
+            print(
+                f"验证损失连续 {epochs_without_improvement} 个 epoch 未改善，"
+                "提前停止训练。"
+            )
+            break
 
     # 重命名与绘图
     current_time_str = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
