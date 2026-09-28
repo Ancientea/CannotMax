@@ -4,6 +4,7 @@ from functools import cache
 from pathlib import Path
 
 import numpy as np
+import numpy.typing
 import torch
 import logging
 
