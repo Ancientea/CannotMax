@@ -239,6 +239,9 @@ class UnitAwareTransformer(nn.Module):
             left_feat = left_feat + out_friend[:2].sum(dim=0)
             right_feat = right_feat + out_friend[2:].sum(dim=0)
 
+            left_feat = self.friend_ffn[i](left_feat)
+            right_feat = self.friend_ffn[i](right_feat)
+
             # 注意：此处不进行 LayerNorm，以保留嵌入向量的模长作为战斗力度量。
             # 对向量进行归一化会破坏模长，而模长直接与数量关联，是重要的线性基础信息。
 
